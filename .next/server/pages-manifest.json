@@ -1,1 +1,1 @@
-{"/_app":"pages/_app.js","/_error":"pages/_error.js","/scraper":"pages/scraper.html","/schedule-app":"pages/schedule-app.html","/api/schedule":"pages/api/schedule.js","/api/scrape":"pages/api/scrape.js","/_document":"pages/_document.js","/404":"pages/404.html"}
+{"/_app":"pages/_app.js","/_error":"pages/_error.js","/":"pages/index.html","/api/schedule":"pages/api/schedule.js","/scraper":"pages/scraper.html","/schedule-app":"pages/schedule-app.html","/api/scrape":"pages/api/scrape.js","/_document":"pages/_document.js","/404":"pages/404.html"}
