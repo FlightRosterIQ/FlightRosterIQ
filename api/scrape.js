@@ -1,6 +1,4 @@
 // Vercel serverless function for crew scheduling scraper
-const { scrapeCrewSchedule, getCrewNotifications } = require('../crew-scraper.cjs');
-
 module.exports = async function handler(req, res) {
   // Set CORS headers for frontend access
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -41,25 +39,27 @@ module.exports = async function handler(req, res) {
 
     console.log(`📋 Scraping for airline: ${options.airline || 'ABX Air'}`);
     
-    // Execute the scraping
-    const result = await getCrewNotifications(options);
+    // For now, return mock data until puppeteer is properly configured for serverless
+    const mockData = {
+      duties: [
+        {
+          id: 'duty-1',
+          content: `Sample duty for ${options.username} on ${options.airline}`,
+          element: 'mock-duty-element'
+        }
+      ],
+      pageTitle: `${options.airline} Crew Portal`,
+      url: options.airline === 'ATI' ? 'https://crew.airtransport.cc' : 'https://crew.abxair.com',
+      timestamp: new Date().toISOString()
+    };
     
-    if (result.success) {
-      console.log('✅ Scraping completed successfully');
-      return res.status(200).json({
-        success: true,
-        data: result.data,
-        timestamp: result.timestamp,
-        message: 'Schedule data retrieved successfully'
-      });
-    } else {
-      console.error('❌ Scraping failed:', result.error);
-      return res.status(500).json({
-        success: false,
-        error: result.error,
-        timestamp: result.timestamp
-      });
-    }
+    console.log('✅ Mock data returned successfully');
+    return res.status(200).json({
+      success: true,
+      data: mockData,
+      timestamp: new Date().toISOString(),
+      message: 'Demo: Mock schedule data (real scraper will be enabled after serverless optimization)'
+    });
 
   } catch (error) {
     console.error('❌ API Error:', error.message);
