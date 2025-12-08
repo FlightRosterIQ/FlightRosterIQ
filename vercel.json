@@ -1,9 +1,9 @@
 {
   "functions": {
-    "pages/api/scrape.js": {
+    "api/scrape.js": {
       "maxDuration": 60
     },
-    "pages/api/schedule.js": {
+    "api/schedule.js": {
       "maxDuration": 30
     }
   }
