@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build" }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "https://abx-schedule-api.onrender.com/api/$1"
+    }
+  ],
+  "env": {
+    "REACT_APP_WEATHER_KEY": "your_openweather_api_key"
+  }
+}

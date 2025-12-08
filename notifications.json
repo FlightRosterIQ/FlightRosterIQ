@@ -1,0 +1,26 @@
+[
+  {
+    "message": "Remarks from scheduler",
+    "date": "12/8/2025",
+    "type": "schedule_change",
+    "read": false
+  },
+  {
+    "message": "No daily remarks to show",
+    "date": "12/8/2025",
+    "type": "general",
+    "read": false
+  },
+  {
+    "message": "Remarks to scheduler",
+    "date": "12/8/2025",
+    "type": "schedule_change",
+    "read": false
+  },
+  {
+    "message": "No daily remarks to show",
+    "date": "12/8/2025",
+    "type": "general",
+    "read": false
+  }
+]
