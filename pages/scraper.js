@@ -62,10 +62,13 @@ export default function CrewScraper() {
       </Head>
 
       <h1>🛩️ Crew Schedule Scraper</h1>
-      <p>Test the crew portal scraping functionality for your scheduling app.</p>
+      <p>Enter your crew portal credentials to access your personal schedule data.</p>
+      <div style={{ padding: '1rem', backgroundColor: '#e3f2fd', border: '1px solid #2196f3', borderRadius: '8px', marginBottom: '1rem' }}>
+        <strong>🔒 Privacy Notice:</strong> Your credentials are only used to fetch your schedule and are never stored. Each pilot must enter their own login information.
+      </div>
 
       <div style={{ marginBottom: '2rem', padding: '1rem', border: '1px solid #ddd', borderRadius: '8px' }}>
-        <h3>Scraper Configuration</h3>
+        <h3>Enter Your Crew Portal Login</h3>
         
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem' }}>
@@ -83,26 +86,28 @@ export default function CrewScraper() {
 
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-            Username:
+            <strong>Your Crew Portal Username:</strong>
             <input
               type="text"
               value={credentials.username}
               onChange={(e) => setCredentials({...credentials, username: e.target.value})}
-              style={{ marginLeft: '0.5rem', padding: '0.25rem', width: '200px' }}
-              placeholder="Your crew portal username"
+              style={{ marginLeft: '0.5rem', padding: '0.5rem', width: '250px', fontSize: '14px' }}
+              placeholder="Enter your ABX Air username"
+              required
             />
           </label>
         </div>
 
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-            Password:
+            <strong>Your Crew Portal Password:</strong>
             <input
               type="password"
               value={credentials.password}
               onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-              style={{ marginLeft: '0.5rem', padding: '0.25rem', width: '200px' }}
-              placeholder="Your crew portal password"
+              style={{ marginLeft: '0.5rem', padding: '0.5rem', width: '250px', fontSize: '14px' }}
+              placeholder="Enter your ABX Air password"
+              required
             />
           </label>
         </div>
@@ -160,9 +165,9 @@ export default function CrewScraper() {
           borderRadius: '4px',
           marginBottom: '1rem'
         }}>
-          <h4>✅ Scraping Results:</h4>
+          <h4>✅ Your Personal Schedule Data:</h4>
           <p><strong>Status:</strong> {result.success ? 'Success' : 'Failed'}</p>
-          <p><strong>Timestamp:</strong> {result.timestamp}</p>
+          <p><strong>Retrieved:</strong> {result.timestamp}</p>
           <p><strong>Message:</strong> {result.message}</p>
           
           {result.data && (
@@ -210,13 +215,13 @@ export default function CrewScraper() {
         border: '1px solid #dee2e6',
         borderRadius: '4px'
       }}>
-        <h4>ℹ️ Usage Information:</h4>
+        <h4>ℹ️ How This Works:</h4>
         <ul>
-          <li>This scraper connects to airline crew portals to retrieve schedule data</li>
-          <li>Supports ABX Air and ATI portals</li>
-          <li>Data is processed and can be used by your scheduling app</li>
-          <li>For production use, set environment variables: CREW_USERNAME, CREW_PASSWORD</li>
-          <li>The scraper runs in headless mode when deployed to Vercel</li>
+          <li><strong>Multi-User:</strong> Each pilot enters their own credentials to get their personal schedule</li>
+          <li><strong>Secure:</strong> Your login information is only used for that request and never stored</li>
+          <li><strong>Real-Time:</strong> Data is fetched directly from ABX Air/ATI crew portals</li>
+          <li><strong>Personal:</strong> You only see your own duties, flights, and notifications</li>
+          <li><strong>Fast:</strong> Results typically return in 10-30 seconds</li>
         </ul>
       </div>
     </div>

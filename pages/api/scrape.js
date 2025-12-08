@@ -21,20 +21,21 @@ export default async function handler(req, res) {
   try {
     console.log('🚀 Crew scraper API called');
     
-    // Get configuration from request body or environment
+    // Prioritize frontend credentials over environment variables
     const options = {
-      airline: req.body?.airline || req.query.airline || process.env.CREW_AIRLINE,
-      username: req.body?.username || process.env.CREW_USERNAME,
-      password: req.body?.password || process.env.CREW_PASSWORD,
+      airline: req.body?.airline || req.query.airline || process.env.CREW_AIRLINE || 'ABX Air',
+      username: req.body?.username || req.query.username,
+      password: req.body?.password || req.query.password,
       headless: true // Always headless in serverless environment
     };
 
-    // Validate credentials
+    // Validate credentials - require user to provide them
     if (!options.username || !options.password) {
       return res.status(400).json({
         success: false,
-        error: 'Missing credentials. Please provide username and password or set environment variables.',
-        required: ['CREW_USERNAME', 'CREW_PASSWORD']
+        error: 'Please provide your crew portal username and password.',
+        message: 'For security, each pilot must enter their own credentials to access their personal schedule.',
+        required: ['username', 'password']
       });
     }
 
