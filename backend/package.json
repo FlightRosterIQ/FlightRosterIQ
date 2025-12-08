@@ -1,0 +1,12 @@
+{
+  "name": "crew-schedule-backend",
+  "version": "1.0.0",
+  "description": "Backend for Crew Schedule App",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "fastify": "^4.0.0"
+  }
+}
