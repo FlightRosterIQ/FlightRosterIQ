@@ -22,16 +22,19 @@ const AIRLINE_CONFIGS = {
   }
 };
 
-const CONFIG = {
-  airline: process.env.CREW_AIRLINE || 'ABX Air',
-  username: process.env.CREW_USERNAME || '',
-  password: process.env.CREW_PASSWORD || '',
-  backendUrl: 'http://localhost:3001/api/schedule/import',
-  headless: 'new',
-  extractCrewDetails: true,
-  get portalUrl() { return AIRLINE_CONFIGS[this.airline]?.portalUrl || AIRLINE_CONFIGS['ABX Air'].portalUrl; },
-  get loginSelectors() { return AIRLINE_CONFIGS[this.airline]?.loginSelectors || AIRLINE_CONFIGS['ABX Air'].loginSelectors; }
-};
+// Default configuration function for Next.js compatibility
+function getConfig(options = {}) {
+  return {
+    airline: options.airline || process.env.CREW_AIRLINE || 'ABX Air',
+    username: options.username || process.env.CREW_USERNAME || '',
+    password: options.password || process.env.CREW_PASSWORD || '',
+    backendUrl: options.backendUrl || 'http://localhost:3001/api/schedule/import',
+    headless: options.headless !== false, // Default to true for Next.js/Vercel
+    extractCrewDetails: options.extractCrewDetails !== false,
+    get portalUrl() { return AIRLINE_CONFIGS[this.airline]?.portalUrl || AIRLINE_CONFIGS['ABX Air'].portalUrl; },
+    get loginSelectors() { return AIRLINE_CONFIGS[this.airline]?.loginSelectors || AIRLINE_CONFIGS['ABX Air'].loginSelectors; }
+  };
+}
 
 // Small helper - some Puppeteer versions don't implement page.waitForTimeout
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -656,7 +659,128 @@ async function scheduleScraper() {
   await scrapeCrewPortal();
 }
 
+// Next.js API-compatible functions
+async function scrapeCrewSchedule(options = {}) {
+  const config = getConfig(options);
+  
+  // Override for serverless environment
+  config.headless = true;
+  
+  console.log('🚀 Starting crew portal scraper for Next.js...');
+  let browser;
+  
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ]
+    });
+
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    
+    console.log('📍 Navigating to crew portal...');
+    await page.goto(config.portalUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // Attempt login if credentials provided
+    if (config.username && config.password) {
+      try {
+        const usernameSelector = 'input#username';
+        const passwordSelector = 'input#password';
+        const loginButtonSelector = 'input#kc-login';
+
+        await page.waitForTimeout(1000);
+        if (await page.$(usernameSelector)) {
+          await page.type(usernameSelector, config.username, { delay: 50 });
+          await page.type(passwordSelector, config.password, { delay: 50 });
+          await page.click(loginButtonSelector);
+          await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 }).catch(() => {});
+          console.log('🔐 Login attempted');
+        }
+      } catch (loginErr) {
+        console.warn('⚠️ Login step failed:', loginErr.message);
+      }
+    }
+
+    // Wait for content to load
+    await page.waitForTimeout(3000);
+    
+    // Extract basic schedule data
+    const scheduleData = await page.evaluate(() => {
+      const duties = [];
+      const dutyElements = document.querySelectorAll('[data-test-id*="duty"], .duty-row, [class*="duty"]');
+      
+      dutyElements.forEach((element, index) => {
+        const text = element.textContent?.trim();
+        if (text && text.length > 5) {
+          duties.push({
+            id: `duty-${index}`,
+            content: text,
+            element: element.className
+          });
+        }
+      });
+      
+      return {
+        duties,
+        pageTitle: document.title,
+        url: window.location.href,
+        timestamp: new Date().toISOString()
+      };
+    });
+
+    console.log(`✅ Extracted ${scheduleData.duties.length} duty items`);
+    return scheduleData;
+
+  } catch (error) {
+    console.error('❌ Scraping failed:', error.message);
+    throw new Error(`Scraping failed: ${error.message}`);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
+async function getCrewNotifications(options = {}) {
+  const config = getConfig(options);
+  
+  try {
+    const result = await scrapeCrewSchedule(config);
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// Export functions for Next.js
+module.exports = {
+  scrapeCrewPortal,
+  scrapeCrewSchedule,
+  getCrewNotifications,
+  transformScheduleData,
+  sendToBackend,
+  getConfig,
+  AIRLINE_CONFIGS
+};
+
+// CLI execution (when run directly)
 if (require.main === module) {
+  const CONFIG = getConfig();
+  
   if (!CONFIG.username || !CONFIG.password) {
     console.error('❌ ERROR: Credentials not provided!');
     console.log('Set CREW_USERNAME and CREW_PASSWORD environment variables.');
