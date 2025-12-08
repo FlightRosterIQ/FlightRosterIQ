@@ -1,7 +1,7 @@
-// Next.js API route for crew scheduling scraper
-const { scrapeCrewSchedule, getCrewNotifications } = require('../../crew-scraper.cjs');
+// Vercel serverless function for crew scheduling scraper
+const { scrapeCrewSchedule, getCrewNotifications } = require('../crew-scraper.cjs');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Set CORS headers for frontend access
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -71,14 +71,4 @@ export default async function handler(req, res) {
   }
 }
 
-// Configure API route for longer execution time
-export const config = {
-  api: {
-    responseLimit: false,
-    bodyParser: {
-      sizeLimit: '1mb',
-    },
-  },
-  // Increase function timeout for Vercel Pro users (60s)
-  maxDuration: 60,
-};
+// Vercel serverless function configuration is handled in vercel.json
