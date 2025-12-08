@@ -4,13 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "export": "next export",
-    "vite-dev": "vite",
-    "vite-build": "vite build",
-    "vite-preview": "vite preview"
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
