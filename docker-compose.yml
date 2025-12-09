@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  crew-scraper:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    volumes:
+      - crew-data:/app/data
+      - /dev/shm:/dev/shm  # Shared memory for Chrome
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+volumes:
+  crew-data:
+    driver: local
+
+networks:
+  default:
+    driver: bridge

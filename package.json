@@ -6,7 +6,11 @@
     "dev": "vite",
     "build": "vite build",
     "start": "vite preview",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docker:build": "docker build -t crew-scraper .",
+    "docker:run": "docker run -p 3000:3000 crew-scraper",
+    "docker:compose": "docker-compose up -d",
+    "docker:stop": "docker-compose down"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
@@ -27,8 +31,7 @@
     "jsonwebtoken": "^9.0.3",
     "localforage": "^1.10.0",
     "node-fetch": "^2.7.0",
-    "puppeteer": "^24.32.1",
-    "puppeteer-core": "^24.32.1",
+    "puppeteer": "^22.15.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

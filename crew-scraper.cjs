@@ -791,6 +791,3 @@ if (require.main === module) {
   if (args.includes('--schedule')) scheduleScraper();
   else scrapeCrewPortal().catch(() => process.exit(1));
 }
-
-module.exports = { scrapeCrewPortal };
-module.exports = { scrapeCrewPortal };

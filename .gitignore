@@ -40,3 +40,5 @@ portal-page.html
 crew-scraper-config.js
 credentials.json
 .env.scraper
+.vercel
+.env*.local
