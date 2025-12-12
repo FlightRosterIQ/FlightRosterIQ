@@ -901,10 +901,21 @@ input:focus {
   background: #6366f1;
   color: white;
   padding: 4px 12px;
-  borderRadius: 6px;
-  fontSize: 12px;
-  fontWeight: bold;
-  marginBottom: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  display: inline-block;
+}
+
+.ground-transport-badge {
+  background: #10b981;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 8px;
   display: inline-block;
 }
 

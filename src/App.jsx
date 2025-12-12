@@ -3171,12 +3171,12 @@ function App() {
               {flights.map((flight, idx) => (
             <div key={idx} className="flight-card" onClick={() => setSelectedFlight(flight)}>
               {flight.isDeadhead && (
-                <div className="deadhead-badge" style={{background: '#6366f1', color: 'white', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', display: 'inline-block'}}>
+                <div className="deadhead-badge">
                   DH - Deadhead Flight
                 </div>
               )}
               {flight.isGroundTransport && (
-                <div className="ground-transport-badge" style={{background: '#10b981', color: 'white', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', display: 'inline-block'}}>
+                <div className="ground-transport-badge">
                   🚗 Ground Transportation
                 </div>
               )}
