@@ -1960,8 +1960,11 @@ function App() {
                 
                 <div className="message-input-container">
                   <input
+                    id="chat-message"
+                    name="chat-message"
                     type="text"
                     placeholder="Type a message..."
+                    autoComplete="off"
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyPress={(e) => {
@@ -2036,10 +2039,13 @@ function App() {
                         {chatEditMode && (
                           <div className="chat-checkbox">
                             <input 
+                              id={`chat-select-${friend.id}`}
+                              name={`chat-select-${friend.id}`}
                               type="checkbox" 
                               checked={selectedChatsToDelete.includes(friend.id)}
                               onChange={() => toggleChatSelection(friend.id)}
                               onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select chat with ${friend.name || friend.employeeId}`}
                             />
                           </div>
                         )}
@@ -2111,9 +2117,13 @@ function App() {
             </div>
             
             <div className="search-box">
+              <label htmlFor="crew-search" className="visually-hidden">Search crew members</label>
               <input
+                id="crew-search"
+                name="crew-search"
                 type="text"
                 placeholder="Search by name (e.g., John Smith) or employee number (e.g., 152780)..."
+                autoComplete="off"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
@@ -2422,12 +2432,16 @@ function App() {
                       {isEditingName ? (
                         <div style={{display: 'flex', gap: '8px', alignItems: 'center', flex: 1}}>
                           <input
+                            id="pilot-name"
+                            name="pilot-name"
                             type="text"
                             value={editedName}
                             onChange={(e) => setEditedName(e.target.value)}
                             placeholder="Enter your name"
+                            autoComplete="name"
                             style={{flex: 1, padding: '6px 10px', borderRadius: '4px', border: '1px solid #ddd'}}
                             autoFocus
+                            aria-label="Edit your name"
                           />
                           <button onClick={handleSaveProfileName} style={{padding: '6px 12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>Save</button>
                           <button onClick={() => setIsEditingName(false)} style={{padding: '6px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>Cancel</button>
@@ -3493,15 +3507,21 @@ function App() {
                 {accountType === 'pilot' ? (
                   <>
                     <input
+                      id="username"
+                      name="username"
                       type="text"
                       placeholder="Username"
+                      autoComplete="username"
                       value={credentials.username}
                       onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
                       required
                     />
                     <input
+                      id="password"
+                      name="password"
                       type="password"
                       placeholder="Password"
+                      autoComplete="current-password"
                       value={credentials.password}
                       onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
                       required
@@ -3509,8 +3529,11 @@ function App() {
                   </>
                 ) : (
                   <input
+                    id="access-code"
+                    name="access-code"
                     type="text"
                     placeholder="Enter Family Access Code"
+                    autoComplete="off"
                     value={credentials.username}
                     onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
                     required
