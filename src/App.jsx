@@ -2814,9 +2814,13 @@ function App() {
                 <h4>➕ Add Family Member</h4>
                 <p>Enter the name of the family member you want to share your schedule with</p>
                 <div className="family-input-group">
+                  <label htmlFor="family-member-name" className="visually-hidden">Family member name</label>
                   <input
+                    id="family-member-name"
+                    name="family-member-name"
                     type="text"
                     placeholder="e.g., Sarah (Wife), John (Son), Mom, etc."
+                    autoComplete="off"
                     value={newFamilyMemberName}
                     onChange={(e) => setNewFamilyMemberName(e.target.value)}
                     onKeyPress={(e) => {
