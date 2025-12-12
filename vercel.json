@@ -6,5 +6,11 @@
     "api/scrape.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "http://157.245.126.24:8080/api/:path*"
+    }
+  ]
 }

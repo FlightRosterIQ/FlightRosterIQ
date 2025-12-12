@@ -2,6 +2,31 @@ import { useState, useEffect } from 'react'
 import localforage from 'localforage'
 import './App.css'
 
+// FlightRosterIQ Server Configuration
+// Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
+const API_BASE_URL = '';
+
+// Helper function for API calls
+const apiCall = async (endpoint, options = {}) => {
+  const url = `${API_BASE_URL}${endpoint}`;
+  
+  const defaultOptions = {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers
+    },
+    ...options
+  };
+
+  try {
+    const response = await fetch(url, defaultOptions);
+    return response;
+  } catch (error) {
+    console.error(`API call failed for ${endpoint}:`, error);
+    throw error;
+  }
+};
+
 localforage.config({
   name: 'FlightRosterIQ',
   storeName: 'schedules'
@@ -13,6 +38,7 @@ function App() {
   const [username, setUsername] = useState('')
   const [schedule, setSchedule] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [scrapingInProgress, setScrapingInProgress] = useState(false)
   const [error, setError] = useState(null)
   const [credentials, setCredentials] = useState({ username: '', password: '' })
   const [weatherData, setWeatherData] = useState({})
@@ -42,12 +68,15 @@ function App() {
   const [contactMenuOpen, setContactMenuOpen] = useState(null)
   const [weatherAirport, setWeatherAirport] = useState(null)
   const [trackedAircraft, setTrackedAircraft] = useState(null)
+  const [flightTrackingData, setFlightTrackingData] = useState(null)
   const [settingsTab, setSettingsTab] = useState('features')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [chatEditMode, setChatEditMode] = useState(false)
   const [selectedChatsToDelete, setSelectedChatsToDelete] = useState([])
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   
   // Crew Portal Scraper states
   const [scraperCredentials, setScraperCredentials] = useState({ username: '', password: '', airline: 'ABX Air' })
@@ -59,12 +88,18 @@ function App() {
   const [newFamilyMemberName, setNewFamilyMemberName] = useState('')
   const [pilotRank, setPilotRank] = useState('Captain')
   const [homeAirport, setHomeAirport] = useState('')
+  const [pilotProfile, setPilotProfile] = useState(null)
+  const [allPilots, setAllPilots] = useState([])
+  const [userLocation, setUserLocation] = useState(null)
   const [domicile, setDomicile] = useState('')
   const [isRegisteredUser, setIsRegisteredUser] = useState(false)
   const [showRegistrationPopup, setShowRegistrationPopup] = useState(false)
   const [nickname, setNickname] = useState('')
   const [familyMemberName, setFamilyMemberName] = useState('')
   const [pushSubscription, setPushSubscription] = useState(null)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editedName, setEditedName] = useState('')
+  const [pilotAirline, setPilotAirline] = useState('')
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -74,10 +109,20 @@ function App() {
     window.addEventListener('offline', handleOffline)
     loadCachedData()
     initializePushNotifications()
+    
+    // PWA Install Prompt Handler
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setShowInstallPrompt(true)
+    }
+    
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
 
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     }
   }, [])
 
@@ -98,6 +143,7 @@ function App() {
       const cachedRegistrationStatus = await localforage.getItem('isRegisteredUser')
       const cachedNickname = await localforage.getItem('nickname')
       const cachedFamilyMemberName = await localforage.getItem('familyMemberName')
+      const cachedPilotAirline = await localforage.getItem('pilotAirline')
       
       if (cachedToken) setToken(cachedToken)
       if (cachedSchedule) setSchedule(cachedSchedule)
@@ -114,11 +160,23 @@ function App() {
       if (cachedRegistrationStatus) setIsRegisteredUser(cachedRegistrationStatus)
       if (cachedNickname) setNickname(cachedNickname)
       if (cachedFamilyMemberName) setFamilyMemberName(cachedFamilyMemberName)
+      if (cachedPilotAirline) setPilotAirline(cachedPilotAirline)
       
-      // Auto-refresh schedule on app open if online and has token
-      if (cachedToken && isOnline) {
-        fetchSchedule(cachedToken)
+      // Load pilot profile and geolocation
+      const cachedProfile = await localforage.getItem('pilotProfile')
+      const cachedLocation = await localforage.getItem('userLocation')
+      if (cachedProfile) setPilotProfile(cachedProfile)
+      if (cachedLocation) setUserLocation(cachedLocation)
+      
+      // Request geolocation permission
+      if (!cachedLocation) {
+        requestGeolocation()
       }
+      
+      // Don't auto-refresh on load - let user login first
+      // if (cachedToken && isOnline) {
+      //   fetchSchedule(cachedToken)
+      // }
       
       // Request notification permission on app load
       if ('Notification' in window && Notification.permission === 'default') {
@@ -134,6 +192,7 @@ function App() {
   const handleLogin = async (e, accountType) => {
     e.preventDefault()
     setLoading(true)
+    setLoadingMessage('Authenticating with crew portal...')
     setError(null)
 
     try {
@@ -141,6 +200,7 @@ function App() {
       if (accountType === 'pilot') {
         if (!airline || !credentials.username || !credentials.password) {
           setError('Please select an airline and enter your credentials')
+          setLoading(false)
           return
         }
         
@@ -155,11 +215,13 @@ function App() {
         // ABX Air username format validation
         if (username.length < 4) {
           setError('ABX Air crew username must be at least 4 characters long')
+          setLoading(false)
           return
         }
         
         if (password.length < 6) {
           setError('ABX Air crew password must be at least 6 characters long')
+          setLoading(false)
           return
         }
         
@@ -171,6 +233,7 @@ function App() {
         
         if (invalidCredentials.includes(usernameLower) || invalidCredentials.includes(passwordLower)) {
           setError('Please use your actual ABX Air crew portal credentials. Test/demo accounts are not accepted.')
+          setLoading(false)
           return
         }
         
@@ -178,19 +241,20 @@ function App() {
         if (/^(.)\1{3,}$/.test(username) || /^(.)\1{3,}$/.test(password) ||
             /^(123|abc|qwe)/i.test(username) || /^(123|abc|qwe)/i.test(password)) {
           setError('Please use your actual ABX Air crew portal username and password.')
+          setLoading(false)
           return
         }
         
-        console.log(`🔐 Validating ABX Air crew portal credentials for pilot: ${username}`)
+        console.log(`🔐 Validating crew portal credentials for ${airline.toUpperCase()} pilot: ${username}`)
+        setLoadingMessage(`Authenticating with ${airline.toUpperCase()} crew portal...`)
         
         // Validate credentials by attempting to authenticate with crew portal
         try {
-          const authResponse = await fetch('/api/scrape', {
+          const authResponse = await apiCall('/api/authenticate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               airline: airline || 'abx', // Default to ABX Air
-              username: username,
+              employeeId: username,
               password: password
             })
           })
@@ -201,6 +265,7 @@ function App() {
           if (authResponse.status === 401) {
             // Credentials were definitely rejected
             setError('Invalid crew portal credentials. Please check your username and password.')
+            setLoading(false)
             return
           }
           
@@ -214,18 +279,21 @@ function App() {
           } else if (!authResult.success && authResult.error) {
             // Authentication failed
             setError(`Authentication failed: ${authResult.error}`)
+            setLoading(false)
             return
           }
           
         } catch (authError) {
           console.error('Authentication error:', authError)
           setError('Unable to validate credentials. Please check your connection and try again.')
+          setLoading(false)
           return
         }
         
       } else if (accountType === 'family') {
         if (!credentials.username) {
           setError('Please enter your family access code')
+          setLoading(false)
           return
         }
         
@@ -233,10 +301,13 @@ function App() {
         const accessCode = credentials.username.trim()
         if (accessCode.length < 6) {
           setError('Family access code must be at least 6 characters')
+          setLoading(false)
           return
         }
       }
 
+      setLoadingMessage('Setting up your account...')
+      
       // Generate a session token (in production, this would come from your auth system)
       const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       
@@ -252,18 +323,68 @@ function App() {
       await localforage.setItem('username', credentials.username.trim())
       if (airline) await localforage.setItem('airline', airline)
       
-      // For family accounts, use the access code as identifier
+      // For family accounts, look up the assigned name from the code
       if (accountType === 'family') {
-        const familyMemberName = `Family Member (${credentials.username})`
+        const accessCode = credentials.username.trim()
+        
+        // Try to get the name mapping for this code
+        const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+        const memberInfo = codeMapping[accessCode]
+        
+        const familyMemberName = memberInfo ? memberInfo.name : 'Family Member'
+        const pilotUsername = memberInfo ? (memberInfo.pilotName || memberInfo.pilot) : 'Pilot'
+        const pilotAirlineValue = memberInfo ? memberInfo.airline : 'abx'
+        
         setFamilyMemberName(familyMemberName)
+        setUsername(pilotUsername) // Set the pilot's name for display
+        setPilotAirline(pilotAirlineValue)
         await localforage.setItem('familyMemberName', familyMemberName)
+        await localforage.setItem('familyAccessCode', accessCode)
+        await localforage.setItem('pilotAirline', pilotAirlineValue)
       }
       
       console.log('✅ Login successful - credentials validated')
+      
+      // Stop loading and show scraping progress banner instead
+      setLoading(false)
+      setLoadingMessage('')
+      
+      // AUTOMATIC SCRAPING: Start scraping in background after successful login
+      if (accountType === 'pilot') {
+        console.log('🔄 Starting automatic crew portal scraping in background...')
+        setScrapingInProgress(true)
+        // Store encrypted credentials for refresh (in production, use proper encryption)
+        await localforage.setItem('tempPassword', credentials.password)
+        // Get current month being viewed for initial scrape
+        const viewingMonth = currentMonth.getMonth() + 1
+        const viewingYear = currentMonth.getFullYear()
+        
+        // Run scraping in background without blocking UI
+        setTimeout(() => {
+          handleAutomaticScraping(credentials.username.trim(), credentials.password, airline, viewingMonth, viewingYear).catch(err => {
+            console.error('Auto-scraping error:', err)
+            setScrapingInProgress(false)
+          })
+        }, 100)
+      } else if (accountType === 'family' && memberInfo) {
+        // For family accounts, scrape using the pilot's credentials
+        console.log('🔄 Starting automatic scraping for family member...')
+        setScrapingInProgress(true)
+        
+        const viewingMonth = currentMonth.getMonth() + 1
+        const viewingYear = currentMonth.getFullYear()
+        
+        // Run scraping with pilot's credentials
+        setTimeout(() => {
+          handleAutomaticScraping(memberInfo.pilotEmployeeId, memberInfo.password, memberInfo.airline, viewingMonth, viewingYear).catch(err => {
+            console.error('Auto-scraping error for family:', err)
+            setScrapingInProgress(false)
+          })
+        }, 100)
+      }
     } catch (err) {
       setError('Login error. Please try again.')
       console.error('Login error:', err)
-    } finally {
       setLoading(false)
     }
   }
@@ -276,19 +397,22 @@ function App() {
 
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:3001/api/schedule', {
+      const response = await apiCall('/api/schedule', {
         headers: { 'Authorization': `Bearer ${authToken}` }
       })
 
       const data = await response.json()
       
-      if (data.success && data.schedule) {
-        setSchedule(data.schedule)
-        await localforage.setItem('schedule', data.schedule)
+      if (data.success) {
+        if (data.schedule) {
+          setSchedule(data.schedule)
+          await localforage.setItem('schedule', data.schedule)
+        }
+        // If no schedule data, just continue without setting it
         
         // Fetch notifications from backend - always get fresh data
         try {
-          const notifResponse = await fetch('http://localhost:3001/api/notifications')
+          const notifResponse = await apiCall('/api/notifications')
           const notifData = await notifResponse.json()
           
           if (notifData.success && notifData.notifications) {
@@ -315,7 +439,7 @@ function App() {
           // Keep existing notifications on error
         }
         
-        if (friendRequests.length === 0 && userType === 'pilot') {
+        if (data.schedule && friendRequests.length === 0 && userType === 'pilot') {
           setFriendRequests([
             { name: 'James Wilson', role: 'Captain', employeeId: '78901', base: 'CVG' },
             { name: 'Maria Garcia', role: 'First Officer', employeeId: '89012', base: 'ATL' }
@@ -384,11 +508,102 @@ function App() {
   }
 
   const getNearbyCrewmates = () => {
-    const today = getCurrentDaySchedule()
-    if (!today || !today.flights || today.flights.length === 0) return []
+    try {
+      // Use geolocation if available
+      if (userLocation && allPilots.length > 0) {
+        // Calculate distance to other pilots and return nearby ones (within 50 miles)
+        return allPilots.filter(pilot => {
+          if (!pilot.location) return false
+          const distance = calculateDistance(userLocation, pilot.location)
+          return distance < 50 && pilot.employeeId !== pilotProfile?.employeeId
+        }).slice(0, 10)
+      }
+      
+      // Fallback to schedule-based location
+      const today = getCurrentDaySchedule()
+      if (!today || !today.flights || today.flights.length === 0) return []
+      
+      const currentLocation = today.flights[0].origin || today.flights[0].departure
+      if (!currentLocation) return []
+      
+      return friends.filter(friend => friend.currentLocation === currentLocation)
+    } catch (error) {
+      console.error('Error in getNearbyCrewmates:', error)
+      return []
+    }
+  }
+  
+  const calculateDistance = (loc1, loc2) => {
+    // Haversine formula to calculate distance between two lat/lng points
+    const R = 3959 // Earth's radius in miles
+    const dLat = (loc2.lat - loc1.lat) * Math.PI / 180
+    const dLon = (loc2.lng - loc1.lng) * Math.PI / 180
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(loc1.lat * Math.PI / 180) * Math.cos(loc2.lat * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+    return R * c
+  }
+  
+  const requestGeolocation = () => {
+    if ('geolocation' in navigator) {
+      // Check if we're on HTTPS or localhost
+      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost'
+      
+      if (!isSecure) {
+        console.warn('Geolocation requires HTTPS. Feature disabled on HTTP.')
+        return
+      }
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          }
+          setUserLocation(location)
+          localforage.setItem('userLocation', location)
+        },
+        (error) => {
+          console.error('Geolocation error:', error)
+        }
+      )
+    }
+  }
+  
+  const searchPilots = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
     
-    const currentLocation = today.flights[0].origin
-    return friends.filter(friend => friend.currentLocation === currentLocation)
+    setSearchLoading(true)
+    
+    try {
+      // Search by name or employee number
+      const isEmployeeId = /^\d{5,7}$/.test(query.trim())
+      
+      let results = []
+      if (isEmployeeId) {
+        // Search by employee ID
+        results = allPilots.filter(pilot => 
+          pilot.employeeId && pilot.employeeId.includes(query.trim())
+        )
+      } else {
+        // Search by name
+        const queryLower = query.toLowerCase()
+        results = allPilots.filter(pilot =>
+          pilot.name && pilot.name.toLowerCase().includes(queryLower)
+        )
+      }
+      
+      setSearchResults(results.slice(0, 20))
+    } catch (error) {
+      console.error('Search error:', error)
+      setSearchResults([])
+    } finally {
+      setSearchLoading(false)
+    }
   }
 
   const handleSearch = async () => {
@@ -398,31 +613,28 @@ function App() {
     setSearchResults([])
     
     try {
-      // Simulate API call to search registered app users database
-      await new Promise(resolve => setTimeout(resolve, 800))
+      // Call server API to search only registered users
+      const response = await apiCall('/api/search-users', {
+        method: 'POST',
+        body: JSON.stringify({ query: searchQuery.trim() })
+      })
       
-      // Mock search results - only shows users who have registered on the app
-      // In production, this would query your app's user database
-      const mockCrewMembers = [
-        { name: username, role: pilotRank, employeeId: username, base: domicile || homeAirport, airline: airline, isCurrentUser: true },
-        { name: 'Sarah Johnson', role: 'Captain', employeeId: '12345', base: 'CVG', airline: 'Delta' },
-        { name: 'Michael Chen', role: 'First Officer', employeeId: '23456', base: 'ORD', airline: 'United' },
-        { name: 'Emily Rodriguez', role: 'Flight Attendant', employeeId: '34567', base: 'LAX', airline: 'American' },
-        { name: 'David Thompson', role: 'First Officer', employeeId: '45678', base: 'CVG', airline: 'ABX Air' },
-        { name: 'Jessica Williams', role: 'Captain', employeeId: '56789', base: 'ATL', airline: 'Southwest' },
-        { name: 'Robert Martinez', role: 'Flight Attendant', employeeId: '67890', base: 'DFW', airline: 'FedEx' }
-      ]
+      const data = await response.json()
       
-      // Filter based on search query (name or employee number)
-      const query = searchQuery.toLowerCase()
-      const results = mockCrewMembers.filter(member => 
-        member.name.toLowerCase().includes(query) || 
-        member.employeeId.includes(query)
-      )
-      
-      setSearchResults(results)
+      if (data.success && data.users) {
+        // Show all users including current user (mark them so they can't add themselves)
+        const currentUserEmployeeId = pilotProfile?.employeeId || username
+        const results = data.users.map(user => ({
+          ...user,
+          isCurrentUser: user.employeeId === currentUserEmployeeId
+        }))
+        setSearchResults(results)
+      } else {
+        setSearchResults([])
+      }
     } catch (err) {
       console.error('Search error:', err)
+      setSearchResults([])
     } finally {
       setSearchLoading(false)
     }
@@ -432,15 +644,24 @@ function App() {
     setShowRegistrationPopup(true)
     
     try {
-      // Simulate API call to register user as findable
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Call server API to register user in database
+      const response = await apiCall('/api/register-user', {
+        method: 'POST',
+        body: JSON.stringify({
+          employeeId: pilotProfile?.employeeId || username,
+          name: pilotProfile?.name || username,
+          role: pilotProfile?.rank || pilotRank,
+          base: pilotProfile?.base || domicile || homeAirport,
+          airline: airline
+        })
+      })
       
-      // Mark user as registered
-      setIsRegisteredUser(true)
-      await localforage.setItem('isRegisteredUser', true)
+      const result = await response.json()
       
-      // In production, this would update the user's profile in the database
-      // to make them searchable by other users
+      if (result.success) {
+        setIsRegisteredUser(true)
+        await localforage.setItem('isRegisteredUser', true)
+      }
     } catch (err) {
       console.error('Registration error:', err)
     } finally {
@@ -450,8 +671,24 @@ function App() {
 
   const handleUnregisterUser = async () => {
     if (confirm('Are you sure you want to unregister? Other pilots will no longer be able to find you.')) {
-      setIsRegisteredUser(false)
-      await localforage.setItem('isRegisteredUser', false)
+      try {
+        // Call server API to unregister user
+        const response = await apiCall('/api/unregister-user', {
+          method: 'POST',
+          body: JSON.stringify({
+            employeeId: pilotProfile?.employeeId || username
+          })
+        })
+        
+        const result = await response.json()
+        
+        if (result.success) {
+          setIsRegisteredUser(false)
+          await localforage.setItem('isRegisteredUser', false)
+        }
+      } catch (err) {
+        console.error('Unregister error:', err)
+      }
     }
   }
 
@@ -487,7 +724,31 @@ function App() {
   }
 
   const dismissScheduleChange = (index) => {
-    setScheduleChanges(prev => prev.filter((_, i) => i !== index))
+    // Dismiss just marks as read, doesn't remove
+    setScheduleChanges(prev => prev.map((change, i) => 
+      i === index ? { ...change, read: true } : change
+    ))
+  }
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) {
+      alert('To install this app:\n\n' +
+            '1. On Android Chrome: Tap the menu (⋮) and select "Add to Home screen"\n' +
+            '2. On iPhone Safari: Tap Share (📤) and select "Add to Home Screen"\n' +
+            '3. On Desktop: Click the install icon in your browser\'s address bar\n\n' +
+            'Note: HTTPS is required for installation.')
+      return
+    }
+    
+    deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+    
+    if (outcome === 'accepted') {
+      console.log('✅ User accepted the install prompt')
+    }
+    
+    setDeferredPrompt(null)
+    setShowInstallPrompt(false)
   }
 
   const initializePushNotifications = async () => {
@@ -591,10 +852,8 @@ function App() {
     // Show in-app notification
     alert(`✅ Notification Accepted!\n\n${notification.message}\n\nYou will be notified about updates for this ${notification.type === 'schedule' ? 'schedule change' : notification.type}.`)
     
-    // Mark as read and keep in list
-    setScheduleChanges(prev => prev.map((change, i) => 
-      i === index ? { ...change, read: true, accepted: true } : change
-    ))
+    // Remove notification after acceptance
+    setScheduleChanges(prev => prev.filter((_, i) => i !== index))
   }
 
   const toggleChatSelection = (friendId) => {
@@ -645,9 +904,8 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/family/generate-code', {
+      const response = await apiCall('/api/family/generate-code', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pilotUsername: username,
           memberName: newFamilyMemberName.trim(),
@@ -662,11 +920,27 @@ function App() {
           id: Date.now().toString(),
           name: newFamilyMemberName.trim(),
           code: data.code,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          pilotUsername: username,
+          pilotEmployeeId: pilotProfile?.employeeId || username,
+          airline: airline
         }
 
         const updatedCodes = [...familyAccessCodes, newAccess]
         setFamilyAccessCodes(updatedCodes)
+        
+        // Store the code mapping globally so family members can look it up
+        const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+        codeMapping[data.code] = {
+          name: newFamilyMemberName.trim(),
+          pilot: username,
+          pilotEmployeeId: pilotProfile?.employeeId || username,
+          pilotName: pilotProfile?.name || username,
+          airline: airline,
+          password: await localforage.getItem('tempPassword') // Store encrypted in production
+        }
+        await localforage.setItem('familyCodeMapping', codeMapping)
+        
         setNewFamilyMemberName('')
         
         // Save to local storage
@@ -680,16 +954,75 @@ function App() {
     }
   }
 
-  const copyFamilyCode = (code) => {
-    navigator.clipboard.writeText(code)
-    alert('Family access code copied to clipboard!')
+  const copyFamilyCode = async (code) => {
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code)
+        alert('✅ Family access code copied to clipboard!')
+      } else {
+        // Fallback for older browsers or non-HTTPS
+        const textArea = document.createElement('textarea')
+        textArea.value = code
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        
+        try {
+          document.execCommand('copy')
+          alert('✅ Family access code copied to clipboard!')
+        } catch (err) {
+          alert(`📋 Copy this code manually: ${code}`)
+        }
+        
+        document.body.removeChild(textArea)
+      }
+    } catch (err) {
+      console.error('Copy failed:', err)
+      alert(`📋 Copy this code manually: ${code}`)
+    }
+  }
+
+  const handleSaveProfileName = async () => {
+    if (!editedName.trim()) {
+      alert('Name cannot be empty')
+      return
+    }
+    
+    try {
+      // Update pilot profile
+      const updatedProfile = { ...pilotProfile, name: editedName.trim() }
+      setPilotProfile(updatedProfile)
+      await localforage.setItem('pilotProfile', updatedProfile)
+      
+      // Update family code mappings so family members see the new name
+      const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+      const currentEmployeeId = pilotProfile?.employeeId || username
+      
+      // Update all codes that belong to this pilot
+      for (const code in codeMapping) {
+        if (codeMapping[code].pilotEmployeeId === currentEmployeeId) {
+          codeMapping[code].pilotName = editedName.trim()
+        }
+      }
+      
+      await localforage.setItem('familyCodeMapping', codeMapping)
+      
+      setIsEditingName(false)
+      alert('✅ Profile name updated successfully!')
+    } catch (err) {
+      console.error('Error saving profile name:', err)
+      alert('❌ Failed to update profile name')
+    }
   }
 
   const revokeFamilyAccess = async (memberId, memberName, code) => {
     const confirmed = window.confirm(`Revoke access for ${memberName}? They will no longer be able to view your schedule.`)
     if (confirmed) {
       try {
-        const response = await fetch(`http://localhost:3001/api/family/revoke-code/${code}`, {
+        const response = await apiCall(`/api/family/revoke-code/${code}`, {
           method: 'DELETE'
         })
 
@@ -715,7 +1048,7 @@ function App() {
       try {
         // Revoke all codes from backend
         const revokePromises = familyAccessCodes.map(access =>
-          fetch(`http://localhost:3001/api/family/revoke-code/${access.code}`, {
+          apiCall(`/api/family/revoke-code/${access.code}`, {
             method: 'DELETE'
           })
         )
@@ -730,7 +1063,498 @@ function App() {
     }
   }
 
-  // Crew Portal Scraper Functions
+  // Convert IATA (3-letter) to ICAO (4-letter) airport code
+  const convertToICAO = (airportCode) => {
+    if (!airportCode) return null
+    
+    const code = airportCode.trim().toUpperCase()
+    
+    // Already ICAO (4 letters)
+    if (code.length === 4) return code
+    
+    // IATA (3 letters) - convert to ICAO
+    if (code.length === 3) {
+      // US airports: add "K" prefix (most common)
+      // Alaska airports: add "PA" prefix
+      // Hawaii airports: add "PH" prefix
+      // Canadian airports: add "C" prefix
+      
+      // Special cases for Alaska
+      const alaskaAirports = ['ANC', 'FAI', 'JNU', 'BET', 'OME', 'SIT', 'CDV', 'KTN', 'ADQ', 'DLG']
+      if (alaskaAirports.includes(code)) {
+        return 'PA' + code
+      }
+      
+      // Special cases for Hawaii
+      const hawaiiAirports = ['HNL', 'OGG', 'KOA', 'LIH', 'ITO', 'MKK', 'LNY', 'JHM']
+      if (hawaiiAirports.includes(code)) {
+        return 'PH' + code
+      }
+      
+      // Default: US mainland - add "K" prefix
+      return 'K' + code
+    }
+    
+    return code
+  }
+
+  // Fetch real weather data
+  const fetchRealWeather = async (airportCode) => {
+    const icaoCode = convertToICAO(airportCode)
+    console.log(`🌦️ Fetching weather for: ${airportCode} → ${icaoCode}`)
+    try {
+      // Use server-side proxy to avoid CORS issues
+      const response = await apiCall('/api/weather', {
+        method: 'POST',
+        body: JSON.stringify({ airport: icaoCode })
+      })
+      
+      const data = await response.json()
+      console.log('📡 Weather response:', data)
+      
+      if (data.success) {
+        return {
+          metar: data.metar || 'No METAR available',
+          decoded: data.decoded || null,
+          taf: data.taf || 'No TAF available',
+          error: false
+        }
+      } else {
+        return {
+          metar: 'Error loading weather data',
+          decoded: null,
+          taf: 'Error loading TAF data',
+          error: true
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching weather:', error)
+      return {
+        metar: 'Error loading weather data',
+        decoded: null,
+        taf: 'Error loading TAF data',
+        error: true
+      }
+    }
+  }
+
+  // Fetch FlightAware data for aircraft tracking
+  const fetchFlightAwareData = async (tailNumber, flightNumber, flightDate = null, origin = null, destination = null) => {
+    try {
+      const response = await apiCall('/api/flightaware', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          tailNumber, 
+          flightNumber,
+          departureDate: flightDate,
+          origin: origin,
+          destination: destination
+        })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        return data.success ? data.flightData : null
+      }
+    } catch (error) {
+      console.error('Error fetching FlightAware data:', error)
+    }
+    return null
+  }
+
+  // Automatic Crew Portal Scraping Functions
+  const handleAutomaticScraping = async (employeeId, password, airline, month = null, year = null) => {
+    console.log('🚀 AUTOMATIC SCRAPING: Starting real crew portal authentication...')
+    if (month && year) {
+      console.log(`📅 Scraping for specific month: ${year}-${String(month).padStart(2, '0')}`)
+    }
+    setLoading(true)
+    
+    try {
+      // Check if this is first login
+      const hasScrapedBefore = await localforage.getItem('hasScrapedBefore')
+      const firstLogin = !hasScrapedBefore
+      
+      console.log(`📋 First login: ${firstLogin} - ${firstLogin ? 'Will scrape full profile' : 'Schedule only'}`)
+      
+      const requestBody = {
+        employeeId: employeeId,
+        password: password,
+        airline: airline || 'abx',
+        firstLogin: firstLogin
+      };
+      
+      // Add month/year if specified
+      if (month && year) {
+        requestBody.month = month;
+        requestBody.year = year;
+      }
+      
+      const response = await apiCall('/api/scrape', {
+        method: 'POST',
+        body: JSON.stringify(requestBody)
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`)
+      }
+      
+      const result = await response.json()
+      
+      if (result.success && result.authenticated) {
+        console.log('✅ AUTOMATIC SCRAPING: Real crew portal authentication successful!')
+        
+        // Update schedule with real data
+        if (result.data && result.data.scheduleData && result.data.scheduleData.flights) {
+          const iadpPairings = result.data.scheduleData.flights;
+          
+          // Transform IADP pairings into displayable flights
+          const allFlights = [];
+          const hotelsByDate = {};
+          
+          iadpPairings.forEach((pairing, pIdx) => {
+            // Handle reserve duties, training, and ground transportation (no legs)
+            if ((pairing.isReserveDuty || pairing.isTraining || pairing.isGroundTransport) && (!pairing.legs || pairing.legs.length === 0)) {
+              allFlights.push({
+                id: `${pairing.pairingCode}-0`,
+                flightNumber: pairing.dutyType || pairing.pairingCode,
+                pairingId: pairing.pairingCode,
+                date: pairing.startDate,
+                origin: pairing.startLocation,
+                destination: pairing.endLocation,
+                departure: pairing.startTime,
+                arrival: pairing.endTime,
+                aircraft: pairing.isTraining ? 'Training' : pairing.isGroundTransport ? 'Ground Transport' : 'Reserve',
+                tailNumber: '',
+                tail: '',
+                status: 'Confirmed',
+                rank: pairing.rank,
+                crewMembers: [],
+                hotels: [],
+                isCodeshare: false,
+                operatingAirline: null,
+                actualDeparture: null,
+                actualArrival: null,
+                isDeadhead: false,
+                isReserveDuty: pairing.isReserveDuty || false,
+                isTraining: pairing.isTraining || false,
+                isGroundTransport: pairing.isGroundTransport || false,
+                dutyType: pairing.dutyType
+              });
+            }
+            
+            if (pairing.legs && pairing.legs.length > 0) {
+              pairing.legs.forEach((leg, lIdx) => {
+                // Convert leg date from "08Dec" format to ISO date
+                let legDate = pairing.startDate // fallback to pairing start date
+                if (leg.departure?.date) {
+                  const depDateStr = leg.departure.date // e.g., "08Dec"
+                  const dayNum = depDateStr.match(/\d+/)?.[0]
+                  const monthAbbr = depDateStr.match(/[A-Z][a-z]{2}/)?.[0]
+                  const monthMap = {
+                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                    'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                  }
+                  const monthNum = monthMap[monthAbbr] || '01'
+                  const year = pairing.startDate.split('-')[0] // Get year from pairing start date
+                  legDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`
+                }
+                
+                allFlights.push({
+                  id: `${pairing.pairingCode}-${lIdx}`,
+                  flightNumber: leg.flightNumber || `Flight ${lIdx + 1}`,
+                  pairingId: pairing.pairingCode,
+                  date: legDate,
+                  origin: leg.departure?.airport || pairing.startLocation,
+                  destination: leg.arrival?.airport || pairing.endLocation,
+                  departure: leg.departure?.time || pairing.startTime,
+                  arrival: leg.arrival?.time || pairing.endTime,
+                  aircraft: leg.aircraftType || 'Unknown',
+                  tailNumber: leg.tailNumber || '',
+                  tail: leg.tailNumber || '',
+                  status: 'Confirmed',
+                  rank: pairing.rank || 'FO',
+                  crewMembers: leg.crewMembers || pairing.crewMembers || [],
+                  hotels: pairing.hotels || [],
+                  isCodeshare: leg.isCodeshare || false,
+                  operatingAirline: leg.operatingAirline || null,
+                  actualDeparture: leg.actualDeparture || null,
+                  actualArrival: leg.actualArrival || null,
+                  isDeadhead: leg.isDeadhead || false,
+                  isReserveDuty: pairing.isReserveDuty || false,
+                  isTraining: pairing.isTraining || false,
+                  dutyType: pairing.dutyType || null
+                });
+              });
+              
+              // Store hotels by the date of the last leg's arrival (hotel date)
+              // Hotels should show on the day you arrive for the layover
+              if (pairing.hotels && pairing.hotels.length > 0 && pairing.legs.length > 0) {
+                // Get the last leg's arrival date as the hotel date
+                const lastLeg = pairing.legs[pairing.legs.length - 1];
+                let hotelDate = pairing.startDate; // fallback
+                
+                if (lastLeg.arrival?.date) {
+                  const arrDateStr = lastLeg.arrival.date;
+                  const dayNum = arrDateStr.match(/\d+/)?.[0];
+                  const monthAbbr = arrDateStr.match(/[A-Z][a-z]{2}/)?.[0];
+                  const monthMap = {
+                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                    'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                  };
+                  const monthNum = monthMap[monthAbbr] || '01';
+                  const year = pairing.startDate.split('-')[0];
+                  hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
+                }
+                
+                // Add hotels to this date (might be multiple hotels on same date)
+                if (!hotelsByDate[hotelDate]) {
+                  hotelsByDate[hotelDate] = [];
+                }
+                hotelsByDate[hotelDate].push(...pairing.hotels);
+              }
+            }
+          });
+          
+          const realScheduleData = { 
+            flights: allFlights,
+            hotelsByDate 
+          };
+          
+          console.log('📊 Schedule Data Summary:')
+          console.log(`  - Total flights: ${allFlights.length}`)
+          console.log(`  - Reserve duties: ${allFlights.filter(f => f.isReserveDuty).length}`)
+          console.log(`  - Training duties: ${allFlights.filter(f => f.isTraining).length}`)
+          console.log(`  - DH flights: ${allFlights.filter(f => f.isDeadhead).length}`)
+          console.log(`  - Hotel dates: ${Object.keys(hotelsByDate).join(', ')}`)
+          console.log('  - Hotels by date:', hotelsByDate)
+          
+          setSchedule(realScheduleData)
+          
+          // Fetch actual times from FlightAware for past flights with tail numbers
+          console.log('⏰ Fetching actual times from FlightAware for completed flights...')
+          const today = new Date()
+          const pastFlights = allFlights.filter(f => {
+            const flightDate = new Date(f.date)
+            return flightDate < today && (f.tail || f.tailNumber) && !f.isReserveDuty && !f.isTraining
+          })
+          
+          if (pastFlights.length > 0) {
+            const actualTimesPromises = pastFlights.slice(0, 10).map(async flight => {
+              try {
+                const response = await fetchFlightAwareData(flight.tail || flight.tailNumber, flight.flightNumber, flight.date)
+                if (response?.actualTimes) {
+                  return {
+                    id: flight.id,
+                    ...response.actualTimes
+                  }
+                }
+              } catch (e) {
+                console.log(`⚠️ Could not fetch actual times for ${flight.flightNumber}`)
+              }
+              return null
+            })
+            
+            const actualTimesResults = await Promise.all(actualTimesPromises)
+            const actualTimesMap = {}
+            actualTimesResults.filter(Boolean).forEach(result => {
+              actualTimesMap[result.id] = result
+            })
+            
+            // Update flights with actual times
+            if (Object.keys(actualTimesMap).length > 0) {
+              const updatedFlights = allFlights.map(f => {
+                if (actualTimesMap[f.id]) {
+                  return {
+                    ...f,
+                    actualDeparture: actualTimesMap[f.id].actualDeparture || f.actualDeparture,
+                    actualArrival: actualTimesMap[f.id].actualArrival || f.actualArrival
+                  }
+                }
+                return f
+              })
+              
+              const updatedScheduleData = {
+                flights: updatedFlights,
+                hotelsByDate
+              }
+              
+              setSchedule(updatedScheduleData)
+              await localforage.setItem(cacheKey, updatedScheduleData)
+              console.log(`✅ Updated ${Object.keys(actualTimesMap).length} flights with actual times`)
+            }
+          }
+          
+          setSchedule(realScheduleData)
+          
+          // Cache by month so previous months persist
+          const cacheKey = month && year ? `schedule_${year}_${String(month).padStart(2, '0')}` : 'schedule'
+          await localforage.setItem(cacheKey, realScheduleData)
+          
+          // Also update current schedule if viewing current month
+          if (!month || !year || (month === new Date().getMonth() + 1 && year === new Date().getFullYear())) {
+            await localforage.setItem('schedule', realScheduleData)
+          }
+          
+          // Mark that we've scraped at least once
+          await localforage.setItem('hasScrapedBefore', true)
+          
+          // Update notifications with remarks from crew portal
+          if (result.data.scheduleData.remarks && result.data.scheduleData.remarks.length > 0) {
+            const newNotifications = result.data.scheduleData.remarks.map(remark => ({
+              type: 'remark',
+              message: remark.message,
+              date: remark.date,
+              read: false
+            }));
+            
+            setScheduleChanges(prev => [...newNotifications, ...prev]);
+          }
+          
+          // Update pilot profile with real data from crew portal
+          if (result.data.scheduleData.pilotProfile) {
+            const profile = {
+              ...result.data.scheduleData.pilotProfile,
+              employeeId: employeeId
+            };
+            setPilotProfile(profile);
+            await localforage.setItem('pilotProfile', profile);
+            
+            // Update username display
+            if (profile.name) {
+              setUsername(profile.name);
+            }
+          }
+          
+          // Success - no notification needed
+          console.log('✅ Schedule data loaded successfully')
+        }
+      } else {
+        console.error('❌ AUTOMATIC SCRAPING: Authentication failed')
+        setScheduleChanges(prev => [{
+          type: 'general',
+          message: `❌ Automatic scraping failed: ${result.message || result.error || 'Authentication error'}`,
+          date: new Date().toISOString(),
+          read: false
+        }, ...prev])
+      }
+      
+    } catch (error) {
+      console.error('❌ AUTOMATIC SCRAPING ERROR:', error)
+      setScheduleChanges(prev => [{
+        type: 'general',
+        message: `❌ Automatic scraping error: Unable to connect to crew portal. ${error.message}`,
+        date: new Date().toISOString(),
+        read: false
+      }, ...prev])
+    } finally {
+      setLoading(false)
+      setScrapingInProgress(false)
+    }
+  }
+
+  // Manual refresh function for the refresh button
+  const handleRefreshScraping = async (e) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
+    if (!token) {
+      setError('Please login to refresh schedule data')
+      return
+    }
+    
+    // Get current month being viewed
+    const viewingMonth = currentMonth.getMonth() + 1 // JavaScript months are 0-indexed
+    const viewingYear = currentMonth.getFullYear()
+    
+    console.log(`🔄 MANUAL REFRESH: Scraping for ${viewingYear}-${String(viewingMonth).padStart(2, '0')}...`)
+    
+    // Don't clear the schedule - keep it visible during refresh
+    setLoadingMessage('Refreshing schedule data from crew portal...')
+    setScrapingInProgress(true)
+    setError(null)
+    
+    // Keep a copy of current schedule to restore if refresh fails
+    const currentSchedule = schedule
+    
+    try {
+      let storedUsername, storedPassword, storedAirline
+      
+      if (userType === 'family') {
+        // For family accounts, use pilot's credentials from code mapping
+        const accessCode = await localforage.getItem('familyAccessCode')
+        const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+        const memberInfo = codeMapping[accessCode]
+        
+        if (!memberInfo) {
+          setError('Family access code not found. Please log in again.')
+          setScrapingInProgress(false)
+          return
+        }
+        
+        storedUsername = memberInfo.pilotEmployeeId
+        storedPassword = memberInfo.password
+        storedAirline = memberInfo.airline
+      } else {
+        // For pilot accounts, use stored credentials
+        storedUsername = await localforage.getItem('username')
+        storedPassword = await localforage.getItem('tempPassword')
+        storedAirline = await localforage.getItem('airline')
+      }
+      
+      if (!storedUsername || !storedPassword) {
+        setScheduleChanges(prev => [{
+          type: 'general',
+          message: '🔄 Please log out and log back in to enable schedule refresh.',
+          date: new Date().toISOString(),
+          read: false
+        }, ...prev])
+        setScrapingInProgress(false)
+        return
+      }
+      
+      // Call the automatic scraping function with month parameter
+      await handleAutomaticScraping(storedUsername, storedPassword, storedAirline, viewingMonth, viewingYear)
+      
+      // After scraping completes, reload the schedule for the viewed month
+      console.log(`✅ Refresh complete. Reloading schedule for ${viewingYear}-${String(viewingMonth).padStart(2, '0')}`)
+      const monthCacheKey = `schedule_${viewingYear}_${String(viewingMonth).padStart(2, '0')}`
+      const monthSchedule = await localforage.getItem(monthCacheKey)
+      if (monthSchedule) {
+        setSchedule(monthSchedule)
+        console.log(`✅ Loaded schedule for ${viewingYear}-${String(viewingMonth).padStart(2, '0')} from cache`)
+        setError(null)
+      } else {
+        console.log(`⚠️ No schedule data available for ${viewingYear}-${String(viewingMonth).padStart(2, '0')} after refresh`)
+        // Keep the current schedule visible and show error message
+        if (currentSchedule) {
+          setSchedule(currentSchedule)
+        }
+        setError(`No schedule data found for ${viewingYear}-${String(viewingMonth).padStart(2, '0')}. The crew portal may not have data for this month yet.`)
+      }
+      
+    } catch (error) {
+      console.error('Refresh error:', error)
+      // Restore the previous schedule on error
+      if (currentSchedule) {
+        setSchedule(currentSchedule)
+      }
+      setScheduleChanges(prev => [{
+        type: 'general',
+        message: '❌ Refresh failed: Unable to connect to crew portal. Please try again.',
+        date: new Date().toISOString(),
+        read: false
+      }, ...prev])
+      setError('Refresh failed. Please try again.')
+    } finally {
+      setScrapingInProgress(false)
+      setLoadingMessage('')
+    }
+  }
+
+  // Crew Portal Scraper Functions (keeping for compatibility)
   const handleCrewPortalScrape = async () => {
     if (!scraperCredentials.username || !scraperCredentials.password) {
       setScraperError('Please enter your crew portal credentials')
@@ -796,74 +1620,287 @@ function App() {
 
   const getCurrentDaySchedule = () => {
     if (!schedule) return null
-    const today = new Date().toISOString().split('T')[0]
     
-    for (const pairing of schedule) {
-      for (const flight of pairing.flights) {
-        if (flight.date === today) {
-          return { ...pairing, currentFlight: flight }
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      
+      // Handle new format from scraper: { flights: [...] }
+      if (schedule.flights && Array.isArray(schedule.flights)) {
+        const todayFlights = schedule.flights.filter(f => f.date === today)
+        if (todayFlights.length > 0) {
+          return { flights: todayFlights, currentFlight: todayFlights[0] }
         }
       }
+      // Handle old format: array of pairings
+      else if (Array.isArray(schedule)) {
+        for (const pairing of schedule) {
+          if (pairing.flights && Array.isArray(pairing.flights)) {
+            for (const flight of pairing.flights) {
+              if (flight.date === today) {
+                return { ...pairing, currentFlight: flight }
+              }
+            }
+          }
+        }
+      }
+      return null
+    } catch (error) {
+      console.error('Error in getCurrentDaySchedule:', error)
+      return null
     }
-    return null
   }
 
   const getScheduleForDate = (dateString) => {
-    if (!schedule) return null
+    if (!schedule) {
+      console.log('getScheduleForDate: No schedule data')
+      return null
+    }
     
-    const flights = []
-    for (const pairing of schedule) {
-      for (const flight of pairing.flights) {
-        if (flight.date === dateString) {
-          flights.push({ ...flight, pairingId: pairing.pairingId })
+    try {
+      const flights = []
+      
+      console.log('getScheduleForDate: Looking for date', dateString)
+      console.log('getScheduleForDate: Schedule structure', schedule)
+      
+      // Handle new format from scraper: { flights: [...] }
+      if (schedule.flights && Array.isArray(schedule.flights)) {
+        for (const flight of schedule.flights) {
+          console.log('Checking flight date:', flight.date, 'against', dateString)
+          if (flight.date === dateString) {
+            flights.push({ ...flight, pairingId: flight.pairingId || 'N/A' })
+          }
         }
       }
+      // Handle old format: array of pairings
+      else if (Array.isArray(schedule)) {
+        for (const pairing of schedule) {
+          if (pairing.flights && Array.isArray(pairing.flights)) {
+            for (const flight of pairing.flights) {
+              if (flight.date === dateString) {
+                flights.push({ ...flight, pairingId: pairing.pairingId })
+              }
+            }
+          }
+        }
+      }
+      
+      console.log('getScheduleForDate: Found', flights.length, 'flights for', dateString)
+      return flights.length > 0 ? flights : null
+    } catch (error) {
+      console.error('Error in getScheduleForDate:', error, error.stack)
+      return null
     }
-    return flights.length > 0 ? flights : null
   }
 
   const getMonthlySchedule = () => {
     if (!schedule) return {}
     
-    const monthData = {}
-    schedule.forEach(pairing => {
-      pairing.flights.forEach(flight => {
-        const dateKey = flight.date
-        if (!monthData[dateKey]) {
-          monthData[dateKey] = []
-        }
-        monthData[dateKey].push({ ...flight, pairingId: pairing.pairingId })
-      })
-    })
-    
-    return monthData
+    try {
+      const monthData = {}
+      
+      // Handle new format from scraper: { flights: [...] }
+      if (schedule.flights && Array.isArray(schedule.flights)) {
+        schedule.flights.forEach(flight => {
+          const dateKey = flight.date
+          if (!monthData[dateKey]) {
+            monthData[dateKey] = []
+          }
+          monthData[dateKey].push({ ...flight, pairingId: flight.pairingId || 'N/A' })
+        })
+      }
+      // Handle old format: array of pairings
+      else if (Array.isArray(schedule)) {
+        schedule.forEach(pairing => {
+          if (pairing.flights && Array.isArray(pairing.flights)) {
+            pairing.flights.forEach(flight => {
+              const dateKey = flight.date
+              if (!monthData[dateKey]) {
+                monthData[dateKey] = []
+              }
+              monthData[dateKey].push({ ...flight, pairingId: pairing.pairingId })
+            })
+          }
+        })
+      }
+      
+      return monthData
+    } catch (error) {
+      console.error('Error in getMonthlySchedule:', error)
+      return {}
+    }
   }
 
   const hasScheduleForMonth = (year, month) => {
     if (!schedule) return false
     
-    return schedule.some(pairing => 
-      pairing.flights.some(flight => {
-        const flightDate = new Date(flight.date)
-        return flightDate.getFullYear() === year && flightDate.getMonth() === month
-      })
-    )
+    try {
+      // Handle new format from scraper: { flights: [...] }
+      if (schedule.flights && Array.isArray(schedule.flights)) {
+        return schedule.flights.some(flight => {
+          const flightDate = new Date(flight.date)
+          return flightDate.getFullYear() === year && flightDate.getMonth() === month
+        })
+      }
+      // Handle old format: array of pairings
+      else if (Array.isArray(schedule)) {
+        return schedule.some(pairing => 
+          pairing.flights && pairing.flights.some(flight => {
+            const flightDate = new Date(flight.date)
+            return flightDate.getFullYear() === year && flightDate.getMonth() === month
+          })
+        )
+      }
+      return false
+    } catch (error) {
+      console.error('Error in hasScheduleForMonth:', error)
+      return false
+    }
   }
 
-  const goToPreviousMonth = () => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev)
-      newDate.setMonth(newDate.getMonth() - 1)
-      return newDate
-    })
+  const goToPreviousMonth = async () => {
+    const newDate = new Date(currentMonth)
+    newDate.setMonth(newDate.getMonth() - 1)
+    
+    // Try to load cached data for this month
+    const month = newDate.getMonth() + 1
+    const year = newDate.getFullYear()
+    const cacheKey = `schedule_${year}_${String(month).padStart(2, '0')}`
+    
+    const cachedData = await localforage.getItem(cacheKey)
+    if (cachedData) {
+      console.log(`📦 Loaded cached schedule for ${year}-${String(month).padStart(2, '0')}`)
+      setSchedule(cachedData)
+      setError(null)
+      setCurrentMonth(newDate)
+    } else {
+      console.log(`⚠️ No cached data for ${year}-${String(month).padStart(2, '0')} - fetching from crew portal`)
+      
+      // Update month first to show loading on correct month
+      setCurrentMonth(newDate)
+      setLoading(true)
+      setLoadingMessage(`Loading schedule for ${year}-${String(month).padStart(2, '0')} from crew portal...`)
+      setError(null)
+      
+      try {
+        let storedUsername, storedPassword, storedAirline
+        
+        if (userType === 'family') {
+          const accessCode = await localforage.getItem('familyAccessCode')
+          const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+          const memberInfo = codeMapping[accessCode]
+          
+          if (!memberInfo) {
+            setError('Family access code not found. Please log in again.')
+            setLoading(false)
+            return
+          }
+          
+          storedUsername = memberInfo.pilotEmployeeId
+          storedPassword = memberInfo.password
+          storedAirline = memberInfo.airline
+        } else {
+          storedUsername = await localforage.getItem('username')
+          storedPassword = await localforage.getItem('tempPassword')
+          storedAirline = await localforage.getItem('airline')
+        }
+        
+        if (!storedUsername || !storedPassword) {
+          setError('Please log out and log back in to load schedule data.')
+          setLoading(false)
+          return
+        }
+        
+        // Fetch from crew portal
+        await handleAutomaticScraping(storedUsername, storedPassword, storedAirline, month, year)
+        
+        // Load the newly fetched data
+        const freshData = await localforage.getItem(cacheKey)
+        if (freshData) {
+          setSchedule(freshData)
+          console.log(`✅ Loaded schedule for ${year}-${String(month).padStart(2, '0')} from crew portal`)
+        } else {
+          setError(`No schedule data available for ${year}-${String(month).padStart(2, '0')}. The crew portal may not have data for this month yet.`)
+        }
+      } catch (error) {
+        console.error('Error loading previous month:', error)
+        setError(`Failed to load schedule for ${year}-${String(month).padStart(2, '0')}. Please try again.`)
+      } finally {
+        setLoading(false)
+      }
+    }
   }
 
-  const goToNextMonth = () => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev)
-      newDate.setMonth(newDate.getMonth() + 1)
-      return newDate
-    })
+  const goToNextMonth = async () => {
+    const newDate = new Date(currentMonth)
+    newDate.setMonth(newDate.getMonth() + 1)
+    
+    // Try to load cached data for this month
+    const month = newDate.getMonth() + 1
+    const year = newDate.getFullYear()
+    const cacheKey = `schedule_${year}_${String(month).padStart(2, '0')}`
+    
+    const cachedData = await localforage.getItem(cacheKey)
+    if (cachedData) {
+      console.log(`📦 Loaded cached schedule for ${year}-${String(month).padStart(2, '0')}`)
+      setSchedule(cachedData)
+      setError(null)
+      setCurrentMonth(newDate)
+    } else {
+      console.log(`⚠️ No cached data for ${year}-${String(month).padStart(2, '0')} - fetching from crew portal`)
+      
+      // Update month first to show loading on correct month
+      setCurrentMonth(newDate)
+      setLoading(true)
+      setLoadingMessage(`Loading schedule for ${year}-${String(month).padStart(2, '0')} from crew portal...`)
+      setError(null)
+      
+      try {
+        let storedUsername, storedPassword, storedAirline
+        
+        if (userType === 'family') {
+          const accessCode = await localforage.getItem('familyAccessCode')
+          const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+          const memberInfo = codeMapping[accessCode]
+          
+          if (!memberInfo) {
+            setError('Family access code not found. Please log in again.')
+            setLoading(false)
+            return
+          }
+          
+          storedUsername = memberInfo.pilotEmployeeId
+          storedPassword = memberInfo.password
+          storedAirline = memberInfo.airline
+        } else {
+          storedUsername = await localforage.getItem('username')
+          storedPassword = await localforage.getItem('tempPassword')
+          storedAirline = await localforage.getItem('airline')
+        }
+        
+        if (!storedUsername || !storedPassword) {
+          setError('Please log out and log back in to load schedule data.')
+          setLoading(false)
+          return
+        }
+        
+        // Fetch from crew portal
+        await handleAutomaticScraping(storedUsername, storedPassword, storedAirline, month, year)
+        
+        // Load the newly fetched data
+        const freshData = await localforage.getItem(cacheKey)
+        if (freshData) {
+          setSchedule(freshData)
+          console.log(`✅ Loaded schedule for ${year}-${String(month).padStart(2, '0')} from crew portal`)
+        } else {
+          setError(`No schedule data available for ${year}-${String(month).padStart(2, '0')}. The crew portal may not have data for this month yet.`)
+        }
+      } catch (error) {
+        console.error('Error loading next month:', error)
+        setError(`Failed to load schedule for ${year}-${String(month).padStart(2, '0')}. Please try again.`)
+      } finally {
+        setLoading(false)
+      }
+    }
   }
 
   const renderFriendsView = () => {
@@ -900,7 +1937,7 @@ function App() {
                   <button className="back-to-list" onClick={() => setSelectedChat(null)}>
                     ← Back
                   </button>
-                  <h3>{selectedChat.name}</h3>
+                  <h3>{selectedChat.name && selectedChat.name.trim() !== '' ? selectedChat.name : selectedChat.employeeId}</h3>
                 </div>
                 
                 <div className="messages-list">
@@ -1006,9 +2043,9 @@ function App() {
                             />
                           </div>
                         )}
-                        <div className="friend-avatar">{friend.name.charAt(0)}</div>
+                        <div className="friend-avatar">{(friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId).charAt(0)}</div>
                         <div className="friend-info">
-                          <span className="friend-name">{friend.name}</span>
+                          <span className="friend-name">{friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId}</span>
                           <span className="last-message">
                             {chatMessages[friend.id]?.length > 0 
                               ? chatMessages[friend.id][chatMessages[friend.id].length - 1].text 
@@ -1034,7 +2071,12 @@ function App() {
               <p className="nearby-subtitle">Friends in your current location</p>
             </div>
             
-            {getNearbyCrewmates().length === 0 ? (
+            {!window.location.protocol.startsWith('https') && window.location.hostname !== 'localhost' ? (
+              <div className="empty-nearby">
+                <p>🔒 Location services require HTTPS</p>
+                <p className="empty-hint">This feature is only available on secure connections</p>
+              </div>
+            ) : getNearbyCrewmates().length === 0 ? (
               <div className="empty-nearby">
                 <p>🌍 No nearby crewmates found</p>
                 <p className="empty-hint">Friends at your current base will appear here</p>
@@ -1043,9 +2085,9 @@ function App() {
               <div className="nearby-list">
                 {getNearbyCrewmates().map((friend, idx) => (
                   <div key={idx} className="nearby-item">
-                    <div className="friend-avatar">{friend.name.charAt(0)}</div>
+                    <div className="friend-avatar">{(friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId).charAt(0)}</div>
                     <div className="friend-info">
-                      <span className="friend-name">{friend.name}</span>
+                      <span className="friend-name">{friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId}</span>
                       <span className="friend-location">📍 {friend.currentLocation}</span>
                     </div>
                     <button className="chat-nearby-btn" onClick={() => {
@@ -1071,9 +2113,16 @@ function App() {
             <div className="search-box">
               <input
                 type="text"
-                placeholder="Enter name or employee number..."
+                placeholder="Search by name (e.g., John Smith) or employee number (e.g., 152780)..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  if (e.target.value.trim()) {
+                    handleSearch()
+                  } else {
+                    setSearchResults([])
+                  }
+                }}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && searchQuery.trim()) {
                     handleSearch()
@@ -1123,7 +2172,7 @@ function App() {
             {searchQuery && searchResults.length === 0 && !searchLoading && (
               <div className="no-results">
                 <p>😔 No registered users found</p>
-                <p className="no-results-hint">Make sure they have the app installed and try their full name or employee number</p>
+                <p className="no-results-hint">Make sure they're registered in the app and try their full name or employee number</p>
               </div>
             )}
 
@@ -1133,6 +2182,7 @@ function App() {
                 <ul>
                   <li>Search by first or last name</li>
                   <li>Search by employee number (e.g., 12345)</li>
+                  <li>Searches both ABX and ATI registered users</li>
                   <li>Only finds crew members who are registered on the app</li>
                   <li>Send a friend request to start chatting</li>
                 </ul>
@@ -1365,26 +2415,77 @@ function App() {
             <h3>👤 Pilot Information</h3>
             <div className="pilot-info-section">
               <div className="pilot-info-card">
-                <div className="pilot-info-row">
-                  <span className="pilot-info-label">Username:</span>
-                  <span className="pilot-info-value">{username || 'Not logged in'}</span>
-                </div>
-                {userType !== 'family' && (
+                {pilotProfile && (
+                  <>
+                    <div className="pilot-info-row">
+                      <span className="pilot-info-label">Name:</span>
+                      {isEditingName ? (
+                        <div style={{display: 'flex', gap: '8px', alignItems: 'center', flex: 1}}>
+                          <input
+                            type="text"
+                            value={editedName}
+                            onChange={(e) => setEditedName(e.target.value)}
+                            placeholder="Enter your name"
+                            style={{flex: 1, padding: '6px 10px', borderRadius: '4px', border: '1px solid #ddd'}}
+                            autoFocus
+                          />
+                          <button onClick={handleSaveProfileName} style={{padding: '6px 12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>Save</button>
+                          <button onClick={() => setIsEditingName(false)} style={{padding: '6px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>Cancel</button>
+                        </div>
+                      ) : (
+                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', flex: 1}}>
+                          <span className="pilot-info-value">{pilotProfile.name || 'Not set'}</span>
+                          {userType !== 'family' && (
+                            <button 
+                              onClick={() => {
+                                setIsEditingName(true)
+                                setEditedName(pilotProfile.name || '')
+                              }}
+                              style={{padding: '4px 10px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px'}}
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="pilot-info-row">
+                      <span className="pilot-info-label">Employee ID:</span>
+                      <span className="pilot-info-value">{pilotProfile.employeeId}</span>
+                    </div>
+                    {pilotProfile.rank && (
+                      <div className="pilot-info-row">
+                        <span className="pilot-info-label">Rank:</span>
+                        <span className="pilot-info-value">{pilotProfile.rank}</span>
+                      </div>
+                    )}
+                    {pilotProfile.base && (
+                      <div className="pilot-info-row">
+                        <span className="pilot-info-label">Base:</span>
+                        <span className="pilot-info-value">{pilotProfile.base}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                {!pilotProfile && userType !== 'family' && (
                   <div className="pilot-info-row">
-                    <span className="pilot-info-label">Nickname:</span>
-                    <input
-                      type="text"
-                      className="pilot-nickname-input"
-                      placeholder="Enter nickname..."
-                      value={nickname}
-                      onChange={(e) => {
-                        setNickname(e.target.value)
-                        localforage.setItem('nickname', e.target.value)
-                      }}
-                    />
+                    <span className="pilot-info-label">Username:</span>
+                    <span className="pilot-info-value">{username || 'Not logged in'}</span>
                   </div>
                 )}
-                {userType !== 'family' && (
+                {userType === 'family' && (
+                  <div className="pilot-info-row">
+                    <span className="pilot-info-label">Your Name:</span>
+                    <span className="pilot-info-value">{familyMemberName || 'Family Member'}</span>
+                  </div>
+                )}
+                {userType === 'family' && (
+                  <div className="pilot-info-row">
+                    <span className="pilot-info-label">Pilot Name:</span>
+                    <span className="pilot-info-value">{username || 'Unknown'}</span>
+                  </div>
+                )}
+                {userType !== 'family' && !pilotProfile?.rank && (
                   <div className="pilot-info-row">
                     <span className="pilot-info-label">Rank:</span>
                     <select 
@@ -1501,7 +2602,10 @@ function App() {
                 <div className="pilot-info-row">
                   <span className="pilot-info-label">Company:</span>
                   <span className="pilot-info-value">
-                    {airline === 'abx' ? 'ABX AIR (GB)' : airline === 'ati' ? 'AIR TRANSPORT INTERNATIONAL (8C)' : airline ? airline.toUpperCase() : 'Unknown'}
+                    {(() => {
+                      const airlineToDisplay = userType === 'family' ? pilotAirline : airline
+                      return airlineToDisplay === 'abx' ? 'ABX AIR (GB)' : airlineToDisplay === 'ati' ? 'AIR TRANSPORT INTERNATIONAL (8C)' : airlineToDisplay ? airlineToDisplay.toUpperCase() : 'Unknown'
+                    })()}
                   </span>
                 </div>
               </div>
@@ -1539,6 +2643,22 @@ function App() {
         {settingsTab === 'features' && (
           <div className="settings-content">
             <h3>🌟 App Features</h3>
+            
+            {!window.matchMedia('(display-mode: standalone)').matches && (
+              <div className="install-app-banner">
+                <div className="install-banner-content">
+                  <span className="install-icon">📱</span>
+                  <div>
+                    <strong>Install FlightRosterIQ</strong>
+                    <p>Add to your home screen for quick access and offline use</p>
+                  </div>
+                </div>
+                <button className="install-app-btn" onClick={handleInstallApp}>
+                  ⬇️ Install App
+                </button>
+              </div>
+            )}
+            
             <div className="features-list">
               <div className="feature-item">
                 <span className="feature-icon">📅</span>
@@ -1772,6 +2892,10 @@ function App() {
         {settingsTab === 'faqs' && (
           <div className="settings-content">
             <h3>❓ Frequently Asked Questions</h3>
+            <div className="faq-item beta-notice">
+              <p><strong>⚠️ BETA VERSION</strong></p>
+              <p>This app is currently in BETA testing. If you experience any bugs or issues, please report them to <a href="mailto:FlightRosterIQ@Gmail.com">FlightRosterIQ@Gmail.com</a> so we can improve the app!</p>
+            </div>
             <div className="faq-item">
               <p><strong>Q: How do I add friends?</strong></p>
               <p>A: Go to Friends tab and search by name or employee number</p>
@@ -1846,166 +2970,7 @@ function App() {
     )
   }
 
-  const renderCrewScraperView = () => {
-    return (
-      <div className="crew-scraper-container">
-        <div className="view-header">
-          <h1>Crew Portal Scraper</h1>
-          <p className="view-subtitle">
-            Enter your crew portal credentials to fetch your schedule data
-          </p>
-        </div>
 
-        <div className="scraper-form-container">
-          <div className="scraper-form">
-            <div className="form-group">
-              <label htmlFor="scraper-airline">Airline:</label>
-              <select
-                id="scraper-airline"
-                value={scraperCredentials.airline}
-                onChange={(e) => setScraperCredentials({
-                  ...scraperCredentials,
-                  airline: e.target.value
-                })}
-              >
-                <option value="">Select Airline</option>
-                <option value="abx">ABX AIR (GB)</option>
-                <option value="ati">Air Transport International (8C)</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="scraper-username">Username:</label>
-              <input
-                type="text"
-                id="scraper-username"
-                value={scraperCredentials.username}
-                onChange={(e) => setScraperCredentials({
-                  ...scraperCredentials,
-                  username: e.target.value
-                })}
-                placeholder="Enter your crew portal username"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="scraper-password">Password:</label>
-              <input
-                type="password"
-                id="scraper-password"
-                value={scraperCredentials.password}
-                onChange={(e) => setScraperCredentials({
-                  ...scraperCredentials,
-                  password: e.target.value
-                })}
-                placeholder="Enter your crew portal password"
-              />
-            </div>
-
-            <div className="form-actions">
-              <button
-                type="button"
-                onClick={handleCrewPortalScrape}
-                disabled={scraperLoading || !scraperCredentials.airline || !scraperCredentials.username || !scraperCredentials.password}
-                className="scrape-btn"
-              >
-                {scraperLoading ? 'Scraping...' : 'Scrape Schedule'}
-              </button>
-              <button
-                type="button"
-                onClick={resetScraperForm}
-                className="reset-btn"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-
-          {scraperError && (
-            <div className="error-message">
-              <strong>Error:</strong> {scraperError}
-              {scraperData && scraperData.manualPortalUrl && (
-                <div className="manual-portal-link">
-                  <a 
-                    href={scraperData.manualPortalUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="portal-link-btn"
-                  >
-                    🔗 Open {scraperData.portalName} Crew Portal
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
-
-          {scraperData && (
-            <div className="scraper-results">
-              <h3>Scraped Schedule Data</h3>
-              <div className="schedule-summary">
-                <p><strong>Total Flights:</strong> {scraperData.flights?.length || 0}</p>
-                <p><strong>Data Source:</strong> {scraperData.airline?.toUpperCase()} Crew Portal</p>
-                <p><strong>Last Updated:</strong> {new Date(scraperData.timestamp).toLocaleString()}</p>
-              </div>
-
-              {scraperData.flights && scraperData.flights.length > 0 && (
-                <div className="scraped-flights">
-                  <h4>Flight Details:</h4>
-                  <div className="flights-list">
-                    {scraperData.flights.map((flight, index) => (
-                      <div key={index} className="flight-item">
-                        <div className="flight-header">
-                          <strong>{flight.flightNumber}</strong>
-                          <span className="flight-route">{flight.origin} → {flight.destination}</span>
-                        </div>
-                        <div className="flight-times">
-                          <span>Departure: {flight.departure}</span>
-                          <span>Arrival: {flight.arrival}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="scraper-info-section">
-            <h3>ℹ️ How This Works</h3>
-            <div className="info-grid">
-              <div className="info-item">
-                <span className="info-icon">🔒</span>
-                <div className="info-content">
-                  <strong>Secure:</strong> Your credentials are never stored
-                </div>
-              </div>
-              <div className="info-item">
-                <span className="info-icon">⚡</span>
-                <div className="info-content">
-                  <strong>Real-Time:</strong> Data fetched directly from crew portals
-                </div>
-              </div>
-              <div className="info-item">
-                <span className="info-icon">👥</span>
-                <div className="info-content">
-                  <strong>Multi-User:</strong> Each pilot sees their own schedule
-                </div>
-              </div>
-              <div className="info-item">
-                <span className="info-icon">🛩️</span>
-                <div className="info-content">
-                  <strong>Multi-Airline:</strong> Supports ABX Air & ATI
-                </div>
-              </div>
-            </div>
-            <div className="beta-notice">
-              <span className="beta-badge">BETA</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   const renderMonthlyView = () => {
     const monthData = getMonthlySchedule()
@@ -2027,7 +2992,11 @@ function App() {
         } else {
           const date = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day)
           const dateKey = date.toISOString().split('T')[0]
-          const hasFlights = monthData[dateKey]?.length > 0
+          const daySchedule = monthData[dateKey]
+          const hasFlights = daySchedule?.length > 0
+          const isTraining = hasFlights && daySchedule[0]?.isTraining
+          const isReserve = hasFlights && daySchedule[0]?.isReserveDuty
+          const dutyType = isTraining || isReserve ? (daySchedule[0]?.dutyType || daySchedule[0]?.pairingId) : null
           const isToday = day === today.getDate() && 
                           viewMonth.getMonth() === today.getMonth() && 
                           viewMonth.getFullYear() === today.getFullYear()
@@ -2035,14 +3004,18 @@ function App() {
           week.push(
             <div 
               key={day} 
-              className={`calendar-day ${hasFlights ? 'has-duty' : ''} ${isToday ? 'today' : ''}`}
+              className={`calendar-day ${hasFlights ? (isTraining ? 'has-training' : isReserve ? 'has-reserve' : 'has-duty') : ''} ${isToday ? 'today' : ''}`}
               onClick={() => {
                 setSelectedDate(dateKey)
                 setActiveTab('daily')
               }}
             >
               <div className="day-number">{day}</div>
-              {hasFlights && <div className="duty-indicator">{monthData[dateKey].length} flights</div>}
+              {hasFlights && (
+                <div className="duty-indicator">
+                  {(isTraining || isReserve) ? dutyType : `${daySchedule.length} flight${daySchedule.length > 1 ? 's' : ''}`}
+                </div>
+              )}
             </div>
           )
           day++
@@ -2086,10 +3059,34 @@ function App() {
     const selectedDateObj = new Date(selectedDate + 'T00:00:00')
     const formattedDate = selectedDateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     
+    const goToPreviousDay = () => {
+      const prevDate = new Date(selectedDateObj)
+      prevDate.setDate(prevDate.getDate() - 1)
+      const dateString = prevDate.toISOString().split('T')[0]
+      setSelectedDate(dateString)
+      setActiveView('daily')
+    }
+
+    const goToNextDay = () => {
+      const nextDate = new Date(selectedDateObj)
+      nextDate.setDate(nextDate.getDate() + 1)
+      const dateString = nextDate.toISOString().split('T')[0]
+      setSelectedDate(dateString)
+      setActiveView('daily')
+    }
+
     if (!flights) {
       return (
         <div className="daily-view">
-          <h2>📋 {formattedDate}</h2>
+          <div className="day-navigation">
+            <button className="nav-arrow" onClick={goToPreviousDay}>
+              ← Previous Day
+            </button>
+            <h2>📋 {formattedDate}</h2>
+            <button className="nav-arrow" onClick={goToNextDay}>
+              Next Day →
+            </button>
+          </div>
           <div className="empty-state">
             <p>No flights scheduled for this day</p>
           </div>
@@ -2099,20 +3096,88 @@ function App() {
 
     return (
       <div className="daily-view">
-        <h2>📋 {formattedDate}</h2>
+        <div className="day-navigation">
+          <button className="nav-arrow" onClick={goToPreviousDay}>
+            ← Previous Day
+          </button>
+          <h2>📋 {formattedDate}</h2>
+          <button className="nav-arrow" onClick={goToNextDay}>
+            Next Day →
+          </button>
+        </div>
         <div className="pairing-card">
-          <h3>Pairing: {flights[0].pairingId}</h3>
-          {flights.map((flight, idx) => (
+          {/* Check if this is a training duty */}
+          {flights[0]?.isTraining ? (
+            <div className="training-duty-card">
+              <h3 className="training-duty-header">
+                🎓 Training: {flights[0]?.dutyType || flights[0]?.pairingId}
+              </h3>
+              <div className="training-duty-info">
+                <div className="training-time">
+                  <span className="training-label">Start:</span>
+                  <span className="training-value">{flights[0]?.departure || flights[0]?.startTime}</span>
+                </div>
+                <div className="training-time">
+                  <span className="training-label">End:</span>
+                  <span className="training-value">{flights[0]?.arrival || flights[0]?.endTime}</span>
+                </div>
+                <div className="training-location">
+                  <span className="training-label">Location:</span>
+                  <span className="training-value">{flights[0]?.origin || flights[0]?.startLocation || 'Training Facility'}</span>
+                </div>
+              </div>
+            </div>
+          ) : flights[0]?.isReserveDuty ? (
+            <div className="reserve-duty-card">
+              <h3 className="reserve-duty-header">
+                📅 Reserve Duty: {flights[0]?.dutyType || flights[0]?.pairingId}
+              </h3>
+              <div className="reserve-duty-info">
+                <div className="reserve-time">
+                  <span className="reserve-label">Start:</span>
+                  <span className="reserve-value">{flights[0]?.departure || flights[0]?.startTime}</span>
+                </div>
+                <div className="reserve-time">
+                  <span className="reserve-label">End:</span>
+                  <span className="reserve-value">{flights[0]?.arrival || flights[0]?.endTime}</span>
+                </div>
+                <div className="reserve-location">
+                  <span className="reserve-label">Location:</span>
+                  <span className="reserve-value">{flights[0]?.origin || flights[0]?.startLocation || 'Base'}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h3>Pairing: {flights[0]?.pairingId || 'N/A'}</h3>
+              {flights.map((flight, idx) => (
             <div key={idx} className="flight-card" onClick={() => setSelectedFlight(flight)}>
+              {flight.isDeadhead && (
+                <div className="deadhead-badge" style={{background: '#6366f1', color: 'white', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', display: 'inline-block'}}>
+                  DH - Deadhead Flight
+                </div>
+              )}
+              {flight.isGroundTransport && (
+                <div className="ground-transport-badge" style={{background: '#10b981', color: 'white', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', display: 'inline-block'}}>
+                  🚗 Ground Transportation
+                </div>
+              )}
               <div className="flight-row">
                 <div className="flight-header-section">
                   <strong>{flight.flightNumber}</strong>
+                  {flight.operatingAirline && flight.isCodeshare && (
+                    <span className="airline-badge" title={`Operated by ${flight.operatingAirline}`}>
+                      {flight.operatingAirline}
+                    </span>
+                  )}
                   <span>
                     <span 
                       className="airport-code" 
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation()
                         setWeatherAirport(flight.origin)
+                        const weather = await fetchRealWeather(flight.origin)
+                        setWeatherData(prev => ({ ...prev, [flight.origin]: weather }))
                       }}
                     >
                       {flight.origin}
@@ -2120,9 +3185,11 @@ function App() {
                     {' → '}
                     <span 
                       className="airport-code" 
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation()
                         setWeatherAirport(flight.destination)
+                        const weather = await fetchRealWeather(flight.destination)
+                        setWeatherData(prev => ({ ...prev, [flight.destination]: weather }))
                       }}
                     >
                       {flight.destination}
@@ -2160,20 +3227,48 @@ function App() {
                 </div>
                 <div className="aircraft-info">
                   <span className="aircraft-type">{flight.aircraft}</span>
-                  <span 
-                    className="tail-number" 
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setTrackedAircraft({
-                        tail: flight.tail,
-                        aircraft: flight.aircraft,
-                        flightNumber: flight.flightNumber
-                      })
-                    }}
-                  >
-                    {flight.tail}
-                  </span>
+                  {(flight.tail || flight.tailNumber) && (
+                    <span 
+                      className="tail-number clickable-tail" 
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        const tailNum = flight.tail || flight.tailNumber
+                        setTrackedAircraft({
+                          tail: tailNum,
+                          aircraft: flight.aircraft,
+                          flightNumber: flight.flightNumber,
+                          origin: flight.origin,
+                          destination: flight.destination
+                        })
+                        setActiveTab('tracking')
+                        // Fetch real flight tracking data
+                        const trackingData = await fetchFlightAwareData(tailNum, flight.flightNumber)
+                        setFlightTrackingData(trackingData)
+                      }}
+                      title="Click to track aircraft location"
+                    >
+                      ✈️ {flight.tail || flight.tailNumber}
+                    </span>
+                  )}
                 </div>
+                {flight.crewMembers && flight.crewMembers.length > 0 && (
+                  <div className="crew-info">
+                    <span className="crew-icon">👥</span>
+                    <div className="crew-list">
+                      {flight.crewMembers.map((crew, cIdx) => (
+                        <div key={cIdx} className="crew-member">
+                          <span className="crew-role">{crew.role}</span>
+                          <span className="crew-name">{crew.name}</span>
+                          {crew.phone && (
+                            <a href={`tel:${crew.phone}`} className="crew-phone" onClick={(e) => e.stopPropagation()}>
+                              📞 {crew.phone}
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="click-hint">Click for details →</div>
               </div>
               {flight.layover && (
@@ -2207,7 +3302,102 @@ function App() {
               )}
             </div>
           ))}
+            </>
+          )}
         </div>
+        
+        {/* Hotel Information at end of daily schedule */}
+        {schedule?.hotelsByDate && schedule.hotelsByDate[selectedDate] && schedule.hotelsByDate[selectedDate].length > 0 && (
+          <div className="daily-hotel-section">
+            <h3>🏨 Hotel Information</h3>
+            {schedule.hotelsByDate[selectedDate].map((hotel, hIdx) => {
+              // Calculate check-in/check-out times based on surrounding flights
+              const selectedFlights = getScheduleForDate(selectedDate)
+              const lastFlight = selectedFlights[selectedFlights.length - 1]
+              
+              // Find next scheduled flight (search up to 7 days ahead)
+              let firstNextFlight = null
+              for (let daysAhead = 1; daysAhead <= 7; daysAhead++) {
+                const checkDate = new Date(new Date(selectedDate).getTime() + (daysAhead * 86400000))
+                const checkDateStr = checkDate.toISOString().split('T')[0]
+                const flights = getScheduleForDate(checkDateStr)
+                if (flights && flights.length > 0) {
+                  firstNextFlight = flights[0]
+                  break
+                }
+              }
+              
+              const checkInTime = lastFlight ? (() => {
+                const arrivalTime = new Date(`${selectedDate}T${lastFlight.arrival}`)
+                arrivalTime.setHours(arrivalTime.getHours() + 1)
+                const date = arrivalTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                const time = arrivalTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                return `${date} at ${time}`
+              })() : new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at 3:00 PM'
+              
+              const checkOutTime = firstNextFlight ? (() => {
+                // Checkout is 1.5 hours before next flight departure
+                const departureTime = new Date(`${firstNextFlight.date}T${firstNextFlight.departure}`)
+                departureTime.setHours(departureTime.getHours() - 1)
+                departureTime.setMinutes(departureTime.getMinutes() - 30)
+                const date = departureTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                const time = departureTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                return `${date} at ${time}`
+              })() : 'Next day at 10:00 AM'
+              
+              return (
+                <div key={hIdx} className="hotel-card">
+                  <div 
+                    className="hotel-header" 
+                    onClick={() => {
+                      const query = encodeURIComponent(`${hotel.name} ${hotel.address || hotel.location || ''}`);
+                      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                    }}
+                    style={{cursor: 'pointer'}}
+                    title="Click to view on Google Maps"
+                  >
+                    <span className="hotel-icon">🏨</span>
+                    <div className="hotel-details">
+                      <strong className="hotel-name">{hotel.name}</strong>
+                      <span className="hotel-location">📍 {hotel.location}</span>
+                    </div>
+                  </div>
+                  <div className="hotel-info-grid">
+                    <div className="hotel-info-item">
+                      <span className="hotel-info-label">Check-in:</span>
+                      <span className="hotel-info-value">{checkInTime}</span>
+                    </div>
+                    <div className="hotel-info-item">
+                      <span className="hotel-info-label">Check-out:</span>
+                      <span className="hotel-info-value">{checkOutTime}</span>
+                    </div>
+                    {hotel.address && (
+                      <div className="hotel-info-item hotel-address">
+                        <span className="hotel-info-label">Address:</span>
+                        <a 
+                          href={`https://maps.google.com/?q=${encodeURIComponent(hotel.address)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hotel-link"
+                        >
+                          📍 {hotel.address}
+                        </a>
+                      </div>
+                    )}
+                    {hotel.phone && (
+                      <div className="hotel-info-item hotel-phone">
+                        <span className="hotel-info-label">Phone:</span>
+                        <a href={`tel:${hotel.phone}`} className="hotel-link">
+                          📞 {hotel.phone}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     )
   }
@@ -2352,6 +3542,20 @@ function App() {
 
   return (
     <div className={`app ${theme === 'dark' ? 'dark-theme' : ''}`}>
+      {loading && (
+        <div className="loading-banner-top">
+          <div className="loading-banner-content">
+            <div className="loading-spinner-small"></div>
+            <span>{loadingMessage || 'Loading...'}</span>
+          </div>
+        </div>
+      )}
+      {scrapingInProgress && !loading && (
+        <div className="scraping-progress-banner">
+          <div className="scraping-spinner"></div>
+          <span>Loading schedule data from crew portal...</span>
+        </div>
+      )}
       <header>
         <div className="header-logo">
           <img src="/logo.png" alt="FlightRosterIQ Logo" className="app-logo" />
@@ -2363,6 +3567,16 @@ function App() {
           </div>
         )}
         <div className="header-actions">
+          {token && (userType === 'pilot' || userType === 'family') && (
+            <button 
+              className="refresh-btn-icon"
+              onClick={handleRefreshScraping}
+              disabled={loading || scrapingInProgress}
+              title="Refresh Schedule from Crew Portal"
+            >
+              {(loading || scrapingInProgress) ? '⟳' : '🔄'}
+            </button>
+          )}
           <div className={`status ${isOnline ? 'online' : 'offline'}`}>
             {isOnline ? '🟢 Online' : '🔴 Offline'}
           </div>
@@ -2396,9 +3610,6 @@ function App() {
               </div>
             )}
           </div>
-          <button onClick={() => fetchSchedule()} disabled={loading || !isOnline}>
-            {loading ? '⟳' : '↻'}
-          </button>
         </div>
       </header>
 
@@ -2406,14 +3617,21 @@ function App() {
         {activeTab === 'monthly' && renderMonthlyView()}
         {activeTab === 'daily' && renderDailyView()}
         {activeTab === 'friends' && renderFriendsView()}
-        {activeTab === 'scraper' && renderCrewScraperView()}
+
         {activeTab === 'notifications' && renderNotificationsView()}
         {activeTab === 'settings' && renderSettingsView()}
         
-        {!schedule && !loading && (
+        {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'friends' && activeTab !== 'notifications' && (
           <div className="empty-state">
             <p>No schedule data available</p>
-            {isOnline && <button onClick={() => fetchSchedule()}>Load Schedule</button>}
+            <p className="empty-hint">Use the refresh button above to load your schedule</p>
+          </div>
+        )}
+        
+        {!schedule && !loading && userType === 'family' && activeTab !== 'settings' && activeTab !== 'notifications' && (
+          <div className="empty-state">
+            <p>No schedule data available</p>
+            <p className="empty-hint">Use the refresh button above to load the pilot's schedule</p>
           </div>
         )}
       </main>
@@ -2461,14 +3679,7 @@ function App() {
             </span>
             <span className="nav-label">Notifications</span>
           </button>
-          <button 
-            className={activeTab === 'scraper' ? 'active' : ''}
-            onClick={() => setActiveTab('scraper')}
-            title="Crew Portal Scraper"
-          >
-            <span className="nav-icon">🕸️</span>
-            <span className="nav-label">Portal</span>
-          </button>
+
           <button 
             className={activeTab === 'settings' ? 'active' : ''}
             onClick={() => setActiveTab('settings')}
@@ -2505,10 +3716,76 @@ function App() {
                       <span className="time-lt">{selectedFlight.departure} LT</span>
                       <span className="time-utc">{convertToUTC(selectedFlight.departure)} UTC</span>
                     </div>
-                    {selectedFlight.actualDeparture && (
+                    {selectedFlight.actualDeparture ? (
                       <div className="time-display actual-time">
                         <span className="time-lt">Actual: {selectedFlight.actualDeparture} LT</span>
                         <span className="time-utc">{convertToUTC(selectedFlight.actualDeparture)} UTC</span>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{fontSize: '11px', color: '#999', marginTop: '4px'}}>
+                          {(() => {
+                            const flightDate = new Date(selectedFlight.date);
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            return flightDate < today ? 'Click button below to fetch actual times' : 'Actual times available after flight completion';
+                          })()}
+                        </div>
+                        {(() => {
+                          const flightDate = new Date(selectedFlight.date);
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          return flightDate < today ? (
+                            <button 
+                              style={{
+                                marginTop: '8px',
+                                padding: '6px 12px',
+                                background: '#007AFF',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '12px'
+                              }}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const tailNum = selectedFlight.tail || selectedFlight.tailNumber;
+                                const trackingData = await fetchFlightAwareData(
+                                  tailNum, 
+                                  selectedFlight.flightNumber, 
+                                  selectedFlight.date,
+                                  selectedFlight.origin,
+                                  selectedFlight.destination
+                                );
+                                if (trackingData?.flightAwareUrl) {
+                                  // Open FlightAware in a new tab
+                                  window.open(trackingData.flightAwareUrl, '_blank');
+                                } else if (trackingData?.actualTimes) {
+                                  // Update the selected flight with actual times
+                                  setSelectedFlight({
+                                    ...selectedFlight,
+                                    actualDeparture: trackingData.actualTimes.actualDeparture || selectedFlight.actualDeparture,
+                                    actualArrival: trackingData.actualTimes.actualArrival || selectedFlight.actualArrival
+                                  });
+                                  
+                                  // Update the schedule data
+                                  setSchedule(prev => {
+                                    const updatedFlights = prev.flights.map(f => 
+                                      f.id === selectedFlight.id ? {
+                                        ...f,
+                                        actualDeparture: trackingData.actualTimes.actualDeparture || f.actualDeparture,
+                                        actualArrival: trackingData.actualTimes.actualArrival || f.actualArrival
+                                      } : f
+                                    );
+                                    return { ...prev, flights: updatedFlights };
+                                  });
+                                }
+                              }}
+                            >
+                              🔗 View on FlightAware
+                            </button>
+                          ) : null;
+                        })()}
                       </div>
                     )}
                   </span>
@@ -2520,12 +3797,12 @@ function App() {
                       <span className="time-lt">{selectedFlight.arrival} LT</span>
                       <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
                     </div>
-                    {selectedFlight.actualArrival && (
+                    {selectedFlight.actualArrival ? (
                       <div className="time-display actual-time">
                         <span className="time-lt">Actual: {selectedFlight.actualArrival} LT</span>
                         <span className="time-utc">{convertToUTC(selectedFlight.actualArrival)} UTC</span>
                       </div>
-                    )}
+                    ) : null}
                   </span>
                 </div>
               </div>
@@ -2540,7 +3817,29 @@ function App() {
                 </div>
                 <div className="detail-item">
                   <span className="detail-label">Tail Number:</span>
-                  <span className="detail-value">{selectedFlight.tail}</span>
+                  <span className="detail-value clickable-tail" 
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      const tailNum = selectedFlight.tail || selectedFlight.tailNumber
+                      if (tailNum) {
+                        setTrackedAircraft({
+                          tail: tailNum,
+                          aircraft: selectedFlight.aircraft,
+                          flightNumber: selectedFlight.flightNumber,
+                          origin: selectedFlight.origin,
+                          destination: selectedFlight.destination
+                        })
+                        setSelectedFlight(null)
+                        setActiveTab('tracking')
+                        // Fetch real flight tracking data
+                        const trackingData = await fetchFlightAwareData(tailNum, selectedFlight.flightNumber)
+                        setFlightTrackingData(trackingData)
+                      }
+                    }}
+                    style={{ cursor: (selectedFlight.tail || selectedFlight.tailNumber) ? 'pointer' : 'default' }}
+                  >
+                    {selectedFlight.tail || selectedFlight.tailNumber || 'Not Available'}
+                  </span>
                 </div>
                 {selectedFlight.gate && (
                   <div className="detail-item">
@@ -2569,11 +3868,11 @@ function App() {
               </div>
             </div>
 
-            {userType !== 'family' && selectedFlight.crew && selectedFlight.crew.length > 0 && (
+            {userType !== 'family' && selectedFlight.crewMembers && selectedFlight.crewMembers.length > 0 && (
               <div className="detail-section">
-                <h3>Crew Members</h3>
+                <h3>👥 Crew Members</h3>
                 <div className="crew-list">
-                  {selectedFlight.crew.map((member, idx) => (
+                  {selectedFlight.crewMembers.map((member, idx) => (
                     <div key={idx} className="crew-member">
                       <div className="crew-avatar">{member.name.charAt(0)}</div>
                       <div className="crew-info">
@@ -2617,6 +3916,16 @@ function App() {
                 </div>
               </div>
             )}
+            
+            {/* Show message when no crew data available */}
+            {userType !== 'family' && (!selectedFlight.crewMembers || selectedFlight.crewMembers.length === 0) && (
+              <div className="detail-section">
+                <h3>👥 Crew Members</h3>
+                <p style={{color: '#666', fontStyle: 'italic', padding: '20px'}}>
+                  No crew information available for this flight
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2628,35 +3937,118 @@ function App() {
             
             <h2>🌤️ Weather for {weatherAirport}</h2>
             
-            <div className="weather-section">
-              <h3>ATIS (Automated Terminal Information Service)</h3>
-              <div className="weather-info">
-                <p><strong>Information:</strong> Alpha</p>
-                <p><strong>Time:</strong> {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} UTC</p>
-                <p><strong>Winds:</strong> 270 at 12 knots, gusts 18 knots</p>
-                <p><strong>Visibility:</strong> 10 statute miles</p>
-                <p><strong>Sky Condition:</strong> Few clouds at 3,000 feet, Scattered at 8,000 feet</p>
-                <p><strong>Temperature:</strong> 18°C / 64°F</p>
-                <p><strong>Dew Point:</strong> 12°C / 54°F</p>
-                <p><strong>Altimeter:</strong> 30.12 inHg</p>
-                <p><strong>Runway:</strong> Landing and departing Runway 27L</p>
+            {weatherData[weatherAirport] ? (
+              <>
+                <div className="weather-section">
+                  <h3>METAR (Current Weather)</h3>
+                  <div className="weather-code">
+                    {weatherData[weatherAirport].metar}
+                  </div>
+                </div>
+                
+                {weatherData[weatherAirport].decoded && !weatherData[weatherAirport].error && (
+                  <div className="weather-section atis-section">
+                    <h3>📻 Decoded Weather Information</h3>
+                    <div className="atis-info">
+                      {weatherData[weatherAirport].decoded.observationTime && (
+                        <p><strong>Observation Time:</strong> {weatherData[weatherAirport].decoded.observationTime}</p>
+                      )}
+                      {weatherData[weatherAirport].decoded.flightCategory && (
+                        <p><strong>Flight Category:</strong> <span style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontWeight: 'bold',
+                          background: weatherData[weatherAirport].decoded.flightCategory === 'VFR' ? '#22c55e' :
+                                     weatherData[weatherAirport].decoded.flightCategory === 'MVFR' ? '#3b82f6' :
+                                     weatherData[weatherAirport].decoded.flightCategory === 'IFR' ? '#ef4444' : '#991b1b',
+                          color: 'white'
+                        }}>{weatherData[weatherAirport].decoded.flightCategory}</span></p>
+                      )}
+                      {weatherData[weatherAirport].decoded.temperature && (
+                        <p><strong>Temperature:</strong> {weatherData[weatherAirport].decoded.temperature}</p>
+                      )}
+                      {weatherData[weatherAirport].decoded.dewpoint && (
+                        <p><strong>Dew Point:</strong> {weatherData[weatherAirport].decoded.dewpoint}</p>
+                      )}
+                      {weatherData[weatherAirport].decoded.wind && (
+                        <p><strong>Wind:</strong> {weatherData[weatherAirport].decoded.wind}</p>
+                      )}
+                      {weatherData[weatherAirport].decoded.visibility && (
+                        <p><strong>Visibility:</strong> {weatherData[weatherAirport].decoded.visibility}</p>
+                      )}
+                      {weatherData[weatherAirport].decoded.altimeter && (
+                        <p><strong>Altimeter:</strong> {weatherData[weatherAirport].decoded.altimeter}</p>
+                      )}
+                      {weatherData[weatherAirport].decoded.clouds && (
+                        <p><strong>Cloud Coverage:</strong> {weatherData[weatherAirport].decoded.clouds}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="weather-section" style={{background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)', padding: '20px', borderRadius: '12px'}}>
+                <h3 style={{color: '#2563eb', fontSize: '16px', marginBottom: '12px'}}>Loading Weather Data...</h3>
+                <p style={{color: '#1e40af', fontSize: '14px', textAlign: 'center'}}>
+                  Fetching current METAR for <strong>{weatherAirport}</strong>
+                </p>
               </div>
-            </div>
-
-            <div className="weather-section">
-              <h3>METAR (Meteorological Aerodrome Report)</h3>
-              <div className="weather-code">
-                {weatherAirport} {new Date().toISOString().slice(8,10)}{new Date().getUTCHours()}00Z 27012G18KT 10SM FEW030 SCT080 18/12 A3012 RMK AO2
-              </div>
-            </div>
+            )}
 
             <div className="weather-section">
               <h3>TAF (Terminal Aerodrome Forecast)</h3>
               <div className="weather-code">
-                TAF {weatherAirport} {new Date().toISOString().slice(8,10)}{new Date().getUTCHours()}00Z {new Date().toISOString().slice(8,10)}{(new Date().getUTCHours() + 24) % 24}00Z 27012G18KT P6SM FEW030 SCT080
-                <br/>FM{(new Date().getUTCHours() + 6) % 24}0000 28015G22KT P6SM SCT040 BKN100
-                <br/>FM{(new Date().getUTCHours() + 12) % 24}0000 29010KT P6SM BKN060
+                {weatherData[weatherAirport]?.taf?.raw || weatherData[weatherAirport]?.taf || 'TAF data not available'}
               </div>
+              
+              {weatherData[weatherAirport]?.taf?.decoded && (
+                <div style={{marginTop: '15px'}}>
+                  <h4 style={{fontSize: '14px', marginBottom: '10px', color: '#1e40af'}}>📅 Forecast Periods:</h4>
+                  {weatherData[weatherAirport].taf.decoded.map((period, idx) => (
+                    <div key={idx} style={{
+                      background: '#f0f9ff',
+                      padding: '12px',
+                      marginBottom: '10px',
+                      borderRadius: '8px',
+                      borderLeft: `4px solid ${
+                        period.flightCategory === 'VFR' ? '#22c55e' :
+                        period.flightCategory === 'MVFR' ? '#3b82f6' :
+                        period.flightCategory === 'IFR' ? '#ef4444' : '#991b1b'
+                      }`
+                    }}>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                        <strong style={{fontSize: '13px'}}>
+                          {period.timeFrom && new Date(period.timeFrom).toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })} - {period.timeTo && new Date(period.timeTo).toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </strong>
+                        {period.flightCategory && (
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            background: period.flightCategory === 'VFR' ? '#22c55e' :
+                                       period.flightCategory === 'MVFR' ? '#3b82f6' :
+                                       period.flightCategory === 'IFR' ? '#ef4444' : '#991b1b',
+                            color: 'white'
+                          }}>
+                            {period.flightCategory}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{fontSize: '12px', color: '#1e40af'}}>
+                        {period.wind && <div>💨 Wind: {period.wind}</div>}
+                        {period.visibility && <div>👁️ Visibility: {period.visibility}</div>}
+                        {period.clouds && <div>☁️ Clouds: {period.clouds}</div>}
+                        {period.weather && <div>🌧️ Weather: {period.weather}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="weather-legend">
@@ -2689,71 +4081,112 @@ function App() {
                 <span className="badge-label">Flight Number</span>
                 <span className="badge-value">{trackedAircraft.flightNumber}</span>
               </div>
-              <div className="tracking-badge status-live">
+              {trackedAircraft.origin && trackedAircraft.destination && (
+                <div className="tracking-badge">
+                  <span className="badge-label">Route</span>
+                  <span className="badge-value">{trackedAircraft.origin} → {trackedAircraft.destination}</span>
+                </div>
+              )}
+              <div className={`tracking-badge ${flightTrackingData?.isLive ? 'status-live' : ''}`}>
                 <span className="badge-label">Status</span>
-                <span className="badge-value">🔴 LIVE</span>
+                <span className="badge-value">
+                  {flightTrackingData?.isLive ? '🔴 LIVE' : '⚪ On Ground'}
+                </span>
               </div>
             </div>
 
             <div className="tracking-section">
               <h3>✈️ Current Position</h3>
-              <div className="position-grid">
-                <div className="position-item">
-                  <span className="position-label">Latitude:</span>
-                  <span className="position-value">39.0997° N</span>
+              {flightTrackingData ? (
+                <div className="position-grid">
+                  <div className="position-item">
+                    <span className="position-label">Status:</span>
+                    <span className="position-value">{flightTrackingData.status}</span>
+                  </div>
+                  <div className="position-item">
+                    <span className="position-label">Altitude:</span>
+                    <span className="position-value">{flightTrackingData.altitude}</span>
+                  </div>
+                  <div className="position-item">
+                    <span className="position-label">Ground Speed:</span>
+                    <span className="position-value">{flightTrackingData.speed}</span>
+                  </div>
+                  <div className="position-item">
+                    <span className="position-label">Heading:</span>
+                    <span className="position-value">{flightTrackingData.heading}</span>
+                  </div>
+                  <div className="position-item">
+                    <span className="position-label">Current Location:</span>
+                    <span className="position-value">{flightTrackingData.currentLocation}</span>
+                  </div>
+                  <div className="position-item">
+                    <span className="position-label">ETA:</span>
+                    <span className="position-value">{flightTrackingData.eta}</span>
+                  </div>
                 </div>
-                <div className="position-item">
-                  <span className="position-label">Longitude:</span>
-                  <span className="position-value">94.5786° W</span>
-                </div>
-                <div className="position-item">
-                  <span className="position-label">Altitude:</span>
-                  <span className="position-value">37,000 ft</span>
-                </div>
-                <div className="position-item">
-                  <span className="position-label">Ground Speed:</span>
-                  <span className="position-value">485 knots</span>
-                </div>
-                <div className="position-item">
-                  <span className="position-label">Heading:</span>
-                  <span className="position-value">270° (West)</span>
-                </div>
-                <div className="position-item">
-                  <span className="position-label">Vertical Speed:</span>
-                  <span className="position-value">Level Flight</span>
-                </div>
-              </div>
+              ) : (
+                <p>Loading tracking data...</p>
+              )}
             </div>
 
-            <div className="tracking-section">
-              <h3>📍 Location Details</h3>
-              <div className="location-info">
-                <div className="location-row">
-                  <strong>Current Location:</strong>
-                  <span>En route - Over Kansas, USA</span>
-                </div>
-                <div className="location-row">
-                  <strong>Distance from Origin:</strong>
-                  <span>892 nautical miles</span>
-                </div>
-                <div className="location-row">
-                  <strong>Distance to Destination:</strong>
-                  <span>734 nautical miles</span>
-                </div>
-                <div className="location-row">
-                  <strong>Estimated Time En Route:</strong>
-                  <span>1 hour 31 minutes</span>
-                </div>
+            {!flightTrackingData || !flightTrackingData.isLive ? (
+              <div className="tracking-section" style={{background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', padding: '20px', borderRadius: '12px', border: '2px solid #f59e0b'}}>
+                <h3>✈️ Flight Not Currently Active</h3>
+                <p style={{color: '#92400e', margin: '10px 0'}}>
+                  This aircraft is not currently in the air or real-time tracking data is unavailable.
+                </p>
+                <p style={{color: '#92400e', fontSize: '14px'}}>
+                  Live tracking is only available for flights currently in progress.
+                </p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="tracking-section">
+                  <h3>📍 Location Details</h3>
+                  <div className="location-info">
+                    <div className="location-row">
+                      <strong>Current Location:</strong>
+                      <span>{flightTrackingData.currentLocation || 'Unknown'}</span>
+                    </div>
+                    <div className="location-row">
+                      <strong>Distance from Origin:</strong>
+                      <span>{flightTrackingData.distanceFromOrigin || 'N/A'}</span>
+                    </div>
+                    <div className="location-row">
+                      <strong>Distance to Destination:</strong>
+                      <span>{flightTrackingData.distanceToDestination || 'N/A'}</span>
+                    </div>
+                    <div className="location-row">
+                      <strong>Estimated Time En Route:</strong>
+                      <span>{flightTrackingData.timeEnRoute || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
 
-            <div className="tracking-section">
-              <h3>⏱️ Flight Timeline</h3>
+                <div className="tracking-section">
+                  <h3>⏱️ Flight Timeline</h3>
+                  <div className="timeline">
+                    {flightTrackingData.timeline && flightTrackingData.timeline.map((event, idx) => (
+                      <div key={idx} className={`timeline-item ${event.completed ? 'completed' : ''}`}>
+                        <div className="timeline-dot"></div>
+                        <div className="timeline-content">
+                          <strong>{event.description}</strong>
+                          <span>{event.time}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Mock timeline removed - keeping only one timeline-item for compatibility */}
+            <div className="tracking-section" style={{display: 'none'}}>
               <div className="timeline">
                 <div className="timeline-item completed">
                   <div className="timeline-dot"></div>
                   <div className="timeline-content">
-                    <strong>Departed CVG</strong>
+                    <strong>Hidden</strong>
                     <span>{new Date(Date.now() - 3600000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                 </div>
@@ -2775,8 +4208,18 @@ function App() {
             </div>
 
             <div className="tracking-note">
-              <p>🔄 Live tracking data updates every 30 seconds</p>
-              <p>📡 Data source: ADS-B & Flight Data Systems</p>
+              {flightTrackingData && !flightTrackingData.isLive ? (
+                <>
+                  <p>⚠️ Real-time tracking data not available</p>
+                  <p>📡 Last known status or historical data shown</p>
+                  <p style={{fontSize: '0.85em', marginTop: '8px', opacity: 0.7}}>Live tracking requires FlightAware API integration</p>
+                </>
+              ) : (
+                <>
+                  <p>🔄 Live tracking data from FlightAware</p>
+                  <p>📡 Updates every 30 seconds via ADS-B</p>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -2818,7 +4261,13 @@ function App() {
                 <div className="hotel-detail-item">
                   <span className="hotel-detail-label">✅ Check-in:</span>
                   <span className="hotel-time-value">
-                    {calculateCheckinTime(selectedFlight.actualArrival || selectedFlight.arrival)}
+                    {(() => {
+                      const arrivalTime = new Date(`${selectedFlight.date}T${selectedFlight.actualArrival || selectedFlight.arrival}`)
+                      arrivalTime.setHours(arrivalTime.getHours() + 1)
+                      const date = arrivalTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                      const time = arrivalTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                      return `${date} at ${time}`
+                    })()}
                   </span>
                 </div>
 
