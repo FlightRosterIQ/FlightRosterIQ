@@ -4368,73 +4368,7 @@ function App() {
                         <span className="time-lt">Actual: {selectedFlight.actualDeparture} LT</span>
                         <span className="time-utc">{convertToUTC(selectedFlight.actualDeparture)} UTC</span>
                       </div>
-                    ) : (
-                      <div>
-                        <div style={{fontSize: '11px', color: '#999', marginTop: '4px'}}>
-                          {(() => {
-                            const flightDate = new Date(selectedFlight.date);
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            return flightDate < today ? 'Click button below to fetch actual times' : 'Actual times available after flight completion';
-                          })()}
-                        </div>
-                        {(() => {
-                          const flightDate = new Date(selectedFlight.date);
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          return flightDate < today ? (
-                            <button 
-                              style={{
-                                marginTop: '8px',
-                                padding: '6px 12px',
-                                background: '#007AFF',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '12px'
-                              }}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const tailNum = selectedFlight.tail || selectedFlight.tailNumber;
-                                const trackingData = await fetchFlightAwareData(
-                                  tailNum, 
-                                  selectedFlight.flightNumber, 
-                                  selectedFlight.date,
-                                  selectedFlight.origin,
-                                  selectedFlight.destination
-                                );
-                                if (trackingData?.flightAwareUrl) {
-                                  // Open FlightAware in a new tab
-                                  window.open(trackingData.flightAwareUrl, '_blank');
-                                } else if (trackingData?.actualTimes) {
-                                  // Update the selected flight with actual times
-                                  setSelectedFlight({
-                                    ...selectedFlight,
-                                    actualDeparture: trackingData.actualTimes.actualDeparture || selectedFlight.actualDeparture,
-                                    actualArrival: trackingData.actualTimes.actualArrival || selectedFlight.actualArrival
-                                  });
-                                  
-                                  // Update the schedule data
-                                  setSchedule(prev => {
-                                    const updatedFlights = prev.flights.map(f => 
-                                      f.id === selectedFlight.id ? {
-                                        ...f,
-                                        actualDeparture: trackingData.actualTimes.actualDeparture || f.actualDeparture,
-                                        actualArrival: trackingData.actualTimes.actualArrival || f.actualArrival
-                                      } : f
-                                    );
-                                    return { ...prev, flights: updatedFlights };
-                                  });
-                                }
-                              }}
-                            >
-                              🔗 View on FlightAware
-                            </button>
-                          ) : null
-                        })()}
-                      </div>
-                    )}
+                    ) : null}
                   </span>
                 </div>
                 <div className="detail-item">
