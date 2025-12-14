@@ -3884,7 +3884,7 @@ function App() {
     return (
       <div className="app">
         <div className="login-container">
-          <img src="/logo.png" alt="FlightRosterIQ Logo" className="login-logo" />
+          <div className="login-logo">✈️</div>
 
           {!accountType ? (
             <div className="account-selection">
@@ -4009,9 +4009,14 @@ function App() {
               </form>
 
               {accountType === 'pilot' && (
-                <div className="security-note">
-                  🔒 Enter your actual crew portal username and password. Your credentials will be validated against the {airline} crew portal before access is granted.
-                </div>
+                <>
+                  <div className="security-note">
+                    🔒 Enter your actual crew portal username and password. Your credentials will be validated against the {airline} crew portal before access is granted.
+                  </div>
+                  <div className="info-note">
+                    ⏱️ First login may take 30-60 seconds while we sync your schedule from the crew portal.
+                  </div>
+                </>
               )}
 
               {accountType === 'family' && (
@@ -4131,7 +4136,7 @@ function App() {
       
       <header>
         <div className="header-logo">
-          <img src="/logo.png" alt="FlightRosterIQ Logo" className="app-logo" />
+          <div className="app-logo">✈️</div>
           <h1>FlightRosterIQ</h1>
         </div>
         {token && (

@@ -768,6 +768,24 @@ button:disabled {
   color: #fff59d;
 }
 
+.info-note {
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  color: #1565c0;
+  padding: 10px;
+  border-radius: 6px;
+  margin: 10px 0;
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.dark-theme .info-note {
+  background: rgba(33, 150, 243, 0.1);
+  border-color: rgba(33, 150, 243, 0.3);
+  color: #90caf9;
+}
+
 .family-note {
   background: #e3f2fd;
   border: 1px solid #90caf9;
