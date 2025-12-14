@@ -1,52 +1,49 @@
 #!/bin/bash
-# Quick VPS Deployment Script for Crew Scheduler
+# VPS Deployment Script for ZenRows Integration
+# Run this on your VPS at 157.245.126.24
 
-echo "🚀 Deploying Crew Scheduler to VPS..."
+echo "🚀 Deploying ZenRows Scraper Integration..."
 
-# Update system
-sudo apt update && sudo apt upgrade -y
+# Navigate to project directory
+cd /root || exit
 
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
+# Pull latest code
+echo "📥 Pulling latest code from GitHub..."
+git pull origin main
 
-# Install Docker Compose
-sudo apt install docker-compose-plugin -y
+# Install axios if not already installed
+echo "📦 Installing dependencies..."
+npm install axios
 
-# Clone your repository (replace with your actual repo)
-git clone https://github.com/FlightRosterIQ/crew-schedule-app.git
-cd crew-schedule-app
+# Set ZenRows API Key (already embedded in code, but can override via env)
+export ZENROWS_API_KEY="65928336a6006dd32a2bdf37c19e9ae0e81d4ce5"
 
-# Build and start the application
-docker compose up -d
+# Kill old server process
+echo "🛑 Stopping old server..."
+pkill -f "node fixed-server-v2.js"
 
-# Setup nginx proxy (optional - for custom domain)
-sudo apt install nginx -y
+# Wait a moment
+sleep 2
 
-# Create nginx config
-sudo tee /etc/nginx/sites-available/crew-scheduler << 'EOF'
-server {
-    listen 80;
-    server_name your-domain.com;  # Replace with your domain
-    
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-EOF
+# Start new server in background
+echo "▶️ Starting server with ZenRows integration..."
+nohup node fixed-server-v2.js > server.log 2>&1 &
 
-# Enable nginx site
-sudo ln -s /etc/nginx/sites-available/crew-scheduler /etc/nginx/sites-enabled/
-sudo systemctl restart nginx
+# Get new process ID
+NEW_PID=$(pgrep -f "node fixed-server-v2.js")
+echo "✅ Server started with PID: $NEW_PID"
+
+# Show last few log lines
+sleep 2
+echo ""
+echo "📋 Last log entries:"
+tail -n 10 server.log
+
+echo ""
+echo "✨ Deployment complete!"
+echo "🔍 Monitor logs with: tail -f /root/server.log"
+echo "🔄 Check status with: ps aux | grep node"
+echo "🌐 Server running on port 8080"
 
 # Setup SSL with Let's Encrypt (optional)
 sudo apt install certbot python3-certbot-nginx -y
