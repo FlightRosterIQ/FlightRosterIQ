@@ -99,6 +99,12 @@ function App() {
   const [isRegisteredUser, setIsRegisteredUser] = useState(false)
   const [showRegistrationPopup, setShowRegistrationPopup] = useState(false)
   const [nickname, setNickname] = useState('')
+  const [trialStartDate, setTrialStartDate] = useState(null)
+  const [subscriptionStatus, setSubscriptionStatus] = useState('trial') // 'trial', 'active', 'expired'
+  const [subscriptionPlan, setSubscriptionPlan] = useState(null) // 'monthly', 'yearly', null
+  const [subscriptionExpiry, setSubscriptionExpiry] = useState(null)
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
+  const [daysRemaining, setDaysRemaining] = useState(30)
   const [familyMemberName, setFamilyMemberName] = useState('')
   const [pushSubscription, setPushSubscription] = useState(null)
   const [isEditingName, setIsEditingName] = useState(false)
@@ -137,6 +143,60 @@ function App() {
     }
   }, [selectedFlight])
 
+  // Check trial status and days remaining
+  useEffect(() => {
+    const checkTrialStatus = async () => {
+      if (!token) return
+      
+      // Family accounts are free - skip subscription checks
+      if (userType === 'family') {
+        return
+      }
+      
+      let trialStart = trialStartDate
+      
+      // If no trial start date, this is a new user - set it now
+      if (!trialStart) {
+        trialStart = new Date().toISOString()
+        setTrialStartDate(trialStart)
+        await localforage.setItem('trialStartDate', trialStart)
+      }
+      
+      const startDate = new Date(trialStart)
+      const now = new Date()
+      const daysElapsed = Math.floor((now - startDate) / (1000 * 60 * 60 * 24))
+      const remaining = 30 - daysElapsed
+      
+      setDaysRemaining(remaining)
+      
+      // Check subscription status
+      if (subscriptionStatus === 'active') {
+        // User has paid subscription, check if expired
+        if (subscriptionExpiry) {
+          const expiryDate = new Date(subscriptionExpiry)
+          if (now > expiryDate) {
+            setSubscriptionStatus('expired')
+            await localforage.setItem('subscriptionStatus', 'expired')
+            setShowSubscriptionModal(true)
+          }
+        }
+        return
+      }
+      
+      if (remaining <= 0 && subscriptionStatus !== 'active') {
+        // Trial expired, show subscription modal
+        setSubscriptionStatus('expired')
+        await localforage.setItem('subscriptionStatus', 'expired')
+        setShowSubscriptionModal(true)
+      } else if (remaining <= 3 && subscriptionStatus === 'trial') {
+        // Show warning when 3 or fewer days remain
+        console.log(`⚠️ Trial ending soon: ${remaining} days remaining`)
+      }
+    }
+    
+    checkTrialStatus()
+  }, [token, trialStartDate, subscriptionStatus, subscriptionExpiry, userType])
+
   // Calculate next duty check-in time
   useEffect(() => {
     if (!schedule?.flights || schedule.flights.length === 0) {
@@ -168,6 +228,28 @@ function App() {
     }
   }, [schedule])
 
+  const fetchSubscriptionStatus = async (employeeId) => {
+    try {
+      const response = await apiCall('/api/subscription/status', {
+        method: 'POST',
+        body: JSON.stringify({ employeeId })
+      })
+      
+      if (response.subscription) {
+        const { status, plan, expiryDate } = response.subscription
+        setSubscriptionStatus(status)
+        setSubscriptionPlan(plan)
+        setSubscriptionExpiry(expiryDate)
+        
+        await localforage.setItem('subscriptionStatus', status)
+        await localforage.setItem('subscriptionPlan', plan)
+        await localforage.setItem('subscriptionExpiry', expiryDate)
+      }
+    } catch (error) {
+      console.error('Failed to fetch subscription status:', error)
+    }
+  }
+
   const loadCachedData = async () => {
     try {
       const cachedToken = await localforage.getItem('authToken')
@@ -186,6 +268,10 @@ function App() {
       const cachedNickname = await localforage.getItem('nickname')
       const cachedFamilyMemberName = await localforage.getItem('familyMemberName')
       const cachedPilotAirline = await localforage.getItem('pilotAirline')
+      const cachedTrialStart = await localforage.getItem('trialStartDate')
+      const cachedSubscription = await localforage.getItem('subscriptionStatus')
+      const cachedSubscriptionPlan = await localforage.getItem('subscriptionPlan')
+      const cachedSubscriptionExpiry = await localforage.getItem('subscriptionExpiry')
       
       if (cachedToken) setToken(cachedToken)
       if (cachedSchedule) setSchedule(cachedSchedule)
@@ -203,6 +289,15 @@ function App() {
       if (cachedNickname) setNickname(cachedNickname)
       if (cachedFamilyMemberName) setFamilyMemberName(cachedFamilyMemberName)
       if (cachedPilotAirline) setPilotAirline(cachedPilotAirline)
+      if (cachedTrialStart) setTrialStartDate(cachedTrialStart)
+      if (cachedSubscription) setSubscriptionStatus(cachedSubscription)
+      if (cachedSubscriptionPlan) setSubscriptionPlan(cachedSubscriptionPlan)
+      if (cachedSubscriptionExpiry) setSubscriptionExpiry(cachedSubscriptionExpiry)
+      
+      // Fetch subscription status from server on load
+      if (cachedToken && cachedUsername) {
+        fetchSubscriptionStatus(cachedUsername)
+      }
       
       // Load pilot profile and geolocation
       const cachedProfile = await localforage.getItem('pilotProfile')
@@ -2685,6 +2780,14 @@ function App() {
           >
             👤 Pilot Info
           </button>
+          {userType !== 'family' && (
+            <button 
+              className={settingsTab === 'subscription' ? 'active' : ''}
+              onClick={() => setSettingsTab('subscription')}
+            >
+              💳 Subscription
+            </button>
+          )}
           <button 
             className={settingsTab === 'features' ? 'active' : ''}
             onClick={() => setSettingsTab('features')}
@@ -2943,6 +3046,71 @@ function App() {
                 )}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {settingsTab === 'subscription' && userType !== 'family' && (
+          <div className="settings-content">
+            <h3>💳 Subscription</h3>
+            
+            <div className="subscription-info-card">
+              <div className="subscription-status-header">
+                <h4>Current Status</h4>
+                <span className={`status-badge ${subscriptionStatus}`}>
+                  {subscriptionStatus === 'active' ? '✓ Active' : 
+                   subscriptionStatus === 'trial' ? '🔄 Trial' : 
+                   '⏰ Expired'}
+                </span>
+              </div>
+              
+              {subscriptionStatus === 'trial' && (
+                <div className="trial-info">
+                  <p><strong>Trial Period:</strong> {daysRemaining} days remaining</p>
+                  <p className="trial-hint">Your trial started on {trialStartDate ? new Date(trialStartDate).toLocaleDateString() : 'N/A'}</p>
+                </div>
+              )}
+              
+              {subscriptionStatus === 'active' && (
+                <div className="active-subscription-info">
+                  <p><strong>Plan:</strong> {subscriptionPlan === 'monthly' ? 'Monthly ($4.99/month)' : 'Yearly ($49.99/year)'}</p>
+                  <p><strong>Renews:</strong> {subscriptionExpiry ? new Date(subscriptionExpiry).toLocaleDateString() : 'N/A'}</p>
+                  <p className="employee-note">Linked to Employee ID: {username}</p>
+                </div>
+              )}
+              
+              {subscriptionStatus === 'expired' && (
+                <div className="expired-info">
+                  <p>Your subscription has expired. Reactivate to continue using FlightRosterIQ.</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="subscription-actions">
+              {subscriptionStatus !== 'active' && (
+                <button 
+                  className="upgrade-btn"
+                  onClick={() => setShowSubscriptionModal(true)}
+                >
+                  {subscriptionStatus === 'expired' ? 'Reactivate Subscription' : 'Upgrade Now'}
+                </button>
+              )}
+              
+              {subscriptionStatus === 'active' && (
+                <button 
+                  className="manage-btn"
+                  onClick={() => {
+                    alert('To manage your subscription or cancel, please contact support@flightrosteriq.com with your Employee ID.')
+                  }}
+                >
+                  Manage Subscription
+                </button>
+              )}
+            </div>
+            
+            <div className="subscription-note">
+              <p><strong>Note:</strong> Your subscription is linked to your Employee ID ({username}). You can log in from any device and your subscription will be recognized.</p>
+              <p><strong>Family Accounts:</strong> Family members using your access code can use the app for free - no subscription required for them!</p>
             </div>
           </div>
         )}
@@ -3874,6 +4042,92 @@ function App() {
           <span>Loading schedule data from crew portal...</span>
         </div>
       )}
+      
+      {/* Trial Expiration Modal */}
+      {showSubscriptionModal && subscriptionStatus === 'expired' && userType !== 'family' && (
+        <div className="modal-overlay" style={{zIndex: 10000}}>
+          <div className="subscription-modal">
+            <h2>⏰ {trialStartDate ? 'Trial Period Ended' : 'Subscription Required'}</h2>
+            <p>Continue using FlightRosterIQ with a subscription</p>
+            
+            <div className="subscription-plans">
+              <div className="plan-card monthly">
+                <div className="plan-header">
+                  <h3>Monthly</h3>
+                  <div className="plan-price">
+                    <span className="price">$4.99</span>
+                    <span className="period">/month</span>
+                  </div>
+                </div>
+                <div className="subscription-features">
+                  <div className="feature-item">✓ Unlimited schedule access</div>
+                  <div className="feature-item">✓ Real-time crew portal sync</div>
+                  <div className="feature-item">✓ Weather & flight tracking</div>
+                  <div className="feature-item">✓ Crew messaging & friends</div>
+                  <div className="feature-item">✓ Flight statistics</div>
+                </div>
+                <button 
+                  className="subscribe-btn"
+                  onClick={() => {
+                    alert('Stripe integration coming soon! Contact support@flightrosteriq.com with your Employee ID to subscribe monthly.')
+                    // TODO: Implement Stripe Checkout here
+                  }}
+                >
+                  Subscribe Monthly
+                </button>
+              </div>
+              
+              <div className="plan-card yearly popular">
+                <div className="popular-badge">BEST VALUE</div>
+                <div className="plan-header">
+                  <h3>Yearly</h3>
+                  <div className="plan-price">
+                    <span className="price">$49.99</span>
+                    <span className="period">/year</span>
+                  </div>
+                  <div className="savings">Save $10/year!</div>
+                </div>
+                <div className="subscription-features">
+                  <div className="feature-item">✓ Everything in Monthly</div>
+                  <div className="feature-item">✓ Save 17% annually</div>
+                  <div className="feature-item">✓ Priority support</div>
+                  <div className="feature-item">✓ Early access to new features</div>
+                </div>
+                <button 
+                  className="subscribe-btn yearly-btn"
+                  onClick={() => {
+                    alert('Stripe integration coming soon! Contact support@flightrosteriq.com with your Employee ID to subscribe yearly.')
+                    // TODO: Implement Stripe Checkout here
+                  }}
+                >
+                  Subscribe Yearly
+                </button>
+              </div>
+            </div>
+            
+            <button 
+              className="close-modal-btn"
+              onClick={() => setShowSubscriptionModal(false)}
+            >
+              Maybe Later
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Trial Warning Banner */}
+      {token && userType !== 'family' && subscriptionStatus === 'trial' && daysRemaining <= 7 && daysRemaining > 0 && (
+        <div className="trial-warning-banner">
+          <span>⏰ {daysRemaining} days left in your free trial</span>
+          <button 
+            className="trial-subscribe-btn"
+            onClick={() => setShowSubscriptionModal(true)}
+          >
+            Subscribe
+          </button>
+        </div>
+      )}
+      
       <header>
         <div className="header-logo">
           <img src="/logo.png" alt="FlightRosterIQ Logo" className="app-logo" />
