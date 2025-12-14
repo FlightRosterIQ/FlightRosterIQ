@@ -38,6 +38,7 @@ function App() {
   const [username, setUsername] = useState('')
   const [schedule, setSchedule] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('')
   const [scrapingInProgress, setScrapingInProgress] = useState(false)
   const [error, setError] = useState(null)
   const [credentials, setCredentials] = useState({ username: '', password: '' })
