@@ -3986,7 +3986,7 @@ function App() {
           <button 
             className={activeTab === 'monthly' ? 'active' : ''}
             onClick={() => setActiveTab('monthly')}
-            title="Monthly View"
+            title="Monthly Calendar View"
           >
             <span className="nav-icon">📅</span>
             <span className="nav-label">Month</span>
