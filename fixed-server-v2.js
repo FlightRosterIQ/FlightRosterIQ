@@ -587,9 +587,8 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                                                 phone: phone || null
                                             };
                                             
-                                            // Enrich with known hotel data
-                                            const enrichedHotel = enrichHotelData(baseHotel);
-                                            hotels.push(enrichedHotel);
+                                            // Add base hotel (will enrich later outside page.evaluate)
+                                            hotels.push(baseHotel);
                                         }
                                     }
                                 }
@@ -917,9 +916,8 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                                         phone: phone || null
                                     };
                                     
-                                    // Enrich with known hotel data
-                                    const enrichedHotel = enrichHotelData(baseHotel);
-                                    hotels.push(enrichedHotel);
+                                    // Add base hotel (will enrich later outside page.evaluate)
+                                    hotels.push(baseHotel);
                                 }
                             }
                         }
