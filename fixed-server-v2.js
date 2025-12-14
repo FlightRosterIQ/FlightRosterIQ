@@ -548,7 +548,18 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                 
                 // Handle DH (deadhead) flights differently
                 if (isDeadhead) {
+                    console.log(`  🚶 Processing Deadhead flight...`);
                     const timeDivs = detailsDiv.querySelectorAll('div.IADP-jss158');
+                    console.log(`  📍 Found ${timeDivs.length} time divs in deadhead details`);
+                    
+                    // Log all text content for debugging
+                    if (timeDivs.length > 0) {
+                        console.log(`  📝 Deadhead text content:`);
+                        timeDivs.forEach((div, i) => {
+                            console.log(`    [${i}]: "${div.textContent}"`);
+                        });
+                    }
+                    
                     const hotels = [];
                     
                     if (timeDivs.length >= 2) {
@@ -556,6 +567,9 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                         const depMatch = depText.match(/([A-Z]{3})\s+(\d{1,2}[A-Z][a-z]{2})\s+(\d{1,2}:\d{2})/);
                         const arrText = timeDivs[1].textContent || '';
                         const arrMatch = arrText.match(/([A-Z]{3})\s+(\d{1,2}[A-Z][a-z]{2})\s+(\d{1,2}:\d{2})/);
+                        
+                        console.log(`  🛫 Departure match: ${depMatch ? `${depMatch[1]} ${depMatch[2]} ${depMatch[3]}` : 'FAILED'}`);
+                        console.log(`  🛬 Arrival match: ${arrMatch ? `${arrMatch[1]} ${arrMatch[2]} ${arrMatch[3]}` : 'FAILED'}`);
                         
                         // Check for hotel after DH flight
                         const allSubEvents = row.querySelectorAll('div[data-test-id="sub-event"]');
@@ -639,7 +653,11 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                                 }],
                                 hotels: hotels
                             });
+                        } else {
+                            console.log(`  ❌ Failed to extract deadhead flight details - dep: ${!!depMatch}, arr: ${!!arrMatch}`);
                         }
+                    } else {
+                        console.log(`  ❌ Insufficient time divs for deadhead (need 2, found ${timeDivs.length})`);
                     }
                     return;
                 }

@@ -44,7 +44,7 @@ function App() {
   const [credentials, setCredentials] = useState({ username: '', password: '' })
   const [weatherData, setWeatherData] = useState({})
   const [aircraftData, setAircraftData] = useState({})
-  const [activeTab, setActiveTab] = useState('roster') // 'roster', 'crew', 'weather', 'settings'
+  const [activeTab, setActiveTab] = useState('monthly')
   const [friends, setFriends] = useState([])
   const [friendRequests, setFriendRequests] = useState([])
   const [friendsSubTab, setFriendsSubTab] = useState('chats')
@@ -69,6 +69,8 @@ function App() {
   const [flightDetailTab, setFlightDetailTab] = useState('flight') // 'flight', 'weather', 'crew'
   const [contactMenuOpen, setContactMenuOpen] = useState(null)
   const [weatherAirport, setWeatherAirport] = useState(null)
+  const [statsPeriod, setStatsPeriod] = useState('current') // current, previous, ytd
+  const [nextDutyCheckIn, setNextDutyCheckIn] = useState(null)
   const [trackedAircraft, setTrackedAircraft] = useState(null)
   const [flightTrackingData, setFlightTrackingData] = useState(null)
   const [settingsTab, setSettingsTab] = useState('features')
@@ -127,6 +129,44 @@ function App() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     }
   }, [])
+
+  // Reset flight detail tab when modal opens
+  useEffect(() => {
+    if (selectedFlight) {
+      setFlightDetailTab('flight')
+    }
+  }, [selectedFlight])
+
+  // Calculate next duty check-in time
+  useEffect(() => {
+    if (!schedule?.flights || schedule.flights.length === 0) {
+      setNextDutyCheckIn(null)
+      return
+    }
+
+    const now = new Date()
+    const upcomingFlights = schedule.flights
+      .filter(f => {
+        const flightDate = new Date(f.date)
+        return flightDate >= now
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+
+    if (upcomingFlights.length > 0) {
+      const nextFlight = upcomingFlights[0]
+      const flightDateTime = new Date(nextFlight.date)
+      
+      // Parse departure time (format: "HH:MM")
+      if (nextFlight.departure) {
+        const [hours, minutes] = nextFlight.departure.split(':').map(Number)
+        flightDateTime.setHours(hours, minutes, 0, 0)
+        
+        // Check-in is typically 1 hour before departure
+        const checkInTime = new Date(flightDateTime.getTime() - 60 * 60 * 1000)
+        setNextDutyCheckIn(checkInTime)
+      }
+    }
+  }, [schedule])
 
   const loadCachedData = async () => {
     try {
@@ -557,19 +597,44 @@ function App() {
         return
       }
       
+      // Request with high accuracy and timeout
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const location = {
             lat: position.coords.latitude,
-            lng: position.coords.longitude
+            lng: position.coords.longitude,
+            timestamp: Date.now()
           }
           setUserLocation(location)
           localforage.setItem('userLocation', location)
+          console.log('✅ Location permission granted:', location)
         },
         (error) => {
           console.error('Geolocation error:', error)
+          let errorMessage = 'Unable to get location'
+          
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = "Location permission denied. Please enable location access in your browser settings."
+              break
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = "Location information unavailable."
+              break
+            case error.TIMEOUT:
+              errorMessage = "Location request timed out."
+              break
+          }
+          
+          alert('📍 ' + errorMessage)
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
         }
       )
+    } else {
+      alert('📍 Geolocation is not supported by your browser')
     }
   }
   
@@ -994,10 +1059,16 @@ function App() {
     }
     
     try {
+      const trimmedName = editedName.trim()
+      
       // Update pilot profile
-      const updatedProfile = { ...pilotProfile, name: editedName.trim() }
+      const updatedProfile = { ...pilotProfile, name: trimmedName }
       setPilotProfile(updatedProfile)
       await localforage.setItem('pilotProfile', updatedProfile)
+      
+      // Update nickname for header display
+      setNickname(trimmedName)
+      await localforage.setItem('nickname', trimmedName)
       
       // Update family code mappings so family members see the new name
       const codeMapping = await localforage.getItem('familyCodeMapping') || {}
@@ -1006,7 +1077,7 @@ function App() {
       // Update all codes that belong to this pilot
       for (const code in codeMapping) {
         if (codeMapping[code].pilotEmployeeId === currentEmployeeId) {
-          codeMapping[code].pilotName = editedName.trim()
+          codeMapping[code].pilotName = trimmedName
         }
       }
       
@@ -2077,12 +2148,35 @@ function App() {
             <div className="nearby-header">
               <h3>📍 Nearby Crewmates</h3>
               <p className="nearby-subtitle">Friends in your current location</p>
+              {!userLocation && (
+                <button 
+                  onClick={requestGeolocation}
+                  style={{
+                    marginTop: '10px',
+                    padding: '8px 16px',
+                    background: '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  📍 Enable Location
+                </button>
+              )}
             </div>
             
             {!window.location.protocol.startsWith('https') && window.location.hostname !== 'localhost' ? (
               <div className="empty-nearby">
                 <p>🔒 Location services require HTTPS</p>
                 <p className="empty-hint">This feature is only available on secure connections</p>
+              </div>
+            ) : !userLocation ? (
+              <div className="empty-nearby">
+                <p>📍 Location access not enabled</p>
+                <p className="empty-hint">Click "Enable Location" above to find nearby crewmates</p>
               </div>
             ) : getNearbyCrewmates().length === 0 ? (
               <div className="empty-nearby">
@@ -2375,6 +2469,203 @@ function App() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderStatsView = () => {
+    const calculateMonthStats = (period = 'current') => {
+      if (!schedule?.flights || schedule.flights.length === 0) {
+        return {
+          flightHours: 0,
+          dutyHours: 0,
+          offDays: [],
+          layovers: 0,
+          landings: 0,
+          daysInMonth: 0
+        }
+      }
+
+      const now = new Date()
+      let targetDate
+      
+      if (period === 'current') {
+        targetDate = now
+      } else if (period === 'previous') {
+        targetDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      } else if (period === 'ytd') {
+        // Year-to-date calculation will aggregate all months
+        targetDate = now
+      }
+
+      const year = targetDate.getFullYear()
+      const month = targetDate.getMonth()
+      
+      // Get days in month
+      const daysInMonth = new Date(year, month + 1, 0).getDate()
+      
+      let flights = []
+      if (period === 'ytd') {
+        // Get all flights from January 1st to now
+        flights = schedule.flights.filter(f => {
+          const flightDate = new Date(f.date)
+          return flightDate.getFullYear() === year && flightDate <= now
+        })
+      } else {
+        // Get flights for specific month
+        flights = schedule.flights.filter(f => {
+          const flightDate = new Date(f.date)
+          return flightDate.getFullYear() === year && flightDate.getMonth() === month
+        })
+      }
+
+      // Calculate flight hours
+      let totalFlightMinutes = 0
+      flights.forEach(f => {
+        if (f.departure && f.arrival) {
+          const [depHours, depMinutes] = f.departure.split(':').map(Number)
+          const [arrHours, arrMinutes] = f.arrival.split(':').map(Number)
+          
+          const depTime = depHours * 60 + depMinutes
+          let arrTime = arrHours * 60 + arrMinutes
+          
+          // Handle overnight flights
+          if (arrTime < depTime) {
+            arrTime += 24 * 60
+          }
+          
+          totalFlightMinutes += (arrTime - depTime)
+        }
+      })
+
+      const flightHours = (totalFlightMinutes / 60).toFixed(1)
+
+      // Count landings (number of flights)
+      const landings = flights.length
+
+      // Count layovers (hotels)
+      const layovers = flights.filter(f => f.type === 'hotel' || f.hotel).length
+
+      // Calculate duty hours (rough estimate: flight time + 2 hours per duty day)
+      const dutyDays = new Set(flights.map(f => new Date(f.date).toDateString())).size
+      const dutyHours = (totalFlightMinutes / 60 + dutyDays * 2).toFixed(1)
+
+      // Calculate off days
+      const scheduledDays = new Set()
+      flights.forEach(f => {
+        const flightDate = new Date(f.date)
+        scheduledDays.add(flightDate.getDate())
+      })
+
+      const offDays = []
+      for (let day = 1; day <= daysInMonth; day++) {
+        if (!scheduledDays.has(day)) {
+          offDays.push(day)
+        }
+      }
+
+      return {
+        flightHours,
+        dutyHours,
+        offDays,
+        layovers,
+        landings,
+        daysInMonth
+      }
+    }
+
+    const currentStats = calculateMonthStats('current')
+    const previousStats = calculateMonthStats('previous')
+    const ytdStats = calculateMonthStats('ytd')
+
+    const now = new Date()
+    const currentMonthName = now.toLocaleString('default', { month: 'long', year: 'numeric' })
+    const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const previousMonthName = previousMonthDate.toLocaleString('default', { month: 'long', year: 'numeric' })
+
+    const displayStats = statsPeriod === 'current' ? currentStats : 
+                         statsPeriod === 'previous' ? previousStats : ytdStats
+    const displayPeriod = statsPeriod === 'current' ? currentMonthName :
+                          statsPeriod === 'previous' ? previousMonthName : `Year to Date ${now.getFullYear()}`
+
+    return (
+      <div className="stats-view">
+        <div className="stats-header">
+          <h2>📊 Flight Statistics</h2>
+          <div className="stats-period-selector">
+            <button 
+              className={statsPeriod === 'current' ? 'active' : ''}
+              onClick={() => setStatsPeriod('current')}
+            >
+              Current Month
+            </button>
+            <button 
+              className={statsPeriod === 'previous' ? 'active' : ''}
+              onClick={() => setStatsPeriod('previous')}
+            >
+              Previous Month
+            </button>
+            <button 
+              className={statsPeriod === 'ytd' ? 'active' : ''}
+              onClick={() => setStatsPeriod('ytd')}
+            >
+              Year to Date
+            </button>
+          </div>
+        </div>
+
+        <div className="stats-period-title">
+          <h3>{displayPeriod}</h3>
+        </div>
+
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon">✈️</div>
+            <div className="stat-content">
+              <div className="stat-label">Flight Hours</div>
+              <div className="stat-value">{displayStats.flightHours}</div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">⏱️</div>
+            <div className="stat-content">
+              <div className="stat-label">Duty Hours</div>
+              <div className="stat-value">{displayStats.dutyHours}</div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">🛬</div>
+            <div className="stat-content">
+              <div className="stat-label">Landings</div>
+              <div className="stat-value">{displayStats.landings}</div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">🏨</div>
+            <div className="stat-content">
+              <div className="stat-label">Layovers</div>
+              <div className="stat-value">{displayStats.layovers}</div>
+            </div>
+          </div>
+        </div>
+
+        {statsPeriod !== 'ytd' && (
+          <div className="off-days-section">
+            <h3>📅 Off Days ({displayStats.offDays.length} days)</h3>
+            <div className="off-days-grid">
+              {displayStats.offDays.length > 0 ? (
+                displayStats.offDays.map(day => (
+                  <div key={day} className="off-day-badge">{day}</div>
+                ))
+              ) : (
+                <p style={{color: '#666', fontStyle: 'italic'}}>No off days this month</p>
+              )}
             </div>
           </div>
         )}
@@ -2990,88 +3281,6 @@ function App() {
     )
   }
 
-  // ROSTER VIEW - Combines monthly calendar + daily list (AirRoster style)
-  const renderRosterView = () => {
-    return (
-      <div className="roster-view">
-        <div className="roster-calendar-section">
-          {renderMonthlyView()}
-        </div>
-        <div className="roster-daily-section">
-          {renderDailyView()}
-        </div>
-      </div>
-    )
-  }
-
-  // CREW VIEW - Friends, chat, and crew search
-  const renderCrewView = () => {
-    return renderFriendsView()
-  }
-
-  // WEATHER VIEW - Weather for all upcoming airports
-  const renderWeatherView = () => {
-    if (!schedule || !schedule.flights || schedule.flights.length === 0) {
-      return (
-        <div className="weather-view">
-          <h2>🌤️ Weather</h2>
-          <p>No flights scheduled. Weather will appear when you have upcoming flights.</p>
-        </div>
-      )
-    }
-
-    // Get unique airports from upcoming flights
-    const upcomingAirports = new Set()
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    schedule.flights.forEach(flight => {
-      const flightDate = new Date(flight.date)
-      if (flightDate >= today) {
-        if (flight.origin) upcomingAirports.add(flight.origin)
-        if (flight.destination) upcomingAirports.add(flight.destination)
-      }
-    })
-
-    return (
-      <div className="weather-view">
-        <h2>🌤️ Weather Forecast</h2>
-        <p className="weather-subtitle">Weather for your upcoming airports</p>
-        
-        <div className="weather-grid">
-          {Array.from(upcomingAirports).slice(0, 10).map(airport => (
-            <div key={airport} className="weather-card" onClick={() => setWeatherAirport(airport)}>
-              <h3>{airport}</h3>
-              {weatherData[airport] ? (
-                <div className="weather-info">
-                  <div className="weather-temp">{weatherData[airport].temp}°</div>
-                  <div className="weather-condition">{weatherData[airport].condition}</div>
-                  <div className="weather-wind">💨 {weatherData[airport].wind}</div>
-                </div>
-              ) : (
-                <button 
-                  className="load-weather-btn"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    fetchWeatherData(airport)
-                  }}
-                >
-                  Load Weather
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        
-        {upcomingAirports.size === 0 && (
-          <div className="empty-state">
-            <p>No upcoming flights found</p>
-          </div>
-        )}
-      </div>
-    )
-  }
-
   const renderMonthlyView = () => {
     const monthData = getMonthlySchedule()
     const today = new Date()
@@ -3671,8 +3880,35 @@ function App() {
           <h1>FlightRosterIQ</h1>
         </div>
         {token && (
-          <div className="welcome-message">
-            {userType === 'family' && familyMemberName ? `Welcome ${familyMemberName}!` : `Welcome ${nickname || username || 'Pilot'}!`}
+          <div className="header-info-section">
+            <div className="welcome-message">
+              {userType === 'family' && familyMemberName ? `Welcome ${familyMemberName}!` : `Welcome ${nickname || username || 'Pilot'}!`}
+            </div>
+            {nextDutyCheckIn && userType === 'pilot' && (
+              <div className="next-duty-timer">
+                <span className="timer-label">Next Duty Check-in:</span>
+                <span className="timer-value">
+                  {(() => {
+                    const now = new Date()
+                    const diff = nextDutyCheckIn - now
+                    
+                    if (diff < 0) return 'Check schedule'
+                    
+                    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+                    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+                    
+                    if (days > 0) {
+                      return `${days}d ${hours}h ${minutes}m`
+                    } else if (hours > 0) {
+                      return `${hours}h ${minutes}m`
+                    } else {
+                      return `${minutes}m`
+                    }
+                  })()}
+                </span>
+              </div>
+            )}
           </div>
         )}
         <div className="header-actions">
@@ -3723,20 +3959,21 @@ function App() {
       </header>
 
       <main>
-        {activeTab === 'roster' && renderRosterView()}
-        {activeTab === 'crew' && userType === 'pilot' && renderCrewView()}
-        {activeTab === 'weather' && renderWeatherView()}
+        {activeTab === 'monthly' && renderMonthlyView()}
+        {activeTab === 'daily' && renderDailyView()}
+        {activeTab === 'friends' && renderFriendsView()}
         {activeTab === 'notifications' && renderNotificationsView()}
         {activeTab === 'settings' && renderSettingsView()}
+        {activeTab === 'stats' && renderStatsView()}
         
-        {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'crew' && activeTab !== 'notifications' && activeTab !== 'weather' && (
+        {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'friends' && activeTab !== 'notifications' && activeTab !== 'stats' && (
           <div className="empty-state">
             <p>No schedule data available</p>
             <p className="empty-hint">Use the refresh button above to load your schedule</p>
           </div>
         )}
         
-        {!schedule && !loading && userType === 'family' && activeTab !== 'settings' && activeTab !== 'notifications' && activeTab !== 'weather' && (
+        {!schedule && !loading && userType === 'family' && activeTab !== 'settings' && activeTab !== 'notifications' && activeTab !== 'stats' && (
           <div className="empty-state">
             <p>No schedule data available</p>
             <p className="empty-hint">Use the refresh button above to load the pilot's schedule</p>
@@ -3747,31 +3984,31 @@ function App() {
       {token && (
         <nav className="bottom-nav">
           <button 
-            className={activeTab === 'roster' ? 'active' : ''}
-            onClick={() => setActiveTab('roster')}
-            title="Flight Roster"
+            className={activeTab === 'monthly' ? 'active' : ''}
+            onClick={() => setActiveTab('monthly')}
+            title="Monthly View"
+          >
+            <span className="nav-icon">📅</span>
+            <span className="nav-label">Month</span>
+          </button>
+          <button 
+            className={activeTab === 'daily' ? 'active' : ''}
+            onClick={() => setActiveTab('daily')}
+            title="Daily View"
           >
             <span className="nav-icon">📋</span>
-            <span className="nav-label">Roster</span>
+            <span className="nav-label">Daily</span>
           </button>
           {userType === 'pilot' && (
             <button 
-              className={activeTab === 'crew' ? 'active' : ''}
-              onClick={() => setActiveTab('crew')}
-              title="Crew Members"
+              className={activeTab === 'friends' ? 'active' : ''}
+              onClick={() => setActiveTab('friends')}
+              title="Friends & Chat"
             >
               <span className="nav-icon">👥</span>
-              <span className="nav-label">Crew</span>
+              <span className="nav-label">Friends</span>
             </button>
           )}
-          <button 
-            className={activeTab === 'weather' ? 'active' : ''}
-            onClick={() => setActiveTab('weather')}
-            title="Weather"
-          >
-            <span className="nav-icon">🌤️</span>
-            <span className="nav-label">Weather</span>
-          </button>
           <button 
             className={`${activeTab === 'notifications' ? 'active' : ''} notification-btn`}
             onClick={() => setActiveTab('notifications')}
@@ -3784,6 +4021,14 @@ function App() {
               )}
             </span>
             <span className="nav-label">Alerts</span>
+          </button>
+          <button 
+            className={activeTab === 'stats' ? 'active' : ''}
+            onClick={() => setActiveTab('stats')}
+            title="Statistics"
+          >
+            <span className="nav-icon">📊</span>
+            <span className="nav-label">Stats</span>
           </button>
           <button 
             className={activeTab === 'settings' ? 'active' : ''}
@@ -3803,6 +4048,41 @@ function App() {
             
             <h2>✈️ Flight Details</h2>
             
+            {/* Tab Navigation */}
+            <div className="flight-modal-tabs">
+              <button 
+                className={`flight-tab ${flightDetailTab === 'flight' ? 'active' : ''}`}
+                onClick={() => setFlightDetailTab('flight')}
+              >
+                ✈️ Flight
+              </button>
+              {userType !== 'family' && (
+                <button 
+                  className={`flight-tab ${flightDetailTab === 'crew' ? 'active' : ''}`}
+                  onClick={() => setFlightDetailTab('crew')}
+                >
+                  👥 Crew
+                </button>
+              )}
+              <button 
+                className={`flight-tab ${flightDetailTab === 'weather' ? 'active' : ''}`}
+                onClick={() => {
+                  setFlightDetailTab('weather');
+                  // Auto-load weather for origin and destination
+                  if (selectedFlight.origin && !weatherData[selectedFlight.origin]) {
+                    fetchWeatherData(selectedFlight.origin);
+                  }
+                  if (selectedFlight.destination && !weatherData[selectedFlight.destination]) {
+                    fetchWeatherData(selectedFlight.destination);
+                  }
+                }}
+              >
+                🌤️ Weather
+              </button>
+            </div>
+            
+            {/* Flight Tab Content */}
+            {flightDetailTab === 'flight' && (
             <div className="detail-section">
               <h3>Flight Information</h3>
               <div className="detail-grid">
@@ -3945,6 +4225,47 @@ function App() {
                   >
                     {selectedFlight.tail || selectedFlight.tailNumber || 'Not Available'}
                   </span>
+                        <span className="time-lt">Actual: {selectedFlight.actualArrival} LT</span>
+                        <span className="time-utc">{convertToUTC(selectedFlight.actualArrival)} UTC</span>
+                      </div>
+                    ) : null}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="detail-section">
+              <h3>Aircraft Information</h3>
+              <div className="detail-grid">
+                <div className="detail-item">
+                  <span className="detail-label">Aircraft Type:</span>
+                  <span className="detail-value">{selectedFlight.aircraft}</span>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">Tail Number:</span>
+                  <span className="detail-value clickable-tail" 
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      const tailNum = selectedFlight.tail || selectedFlight.tailNumber
+                      if (tailNum) {
+                        setTrackedAircraft({
+                          tail: tailNum,
+                          aircraft: selectedFlight.aircraft,
+                          flightNumber: selectedFlight.flightNumber,
+                          origin: selectedFlight.origin,
+                          destination: selectedFlight.destination
+                        })
+                        setSelectedFlight(null)
+                        setActiveTab('tracking')
+                        // Fetch real flight tracking data
+                        const trackingData = await fetchFlightAwareData(tailNum, selectedFlight.flightNumber)
+                        setFlightTrackingData(trackingData)
+                      }
+                    }}
+                    style={{ cursor: (selectedFlight.tail || selectedFlight.tailNumber) ? 'pointer' : 'default' }}
+                  >
+                    {selectedFlight.tail || selectedFlight.tailNumber || 'Not Available'}
+                  </span>
                 </div>
                 {selectedFlight.gate && (
                   <div className="detail-item">
@@ -3972,8 +4293,12 @@ function App() {
                 )}
               </div>
             </div>
-
-            {userType !== 'family' && selectedFlight.crewMembers && selectedFlight.crewMembers.length > 0 && (
+            )}
+            
+            {/* Crew Tab Content */}
+            {flightDetailTab === 'crew' && userType !== 'family' && (
+              <>
+            {selectedFlight.crewMembers && selectedFlight.crewMembers.length > 0 ? (
               <div className="detail-section">
                 <h3>👥 Crew Members</h3>
                 <div className="crew-list">
@@ -4020,15 +4345,119 @@ function App() {
                   ))}
                 </div>
               </div>
-            )}
-            
-            {/* Show message when no crew data available */}
-            {userType !== 'family' && (!selectedFlight.crewMembers || selectedFlight.crewMembers.length === 0) && (
+            ) : (
               <div className="detail-section">
                 <h3>👥 Crew Members</h3>
                 <p style={{color: '#666', fontStyle: 'italic', padding: '20px'}}>
                   No crew information available for this flight
                 </p>
+              </div>
+            )}
+              </>
+            )}
+            
+            {/* Weather Tab Content */}
+            {flightDetailTab === 'weather' && (
+              <div className="flight-weather-container">
+                {/* Departure Airport Weather */}
+                <div className="airport-weather-section">
+                  <h3>🛫 Departure: {selectedFlight.origin}</h3>
+                  {weatherData[selectedFlight.origin] ? (
+                    <>
+                      <div className="weather-section">
+                        <h4>METAR (Current Weather)</h4>
+                        <div className="weather-code">
+                          {weatherData[selectedFlight.origin].metar}
+                        </div>
+                      </div>
+                      
+                      {weatherData[selectedFlight.origin].decoded && !weatherData[selectedFlight.origin].error && (
+                        <div className="weather-section atis-section">
+                          <h4>📻 Decoded</h4>
+                          <div className="atis-info">
+                            {weatherData[selectedFlight.origin].decoded.observationTime && (
+                              <p><strong>Time:</strong> {weatherData[selectedFlight.origin].decoded.observationTime}</p>
+                            )}
+                            {weatherData[selectedFlight.origin].decoded.flightCategory && (
+                              <p><strong>Category:</strong> <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                background: weatherData[selectedFlight.origin].decoded.flightCategory === 'VFR' ? '#22c55e' :
+                                           weatherData[selectedFlight.origin].decoded.flightCategory === 'MVFR' ? '#3b82f6' :
+                                           weatherData[selectedFlight.origin].decoded.flightCategory === 'IFR' ? '#ef4444' : '#991b1b',
+                                color: 'white'
+                              }}>{weatherData[selectedFlight.origin].decoded.flightCategory}</span></p>
+                            )}
+                            {weatherData[selectedFlight.origin].decoded.temperature && (
+                              <p><strong>Temp:</strong> {weatherData[selectedFlight.origin].decoded.temperature}</p>
+                            )}
+                            {weatherData[selectedFlight.origin].decoded.wind && (
+                              <p><strong>Wind:</strong> {weatherData[selectedFlight.origin].decoded.wind}</p>
+                            )}
+                            {weatherData[selectedFlight.origin].decoded.visibility && (
+                              <p><strong>Visibility:</strong> {weatherData[selectedFlight.origin].decoded.visibility}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="weather-section" style={{background: '#dbeafe', padding: '20px', borderRadius: '8px'}}>
+                      <p style={{color: '#1e40af', fontSize: '14px'}}>Loading weather data...</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Arrival Airport Weather */}
+                <div className="airport-weather-section">
+                  <h3>🛬 Arrival: {selectedFlight.destination}</h3>
+                  {weatherData[selectedFlight.destination] ? (
+                    <>
+                      <div className="weather-section">
+                        <h4>METAR (Current Weather)</h4>
+                        <div className="weather-code">
+                          {weatherData[selectedFlight.destination].metar}
+                        </div>
+                      </div>
+                      
+                      {weatherData[selectedFlight.destination].decoded && !weatherData[selectedFlight.destination].error && (
+                        <div className="weather-section atis-section">
+                          <h4>📻 Decoded</h4>
+                          <div className="atis-info">
+                            {weatherData[selectedFlight.destination].decoded.observationTime && (
+                              <p><strong>Time:</strong> {weatherData[selectedFlight.destination].decoded.observationTime}</p>
+                            )}
+                            {weatherData[selectedFlight.destination].decoded.flightCategory && (
+                              <p><strong>Category:</strong> <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                background: weatherData[selectedFlight.destination].decoded.flightCategory === 'VFR' ? '#22c55e' :
+                                           weatherData[selectedFlight.destination].decoded.flightCategory === 'MVFR' ? '#3b82f6' :
+                                           weatherData[selectedFlight.destination].decoded.flightCategory === 'IFR' ? '#ef4444' : '#991b1b',
+                                color: 'white'
+                              }}>{weatherData[selectedFlight.destination].decoded.flightCategory}</span></p>
+                            )}
+                            {weatherData[selectedFlight.destination].decoded.temperature && (
+                              <p><strong>Temp:</strong> {weatherData[selectedFlight.destination].decoded.temperature}</p>
+                            )}
+                            {weatherData[selectedFlight.destination].decoded.wind && (
+                              <p><strong>Wind:</strong> {weatherData[selectedFlight.destination].decoded.wind}</p>
+                            )}
+                            {weatherData[selectedFlight.destination].decoded.visibility && (
+                              <p><strong>Visibility:</strong> {weatherData[selectedFlight.destination].decoded.visibility}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="weather-section" style={{background: '#dbeafe', padding: '20px', borderRadius: '8px'}}>
+                      <p style={{color: '#1e40af', fontSize: '14px'}}>Loading weather data...</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
