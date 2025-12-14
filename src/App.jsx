@@ -3882,7 +3882,9 @@ function App() {
         {token && (
           <div className="header-info-section">
             <div className="welcome-message">
-              {userType === 'family' && familyMemberName ? `Welcome ${familyMemberName}!` : `Welcome ${nickname || username || 'Pilot'}!`}
+              {userType === 'family' && familyMemberName 
+                ? `Welcome ${familyMemberName}!` 
+                : `Welcome ${pilotProfile?.name || username || 'Pilot'}!`}
             </div>
             {nextDutyCheckIn && userType === 'pilot' && (
               <div className="next-duty-timer">
