@@ -98,6 +98,12 @@ function App() {
   const [userLocation, setUserLocation] = useState(null)
   const [domicile, setDomicile] = useState('')
   const [isRegisteredUser, setIsRegisteredUser] = useState(false)
+  
+  // Mobile enhancement states
+  const [pullRefreshDistance, setPullRefreshDistance] = useState(0)
+  const [isPulling, setIsPulling] = useState(false)
+  const [touchStartX, setTouchStartX] = useState(0)
+  const [touchStartY, setTouchStartY] = useState(0)
   const [showRegistrationPopup, setShowRegistrationPopup] = useState(false)
   const [nickname, setNickname] = useState('')
   const [trialStartDate, setTrialStartDate] = useState(null)
@@ -325,6 +331,66 @@ function App() {
     } catch (err) {
       console.error('Error loading cached data:', err)
     }
+  }
+
+  // Pull-to-refresh handler
+  const handleTouchStart = (e) => {
+    if (window.scrollY === 0 && activeTab === 'monthly') {
+      setTouchStartY(e.touches[0].clientY)
+      setTouchStartX(e.touches[0].clientX)
+    }
+  }
+
+  const handleTouchMove = (e) => {
+    if (!touchStartY) return
+    
+    const touchY = e.touches[0].clientY
+    const touchX = e.touches[0].clientX
+    const deltaY = touchY - touchStartY
+    const deltaX = Math.abs(touchX - touchStartX)
+    
+    // Pull to refresh (vertical swipe down)
+    if (deltaY > 0 && deltaY > deltaX && window.scrollY === 0) {
+      setIsPulling(true)
+      setPullRefreshDistance(Math.min(deltaY, 150))
+      e.preventDefault()
+    }
+    
+    // Swipe for month navigation (horizontal swipe)
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+      if (deltaX > 0 && deltaX > 100) {
+        // Swipe right - go to previous month
+        goToPreviousMonth()
+        setTouchStartX(0)
+        setTouchStartY(0)
+      } else if (deltaX < 0 && Math.abs(deltaX) > 100) {
+        // Swipe left - go to next month
+        goToNextMonth()
+        setTouchStartX(0)
+        setTouchStartY(0)
+      }
+    }
+  }
+
+  const handleTouchEnd = async () => {
+    if (isPulling && pullRefreshDistance > 80) {
+      // Trigger refresh
+      setIsPulling(false)
+      setPullRefreshDistance(0)
+      
+      // Haptic feedback
+      if (navigator.vibrate) {
+        navigator.vibrate(50)
+      }
+      
+      // Refresh schedule
+      await handleManualScrape()
+    } else {
+      setIsPulling(false)
+      setPullRefreshDistance(0)
+    }
+    setTouchStartX(0)
+    setTouchStartY(0)
   }
 
   const handleLogin = async (e, accountType) => {
@@ -3882,7 +3948,15 @@ function App() {
 
   if (!token) {
     return (
-      <div className="app">
+      <div className="app" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+        {/* Pull to Refresh Indicator */}
+        {isPulling && (
+          <div className="pull-refresh-indicator" style={{ transform: `translateX(-50%) translateY(${Math.min(pullRefreshDistance - 60, 0)}px)` }}>
+            <span className="pull-refresh-icon">↻</span>
+            <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
+          </div>
+        )}
+        
         <div className="login-container">
           <div className="login-logo">✈️</div>
 
@@ -4033,7 +4107,26 @@ function App() {
   }
 
   return (
-    <div className={`app ${theme === 'dark' ? 'dark-theme' : ''}`}>
+    <div 
+      className={`app ${theme === 'dark' ? 'dark-theme' : ''}`}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull-to-refresh indicator */}
+      {isPulling && (
+        <div 
+          className="pull-refresh-indicator"
+          style={{
+            transform: `translateY(${pullRefreshDistance}px)`,
+            opacity: pullRefreshDistance / 100
+          }}
+        >
+          <div className="pull-refresh-spinner"></div>
+          <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
+        </div>
+      )}
+      
       {loading && (
         <div className="loading-banner-top">
           <div className="loading-banner-content">
@@ -4131,6 +4224,14 @@ function App() {
           >
             Subscribe
           </button>
+        </div>
+      )}
+      
+      {/* Pull to Refresh Indicator */}
+      {isPulling && token && (
+        <div className="pull-refresh-indicator" style={{ transform: `translateX(-50%) translateY(${Math.min(pullRefreshDistance - 60, 0)}px)` }}>
+          <span className="pull-refresh-icon">↻</span>
+          <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
         </div>
       )}
       
@@ -5009,4 +5110,3 @@ function App() {
 }
 
 export default App
-
