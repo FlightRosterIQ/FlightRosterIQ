@@ -74,7 +74,7 @@ function App() {
   const [nextDutyCheckIn, setNextDutyCheckIn] = useState(null)
   const [trackedAircraft, setTrackedAircraft] = useState(null)
   const [flightTrackingData, setFlightTrackingData] = useState(null)
-  const [settingsTab, setSettingsTab] = useState('features')
+  const [settingsTab, setSettingsTab] = useState('pilot-info')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
