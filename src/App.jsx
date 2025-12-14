@@ -4431,7 +4431,7 @@ function App() {
                             >
                               🔗 View on FlightAware
                             </button>
-                          ) : null;
+                          ) : null
                         })()}
                       </div>
                     )}
