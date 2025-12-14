@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import localforage from 'localforage'
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 import './App.css'
 
 // FlightRosterIQ Server Configuration
@@ -3100,10 +3101,10 @@ function App() {
                 <button 
                   className="manage-btn"
                   onClick={() => {
-                    alert('To manage your subscription or cancel, please contact support@flightrosteriq.com with your Employee ID.')
+                    window.open('https://www.paypal.com/myaccount/autopay/', '_blank')
                   }}
                 >
-                  Manage Subscription
+                  Manage on PayPal
                 </button>
               )}
             </div>
@@ -3199,7 +3200,7 @@ function App() {
                 </div>
               </div>
               <div className="feature-item">
-                <span className="feature-icon">👨‍👩‍👧‍👦</span>
+                <span className="feature-icon">👪</span>
                 <div>
                   <strong>Family Access Codes</strong>
                   <p>Generate unique codes to share your schedule with family members (view-only)</p>
@@ -3258,7 +3259,7 @@ function App() {
 
         {settingsTab === 'family' && (
           <div className="settings-content">
-            <h3>👨‍👩‍👧‍👦 Family Access</h3>
+            <h3>👪 Family Access</h3>
             <div className="family-access-info">
               <p className="family-intro">
                 Share your flight schedule with family members! Generate a unique access code 
@@ -3895,7 +3896,7 @@ function App() {
                   <span className="account-desc">Full access to schedule, friends & more</span>
                 </button>
                 <button className="account-btn family-btn" onClick={() => setAccountType('family')}>
-                  <span className="account-icon">👨‍👩‍👧‍👦</span>
+                  <span className="account-icon">👪</span>
                   <span className="account-label">Family Account</span>
                   <span className="account-desc">View schedule (limited access)</span>
                 </button>
@@ -3949,7 +3950,7 @@ function App() {
           ) : (
             <>
               <div className="account-type-badge">
-                {accountType === 'pilot' ? '✈️ Pilot Login' : '👨‍👩‍👧‍👦 Family Login'}
+                {accountType === 'pilot' ? '✈️ Pilot Login' : '👪 Family Login'}
               </div>
               <button className="back-btn" onClick={() => setAccountType(null)}>
                 ← Back
@@ -4069,11 +4070,11 @@ function App() {
                 <button 
                   className="subscribe-btn"
                   onClick={() => {
-                    alert('Stripe integration coming soon! Contact support@flightrosteriq.com with your Employee ID to subscribe monthly.')
-                    // TODO: Implement Stripe Checkout here
+                    alert('PayPal integration ready! You will create subscription plans in your PayPal Business account and add the Plan IDs here.')
+                    // TODO: Add PayPal Monthly Plan ID from PayPal Dashboard
                   }}
                 >
-                  Subscribe Monthly
+                  Subscribe with PayPal
                 </button>
               </div>
               
@@ -4096,11 +4097,11 @@ function App() {
                 <button 
                   className="subscribe-btn yearly-btn"
                   onClick={() => {
-                    alert('Stripe integration coming soon! Contact support@flightrosteriq.com with your Employee ID to subscribe yearly.')
-                    // TODO: Implement Stripe Checkout here
+                    alert('PayPal integration ready! You will create subscription plans in your PayPal Business account and add the Plan IDs here.')
+                    // TODO: Add PayPal Yearly Plan ID from PayPal Dashboard
                   }}
                 >
-                  Subscribe Yearly
+                  Subscribe with PayPal
                 </button>
               </div>
             </div>
