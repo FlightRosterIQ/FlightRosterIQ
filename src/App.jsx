@@ -4345,6 +4345,7 @@ function App() {
             
             {/* Flight Tab Content */}
             {flightDetailTab === 'flight' && (
+            <>
             <div className="detail-section">
               <h3>Flight Information</h3>
               <div className="detail-grid">
@@ -4421,47 +4422,6 @@ function App() {
                   >
                     {selectedFlight.tail || selectedFlight.tailNumber || 'Not Available'}
                   </span>
-                        <span className="time-lt">Actual: {selectedFlight.actualArrival} LT</span>
-                        <span className="time-utc">{convertToUTC(selectedFlight.actualArrival)} UTC</span>
-                      </div>
-                    ) : null}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="detail-section">
-              <h3>Aircraft Information</h3>
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <span className="detail-label">Aircraft Type:</span>
-                  <span className="detail-value">{selectedFlight.aircraft}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Tail Number:</span>
-                  <span className="detail-value clickable-tail" 
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      const tailNum = selectedFlight.tail || selectedFlight.tailNumber
-                      if (tailNum) {
-                        setTrackedAircraft({
-                          tail: tailNum,
-                          aircraft: selectedFlight.aircraft,
-                          flightNumber: selectedFlight.flightNumber,
-                          origin: selectedFlight.origin,
-                          destination: selectedFlight.destination
-                        })
-                        setSelectedFlight(null)
-                        setActiveTab('tracking')
-                        // Fetch real flight tracking data
-                        const trackingData = await fetchFlightAwareData(tailNum, selectedFlight.flightNumber)
-                        setFlightTrackingData(trackingData)
-                      }
-                    }}
-                    style={{ cursor: (selectedFlight.tail || selectedFlight.tailNumber) ? 'pointer' : 'default' }}
-                  >
-                    {selectedFlight.tail || selectedFlight.tailNumber || 'Not Available'}
-                  </span>
                 </div>
                 {selectedFlight.gate && (
                   <div className="detail-item">
@@ -4489,6 +4449,7 @@ function App() {
                 )}
               </div>
             </div>
+            </>
             )}
             
             {/* Crew Tab Content */}
