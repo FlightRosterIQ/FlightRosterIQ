@@ -44,7 +44,7 @@ function App() {
   const [credentials, setCredentials] = useState({ username: '', password: '' })
   const [weatherData, setWeatherData] = useState({})
   const [aircraftData, setAircraftData] = useState({})
-  const [activeTab, setActiveTab] = useState('daily')
+  const [activeTab, setActiveTab] = useState('roster') // 'roster', 'crew', 'weather', 'settings'
   const [friends, setFriends] = useState([])
   const [friendRequests, setFriendRequests] = useState([])
   const [friendsSubTab, setFriendsSubTab] = useState('chats')
@@ -66,6 +66,7 @@ function App() {
   const [accountType, setAccountType] = useState(null)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [selectedFlight, setSelectedFlight] = useState(null)
+  const [flightDetailTab, setFlightDetailTab] = useState('flight') // 'flight', 'weather', 'crew'
   const [contactMenuOpen, setContactMenuOpen] = useState(null)
   const [weatherAirport, setWeatherAirport] = useState(null)
   const [trackedAircraft, setTrackedAircraft] = useState(null)
@@ -2989,7 +2990,87 @@ function App() {
     )
   }
 
+  // ROSTER VIEW - Combines monthly calendar + daily list (AirRoster style)
+  const renderRosterView = () => {
+    return (
+      <div className="roster-view">
+        <div className="roster-calendar-section">
+          {renderMonthlyView()}
+        </div>
+        <div className="roster-daily-section">
+          {renderDailyView()}
+        </div>
+      </div>
+    )
+  }
 
+  // CREW VIEW - Friends, chat, and crew search
+  const renderCrewView = () => {
+    return renderFriendsView()
+  }
+
+  // WEATHER VIEW - Weather for all upcoming airports
+  const renderWeatherView = () => {
+    if (!schedule || !schedule.flights || schedule.flights.length === 0) {
+      return (
+        <div className="weather-view">
+          <h2>🌤️ Weather</h2>
+          <p>No flights scheduled. Weather will appear when you have upcoming flights.</p>
+        </div>
+      )
+    }
+
+    // Get unique airports from upcoming flights
+    const upcomingAirports = new Set()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    schedule.flights.forEach(flight => {
+      const flightDate = new Date(flight.date)
+      if (flightDate >= today) {
+        if (flight.origin) upcomingAirports.add(flight.origin)
+        if (flight.destination) upcomingAirports.add(flight.destination)
+      }
+    })
+
+    return (
+      <div className="weather-view">
+        <h2>🌤️ Weather Forecast</h2>
+        <p className="weather-subtitle">Weather for your upcoming airports</p>
+        
+        <div className="weather-grid">
+          {Array.from(upcomingAirports).slice(0, 10).map(airport => (
+            <div key={airport} className="weather-card" onClick={() => setWeatherAirport(airport)}>
+              <h3>{airport}</h3>
+              {weatherData[airport] ? (
+                <div className="weather-info">
+                  <div className="weather-temp">{weatherData[airport].temp}°</div>
+                  <div className="weather-condition">{weatherData[airport].condition}</div>
+                  <div className="weather-wind">💨 {weatherData[airport].wind}</div>
+                </div>
+              ) : (
+                <button 
+                  className="load-weather-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    fetchWeatherData(airport)
+                  }}
+                >
+                  Load Weather
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        
+        {upcomingAirports.size === 0 && (
+          <div className="empty-state">
+            <p>No upcoming flights found</p>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const renderMonthlyView = () => {
     const monthData = getMonthlySchedule()
@@ -3642,21 +3723,20 @@ function App() {
       </header>
 
       <main>
-        {activeTab === 'monthly' && renderMonthlyView()}
-        {activeTab === 'daily' && renderDailyView()}
-        {activeTab === 'friends' && renderFriendsView()}
-
+        {activeTab === 'roster' && renderRosterView()}
+        {activeTab === 'crew' && userType === 'pilot' && renderCrewView()}
+        {activeTab === 'weather' && renderWeatherView()}
         {activeTab === 'notifications' && renderNotificationsView()}
         {activeTab === 'settings' && renderSettingsView()}
         
-        {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'friends' && activeTab !== 'notifications' && (
+        {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'crew' && activeTab !== 'notifications' && activeTab !== 'weather' && (
           <div className="empty-state">
             <p>No schedule data available</p>
             <p className="empty-hint">Use the refresh button above to load your schedule</p>
           </div>
         )}
         
-        {!schedule && !loading && userType === 'family' && activeTab !== 'settings' && activeTab !== 'notifications' && (
+        {!schedule && !loading && userType === 'family' && activeTab !== 'settings' && activeTab !== 'notifications' && activeTab !== 'weather' && (
           <div className="empty-state">
             <p>No schedule data available</p>
             <p className="empty-hint">Use the refresh button above to load the pilot's schedule</p>
@@ -3667,33 +3747,31 @@ function App() {
       {token && (
         <nav className="bottom-nav">
           <button 
-            className={activeTab === 'monthly' ? 'active' : ''}
-            onClick={() => setActiveTab('monthly')}
-            title="Monthly View"
-          >
-            <span className="nav-icon">📅</span>
-            <span className="nav-label">Monthly</span>
-          </button>
-          <button 
-            className={activeTab === 'daily' ? 'active' : ''}
-            onClick={() => setActiveTab('daily')}
-            title="Daily View"
+            className={activeTab === 'roster' ? 'active' : ''}
+            onClick={() => setActiveTab('roster')}
+            title="Flight Roster"
           >
             <span className="nav-icon">📋</span>
-            <span className="nav-label">Daily</span>
+            <span className="nav-label">Roster</span>
           </button>
           {userType === 'pilot' && (
-            <>
-              <button 
-                className={activeTab === 'friends' ? 'active' : ''}
-                onClick={() => setActiveTab('friends')}
-                title="Friends & Chat"
-              >
-                <span className="nav-icon">👥</span>
-                <span className="nav-label">Friends</span>
-              </button>
-            </>
+            <button 
+              className={activeTab === 'crew' ? 'active' : ''}
+              onClick={() => setActiveTab('crew')}
+              title="Crew Members"
+            >
+              <span className="nav-icon">👥</span>
+              <span className="nav-label">Crew</span>
+            </button>
           )}
+          <button 
+            className={activeTab === 'weather' ? 'active' : ''}
+            onClick={() => setActiveTab('weather')}
+            title="Weather"
+          >
+            <span className="nav-icon">🌤️</span>
+            <span className="nav-label">Weather</span>
+          </button>
           <button 
             className={`${activeTab === 'notifications' ? 'active' : ''} notification-btn`}
             onClick={() => setActiveTab('notifications')}
@@ -3705,9 +3783,8 @@ function App() {
                 <span className="notification-badge">{getNotificationCount()}</span>
               )}
             </span>
-            <span className="nav-label">Notifications</span>
+            <span className="nav-label">Alerts</span>
           </button>
-
           <button 
             className={activeTab === 'settings' ? 'active' : ''}
             onClick={() => setActiveTab('settings')}

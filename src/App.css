@@ -1575,6 +1575,121 @@ input:focus {
   font-weight: 500;
 }
 
+/* Roster View - AirRoster Style */
+.roster-view {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 20px;
+  height: calc(100vh - 180px);
+  overflow: hidden;
+}
+
+.roster-calendar-section {
+  overflow-y: auto;
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.roster-daily-section {
+  overflow-y: auto;
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+/* Weather View */
+.weather-view {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.weather-view h2 {
+  color: #1f2937;
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.weather-subtitle {
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+.weather-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.weather-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.weather-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-color: #3b82f6;
+}
+
+.weather-card h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 12px;
+}
+
+.weather-temp {
+  font-size: 32px;
+  font-weight: bold;
+  color: #3b82f6;
+}
+
+.weather-condition {
+  color: #6b7280;
+  margin: 4px 0;
+}
+
+.weather-wind {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.load-weather-btn {
+  width: 100%;
+  padding: 8px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.load-weather-btn:hover {
+  background: #2563eb;
+}
+
+/* Mobile Responsive */
+@media (max-width: 1024px) {
+  .roster-view {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  
+  .roster-calendar-section {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+}
+
 /* Daily View */
 .daily-view {
   background: white;
