@@ -549,9 +549,12 @@ function App() {
       
       console.log('✅ Login successful - credentials validated')
       
-      // Stop loading and show scraping progress banner instead
+      // Stop loading immediately and show the app
       setLoading(false)
       setLoadingMessage('')
+      
+      // Set active tab to monthly view immediately
+      setActiveTab('monthly')
       
       // AUTOMATIC SCRAPING: Start scraping in background after successful login
       if (accountType === 'pilot') {
