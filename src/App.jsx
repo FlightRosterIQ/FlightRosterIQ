@@ -295,14 +295,18 @@ function App() {
       const nextFlight = upcomingFlights[0]
       const flightDateTime = new Date(nextFlight.date)
       
-      // Parse departure time (format: "HH:MM")
+      // Parse departure time from formats like "19Dec 05:00 LT" or "05:00"
       if (nextFlight.departure) {
-        const [hours, minutes] = nextFlight.departure.split(':').map(Number)
-        flightDateTime.setHours(hours, minutes, 0, 0)
-        
-        // Check-in is typically 1 hour before departure
-        const checkInTime = new Date(flightDateTime.getTime() - 60 * 60 * 1000)
-        setNextDutyCheckIn(checkInTime)
+        const timeMatch = nextFlight.departure.match(/(\d{1,2}):(\d{2})/);
+        if (timeMatch) {
+          const hours = parseInt(timeMatch[1]);
+          const minutes = parseInt(timeMatch[2]);
+          flightDateTime.setHours(hours, minutes, 0, 0)
+          
+          // Check-in is typically 1 hour before departure
+          const checkInTime = new Date(flightDateTime.getTime() - 60 * 60 * 1000)
+          setNextDutyCheckIn(checkInTime)
+        }
       }
     }
   }, [schedule])
