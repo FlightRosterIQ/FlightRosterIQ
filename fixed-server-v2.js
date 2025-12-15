@@ -3,15 +3,10 @@ const puppeteer = require('puppeteer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs').promises;
-const axios = require('axios');
 
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-
-// ZenRows API Configuration
-const ZENROWS_API_KEY = process.env.ZENROWS_API_KEY || '65928336a6006dd32a2bdf37c19e9ae0e81d4ce5';
-const ZENROWS_ENABLED = ZENROWS_API_KEY && ZENROWS_API_KEY !== 'YOUR_ZENROWS_API_KEY_HERE';
 
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -1357,44 +1352,6 @@ app.post('/api/authenticate', async (req, res) => {
     }
 });
 
-// ZenRows scraping helper function
-async function scrapeWithZenRows(url, options = {}) {
-    if (!ZENROWS_ENABLED) {
-        console.log('⚠️ ZenRows not configured, falling back to Puppeteer');
-        return null;
-    }
-
-    try {
-        console.log('🔄 Using ZenRows API for scraping...');
-        
-        const params = {
-            url: url,
-            apikey: ZENROWS_API_KEY,
-            js_render: 'true',
-            premium_proxy: 'true',
-            proxy_country: 'us',
-            autoparse: 'true',
-            wait_for: '.content',  // Wait for content to load
-            wait: '2500',  // Wait 2.5 seconds for JS to render
-            json_response: 'false',  // Get HTML response
-            ...options
-        };
-
-        const response = await axios.get('https://api.zenrows.com/v1/', { params });
-        
-        if (response.status === 200) {
-            console.log('✅ ZenRows scraping successful');
-            return response.data;
-        } else {
-            console.log(`⚠️ ZenRows returned status ${response.status}`);
-            return null;
-        }
-    } catch (error) {
-        console.error('❌ ZenRows error:', error.message);
-        return null;
-    }
-}
-
 app.post('/api/scrape', async (req, res) => {
     const { employeeId, password, airline, month, year, firstLogin } = req.body;
     const monthStr = month && year ? `${year}-${String(month).padStart(2, '0')}` : 'current';
@@ -1800,7 +1757,6 @@ app.get('/api/health', (req, res) => {
         success: true,
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        zenrows: ZENROWS_ENABLED,
         version: '2.0.0'
     });
 });
@@ -1832,6 +1788,5 @@ app.listen(PORT, '0.0.0.0', () => {
 🔐 Real crew portal auth enabled
 🔄 Automatic scraping fixed
 ✅ Ready for production!
-🔄 ZenRows: ${ZENROWS_ENABLED ? 'ENABLED ✅' : 'DISABLED ⚠️'}
     `);
 });

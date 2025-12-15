@@ -83,6 +83,11 @@ function App() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   
+  // Device detection states
+  const [deviceType, setDeviceType] = useState('desktop') // 'desktop', 'android', 'ios'
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+  
   // Crew Portal Scraper states
   const [scraperCredentials, setScraperCredentials] = useState({ username: '', password: '', airline: 'ABX Air' })
   const [scraperData, setScraperData] = useState(null)
@@ -126,6 +131,73 @@ function App() {
     window.addEventListener('offline', handleOffline)
     loadCachedData()
     initializePushNotifications()
+    
+    // Device Detection
+    const detectDevice = () => {
+      const ua = navigator.userAgent || navigator.vendor || window.opera
+      
+      // Detect iOS devices
+      if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) {
+        setDeviceType('ios')
+        setIsMobile(/iPhone|iPod/.test(ua))
+        setIsTablet(/iPad/.test(ua))
+        document.documentElement.classList.add('ios-device')
+        
+        // Set iOS-specific viewport
+        const viewport = document.querySelector('meta[name=viewport]')
+        if (viewport) {
+          viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover')
+        }
+      }
+      // Detect Android devices
+      else if (/android/i.test(ua)) {
+        setDeviceType('android')
+        setIsMobile(!/tablet/i.test(ua))
+        setIsTablet(/tablet/i.test(ua))
+        document.documentElement.classList.add('android-device')
+        
+        // Set Android-specific viewport
+        const viewport = document.querySelector('meta[name=viewport]')
+        if (viewport) {
+          viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+        }
+      }
+      // Desktop
+      else {
+        setDeviceType('desktop')
+        setIsMobile(false)
+        setIsTablet(false)
+        document.documentElement.classList.add('desktop-device')
+      }
+      
+      // Detect mobile vs tablet by screen size if user agent is ambiguous
+      const handleResize = () => {
+        const width = window.innerWidth
+        if (width <= 768) {
+          setIsMobile(true)
+          setIsTablet(false)
+          document.documentElement.classList.add('mobile-view')
+          document.documentElement.classList.remove('tablet-view', 'desktop-view')
+        } else if (width <= 1024) {
+          setIsMobile(false)
+          setIsTablet(true)
+          document.documentElement.classList.add('tablet-view')
+          document.documentElement.classList.remove('mobile-view', 'desktop-view')
+        } else {
+          setIsMobile(false)
+          setIsTablet(false)
+          document.documentElement.classList.add('desktop-view')
+          document.documentElement.classList.remove('mobile-view', 'tablet-view')
+        }
+      }
+      
+      handleResize()
+      window.addEventListener('resize', handleResize)
+      
+      return () => window.removeEventListener('resize', handleResize)
+    }
+    
+    detectDevice()
     
     // PWA Install Prompt Handler
     const handleBeforeInstallPrompt = (e) => {
@@ -1484,18 +1556,34 @@ function App() {
             if (pairing.legs && pairing.legs.length > 0) {
               pairing.legs.forEach((leg, lIdx) => {
                 // Convert leg date from "08Dec" format to ISO date
+                // Use LOCAL TIME for date determination, not Zulu time
                 let legDate = pairing.startDate // fallback to pairing start date
-                if (leg.departure?.date) {
-                  const depDateStr = leg.departure.date // e.g., "08Dec"
-                  const dayNum = depDateStr.match(/\d+/)?.[0]
-                  const monthAbbr = depDateStr.match(/[A-Z][a-z]{2}/)?.[0]
+                
+                // Priority 1: Use local time from departure
+                if (leg.departure?.localTime) {
+                  const depDateStr = leg.departure.localTime; // e.g., "08Dec 15:30 LT"
+                  const dayNum = depDateStr.match(/\d+/)?.[0];
+                  const monthAbbr = depDateStr.match(/[A-Z][a-z]{2}/)?.[0];
                   const monthMap = {
                     'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
                     'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-                  }
-                  const monthNum = monthMap[monthAbbr] || '01'
-                  const year = pairing.startDate.split('-')[0] // Get year from pairing start date
-                  legDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`
+                  };
+                  const monthNum = monthMap[monthAbbr] || '01';
+                  const year = pairing.startDate.split('-')[0]; // Get year from pairing start date
+                  legDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
+                }
+                // Priority 2: Fall back to date field if localTime not available
+                else if (leg.departure?.date) {
+                  const depDateStr = leg.departure.date; // e.g., "08Dec"
+                  const dayNum = depDateStr.match(/\d+/)?.[0];
+                  const monthAbbr = depDateStr.match(/[A-Z][a-z]{2}/)?.[0];
+                  const monthMap = {
+                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                    'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                  };
+                  const monthNum = monthMap[monthAbbr] || '01';
+                  const year = pairing.startDate.split('-')[0]; // Get year from pairing start date
+                  legDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
                 }
                 
                 allFlights.push({
@@ -1505,8 +1593,10 @@ function App() {
                   date: legDate,
                   origin: leg.departure?.airport || pairing.startLocation,
                   destination: leg.arrival?.airport || pairing.endLocation,
-                  departure: leg.departure?.time || pairing.startTime,
-                  arrival: leg.arrival?.time || pairing.endTime,
+                  departure: leg.departure?.localTime || leg.departure?.time || pairing.startTime,
+                  arrival: leg.arrival?.localTime || leg.arrival?.time || pairing.endTime,
+                  departureZulu: leg.departure?.zuluTime || leg.departure?.time,
+                  arrivalZulu: leg.arrival?.zuluTime || leg.arrival?.time,
                   aircraft: leg.aircraftType || 'Unknown',
                   tailNumber: leg.tailNumber || '',
                   tail: leg.tailNumber || '',
@@ -1526,13 +1616,27 @@ function App() {
               });
               
               // Store hotels by the date of the last leg's arrival (hotel date)
-              // Hotels should show on the day you arrive for the layover
+              // Hotels should show on the day you arrive for the layover (LOCAL TIME)
               if (pairing.hotels && pairing.hotels.length > 0 && pairing.legs.length > 0) {
                 // Get the last leg's arrival date as the hotel date
                 const lastLeg = pairing.legs[pairing.legs.length - 1];
                 let hotelDate = pairing.startDate; // fallback
                 
-                if (lastLeg.arrival?.date) {
+                // Use the arrival local time to determine the hotel date
+                if (lastLeg.arrival?.localTime) {
+                  // Extract date from local time format like "19Dec 07:35 LT"
+                  const arrDateStr = lastLeg.arrival.localTime;
+                  const dayNum = arrDateStr.match(/\d+/)?.[0];
+                  const monthAbbr = arrDateStr.match(/[A-Z][a-z]{2}/)?.[0];
+                  const monthMap = {
+                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                    'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                  };
+                  const monthNum = monthMap[monthAbbr] || '01';
+                  const year = pairing.startDate.split('-')[0];
+                  hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
+                } else if (lastLeg.arrival?.date) {
+                  // Fallback to date field if localTime not available
                   const arrDateStr = lastLeg.arrival.date;
                   const dayNum = arrDateStr.match(/\d+/)?.[0];
                   const monthAbbr = arrDateStr.match(/[A-Z][a-z]{2}/)?.[0];
@@ -4435,14 +4539,16 @@ function App() {
               )}
               <button 
                 className={`flight-tab ${flightDetailTab === 'weather' ? 'active' : ''}`}
-                onClick={() => {
+                onClick={async () => {
                   setFlightDetailTab('weather');
                   // Auto-load weather for origin and destination
                   if (selectedFlight.origin && !weatherData[selectedFlight.origin]) {
-                    fetchWeatherData(selectedFlight.origin);
+                    const originWeather = await fetchRealWeather(selectedFlight.origin);
+                    setWeatherData(prev => ({ ...prev, [selectedFlight.origin]: originWeather }));
                   }
                   if (selectedFlight.destination && !weatherData[selectedFlight.destination]) {
-                    fetchWeatherData(selectedFlight.destination);
+                    const destWeather = await fetchRealWeather(selectedFlight.destination);
+                    setWeatherData(prev => ({ ...prev, [selectedFlight.destination]: destWeather }));
                   }
                 }}
               >
