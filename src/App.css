@@ -6,13 +6,6 @@
 
 /* Updated: December 14, 2025 - AirRoster Design Match - v5 with Device Detection */
 
-/* Prevent horizontal scroll on all devices */
-html, body {
-  overflow-x: hidden;
-  width: 100%;
-  position: relative;
-}
-
 /* Mobile-First Touch Optimizations */
 @media (hover: none) and (pointer: coarse) {
   /* Increase touch targets for mobile */
@@ -125,7 +118,13 @@ body {
 }
 
 .desktop-device .bottom-nav {
-  display: none; /* Hide mobile nav on desktop */
+  /* Show bottom nav on desktop too */
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .desktop-device header {
@@ -157,7 +156,7 @@ body {
 
 /* Desktop View (>1024px) */
 .desktop-view .app {
-  padding: 0 24px 24px;
+  padding: 0 24px 100px; /* Space for bottom nav */
 }
 
 .desktop-view .main-content {
