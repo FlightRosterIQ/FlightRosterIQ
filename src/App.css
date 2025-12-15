@@ -724,10 +724,32 @@ button:disabled {
 }
 
 .login-logo {
-  display: block;
-  margin: 0 auto 20px;
-  height: 120px;
-  width: auto;
+  text-align: center;
+  margin: 0 auto 30px;
+}
+
+.login-logo-icon {
+  font-size: 80px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.login-logo-text {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+@media (max-width: 768px) {
+  .login-logo-icon {
+    font-size: 70px;
+  }
+  
+  .login-logo-text {
+    font-size: 28px;
+  }
 }
 
 .login-container h1 {

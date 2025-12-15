@@ -3961,7 +3961,10 @@ function App() {
         )}
         
         <div className="login-container">
-          <div className="login-logo">✈️</div>
+          <div className="login-logo">
+            <div className="login-logo-icon">✈️</div>
+            <h1 className="login-logo-text">FlightRosterIQ</h1>
+          </div>
 
           {!accountType ? (
             <div className="account-selection">
