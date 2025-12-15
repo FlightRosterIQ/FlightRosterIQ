@@ -890,7 +890,7 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                                 crewMembers
                             });
                         } else if (subEventType === 'HOT') {
-                            // Hotel - extract all available information
+                            // Hotel - store basic info, will click details button later
                             const hotelSpans = subDetails.querySelectorAll('div.IADP-jss158');
                             if (hotelSpans.length > 0) {
                                 const hotelText = hotelSpans[0].textContent || '';
@@ -898,49 +898,21 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                                 
                                 if (hotelMatch) {
                                     const location = hotelMatch[1];
-                                    let name = hotelMatch[2].trim();
-                                    let address = '';
-                                    let phone = '';
+                                    const name = hotelMatch[2].trim();
                                     
-                                    // Try to extract address and phone from other spans
-                                    hotelSpans.forEach((span, idx) => {
-                                        if (idx > 0) {
-                                            const text = span.textContent || '';
-                                            // Look for phone numbers
-                                            const phoneMatch = text.match(/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\(\d{3}\)\s*\d{3}[-.\s]?\d{4}/);
-                                            if (phoneMatch) {
-                                                phone = phoneMatch[0];
-                                            }
-                                            // Look for addresses (street numbers and street names)
-                                            if (text.match(/\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*/)) {
-                                                address = text.trim();
-                                            }
-                                        }
-                                    });
-                                    
-                                    // Also check all divs in subDetails for hotel info
-                                    const allDivs = subDetails.querySelectorAll('div');
-                                    allDivs.forEach(div => {
-                                        const text = div.textContent || '';
-                                        if (!phone) {
-                                            const phoneMatch = text.match(/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\(\d{3}\)\s*\d{3}[-.\s]?\d{4}/);
-                                            if (phoneMatch) phone = phoneMatch[0];
-                                        }
-                                        if (!address && text.match(/\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*/) && text.length < 100) {
-                                            address = text.trim();
-                                        }
-                                    });
-                                    
-                                    // Create base hotel object
-                                    const baseHotel = {
+                                    // Store hotel with index for later detail extraction
+                                    hotels.push({
                                         location: location,
                                         name: name,
-                                        address: address || null,
-                                        phone: phone || null
-                                    };
-                                    
-                                    // Add base hotel (will enrich later outside page.evaluate)
-                                    hotels.push(baseHotel);
+                                        subDetailsIndex: subDetails.getAttribute('data-sub-index') || hotels.length,
+                                        address: null,
+                                        phone: null,
+                                        date: null,
+                                        pickupTime: null,
+                                        transferTime: null,
+                                        transportType: null,
+                                        remark: null
+                                    });
                                 }
                             }
                         }
@@ -970,25 +942,70 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
         
         console.log(`📊 Scraped ${scheduleData.flights.length} pairings from ${scheduleData.totalRows} duty rows`);
         
-        // Scrape remarks/notifications
-        console.log('📬 Extracting remarks and notifications...');
+        // Scrape remarks/notifications from the News tab
+        console.log('📬 Extracting remarks and notifications from News tab...');
+        
+        // Try to click on News/Messages tab if it exists
+        try {
+            const newsTabClicked = await page.evaluate(() => {
+                // Look for News tab button
+                const buttons = Array.from(document.querySelectorAll('button, a, div[role="button"], [role="tab"]'));
+                const newsButton = buttons.find(btn => {
+                    const text = (btn.textContent || '').toLowerCase();
+                    return text.includes('news') || text.includes('message') || text.includes('notification');
+                });
+                
+                if (newsButton) {
+                    newsButton.click();
+                    return true;
+                }
+                return false;
+            });
+            
+            if (newsTabClicked) {
+                console.log('✅ Clicked News tab, waiting for content...');
+                await sleep(3000);
+            } else {
+                console.log('⚠️ News tab not found, checking current page...');
+            }
+        } catch (e) {
+            console.log('⚠️ Could not click News tab:', e.message);
+        }
         
         const remarks = await page.evaluate(() => {
             const remarksList = [];
             
-            // Look for remarks/news elements
-            const remarkElements = document.querySelectorAll('[data-test-id*="remark"], [data-test-id*="news"], [class*="remark"], [class*="notification"], [class*="message"]');
+            // Look for news items using the specific data-test-id
+            const newsItems = document.querySelectorAll('[data-test-id^="news-item"]');
             
-            remarkElements.forEach(elem => {
-                const text = (elem.textContent || '').trim();
-                const dateElem = elem.querySelector('[class*="date"], [data-date]');
-                const date = dateElem ? dateElem.textContent : '';
+            newsItems.forEach(item => {
+                // Get the parent element to capture full news item
+                const newsContainer = item.closest('[class*="news"]') || item.parentElement;
                 
-                if (text && text.length > 10) {
+                // Extract title/message
+                const titleElem = newsContainer.querySelector('[data-test-id="news-item-title"]') || 
+                                newsContainer.querySelector('[class*="title"]') ||
+                                newsContainer.querySelector('h3, h4, h5, h6');
+                const title = titleElem ? titleElem.textContent.trim() : '';
+                
+                // Extract date from subtitle
+                const dateElem = newsContainer.querySelector('[data-test-id="news-item-subtitle"]');
+                const date = dateElem ? dateElem.textContent.trim() : '';
+                
+                // Extract body/content
+                const bodyElem = newsContainer.querySelector('[data-test-id="news-item-body"]') ||
+                               newsContainer.querySelector('[class*="body"]') ||
+                               newsContainer.querySelector('p');
+                const body = bodyElem ? bodyElem.textContent.trim() : '';
+                
+                // Combine title and body for the message
+                const message = [title, body].filter(Boolean).join(' - ');
+                
+                if (message && message.length > 5) {
                     remarksList.push({
-                        message: text,
+                        message: message,
                         date: date || new Date().toISOString(),
-                        type: 'remark',
+                        type: 'news',
                         read: false
                     });
                 }
@@ -998,7 +1015,7 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
         });
         
         scheduleData.remarks = remarks;
-        console.log(`📬 Found ${remarks.length} remarks/notifications`);
+        console.log(`📬 Found ${remarks.length} news/notifications from crew portal`);
         
         // Extract pilot profile information (only on first login)
         let pilotProfile = null;
@@ -1057,6 +1074,71 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
             scheduleData.pilotProfile = null;
         }
         
+        // Extract hotel details by clicking details buttons
+        console.log('🏨 Extracting hotel details...');
+        let hotelDetailsExtracted = 0;
+        
+        for (let flight of scheduleData.flights) {
+            if (flight.hotels && flight.hotels.length > 0) {
+                for (let hotel of flight.hotels) {
+                    try {
+                        // Click details button for this hotel
+                        const detailsClicked = await page.evaluate(() => {
+                            const detailsButtons = document.querySelectorAll('[data-test-id="details-page-button"]');
+                            // Find the button associated with this hotel (would need better targeting)
+                            for (let btn of detailsButtons) {
+                                btn.click();
+                                return true;
+                            }
+                            return false;
+                        });
+                        
+                        if (detailsClicked) {
+                            await sleep(1500);
+                            
+                            // Extract hotel details using data-test-id selectors
+                            const hotelDetails = await page.evaluate(() => {
+                                const details = {};
+                                const hotelItems = document.querySelectorAll('[data-test-id="hotel-key"]');
+                                
+                                hotelItems.forEach(keyElem => {
+                                    const key = keyElem.textContent.trim();
+                                    const valueElem = keyElem.parentElement.querySelector('[data-test-id="hotel-value"]');
+                                    const value = valueElem ? valueElem.textContent.trim() : '';
+                                    
+                                    if (key && value) {
+                                        details[key] = value;
+                                    }
+                                });
+                                
+                                return details;
+                            });
+                            
+                            // Update hotel object with extracted details
+                            if (hotelDetails['Date']) hotel.date = hotelDetails['Date'];
+                            if (hotelDetails['Hotel name']) hotel.name = hotelDetails['Hotel name'];
+                            if (hotelDetails['Address']) hotel.address = hotelDetails['Address'];
+                            if (hotelDetails['Hotel contacts']) hotel.phone = hotelDetails['Hotel contacts'];
+                            if (hotelDetails['Pickup time']) hotel.pickupTime = hotelDetails['Pickup time'];
+                            if (hotelDetails['Transfer time']) hotel.transferTime = hotelDetails['Transfer time'];
+                            if (hotelDetails['Transport company type']) hotel.transportType = hotelDetails['Transport company type'];
+                            if (hotelDetails['Remark']) hotel.remark = hotelDetails['Remark'];
+                            
+                            hotelDetailsExtracted++;
+                            
+                            // Close the details modal (press Escape or click back)
+                            await page.keyboard.press('Escape');
+                            await sleep(500);
+                        }
+                    } catch (e) {
+                        console.log(`   ⚠️ Could not extract hotel details: ${e.message}`);
+                    }
+                }
+            }
+        }
+        
+        console.log(`✅ Extracted details for ${hotelDetailsExtracted} hotels`);
+        
         // Extract crew member information from expanded duty rows
         console.log('👥 Extracting crew information from duty rows...');
         
@@ -1081,162 +1163,118 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                     await dutyRows[idx].click();
                     await sleep(1500); // Wait for pairing to expand
                     
-                    // Now look for "CREW MEMBERS ON THIS LEG" dropdown buttons within each leg of this pairing
+                    // Now look for "CREW MEMBERS ON THIS LEG" section within each leg of this pairing
                     const crewData = await page.evaluate((rowIndex) => {
                         const allCrew = [];
                         const dutyRows = document.querySelectorAll('div[data-test-id="duty-row"]');
                         const pairingRow = dutyRows[rowIndex];
                         
-                        console.log(`[CREW DEBUG] Processing pairing row ${rowIndex}`);
                         if (!pairingRow) {
-                            console.log(`[CREW DEBUG] No pairing row found at index ${rowIndex}`);
                             return allCrew;
                         }
                         
                         // Find the collapse container that holds the legs
                         const collapseDiv = pairingRow.querySelector('.IADP-MuiCollapse-root');
                         if (!collapseDiv) {
-                            console.log(`[CREW DEBUG] No collapse div found in pairing row ${rowIndex}`);
                             return allCrew;
                         }
                         
                         // Find all leg sub-rows within this pairing
                         const legRows = collapseDiv.querySelectorAll('div[data-test-id="duty-row"]');
-                        console.log(`[CREW DEBUG] Found ${legRows.length} leg rows in pairing ${rowIndex}`);
                         
                         legRows.forEach((legRow, legIdx) => {
                             const legEventType = legRow.querySelector('[data-event-type]')?.getAttribute('data-event-type');
-                            
-                            console.log(`[CREW DEBUG] Leg ${legIdx} event type: ${legEventType}`);
                             
                             // Only process actual flight legs (LEG event type)
                             if (legEventType !== 'LEG') return;
                             
                             const legDetails = legRow.querySelector('[data-test-id="duty-row-details"]');
-                            if (!legDetails) {
-                                console.log(`[CREW DEBUG] No leg details found for leg ${legIdx}`);
+                            if (!legDetails) return;
+                            
+                            // Look for crew members accordion using data-test-id
+                            const crewLabel = legDetails.querySelector('[data-test-id="crew-members-label"]');
+                            
+                            if (!crewLabel) {
                                 return;
                             }
                             
-                            // Look for "CREW MEMBERS ON THIS LEG" dropdown button or expandable section
-                            const allButtons = legDetails.querySelectorAll('button, div[role="button"], span[role="button"], [aria-expanded], [class*="expand"], [class*="collapse"]');
-                            console.log(`[CREW DEBUG] Leg ${legIdx}: Found ${allButtons.length} potential buttons`);
-                            let crewDropdown = null;
-                            
-                            // Search for crew dropdown
-                            allButtons.forEach(btn => {
-                                const text = (btn.textContent || '').toUpperCase();
-                                const ariaLabel = (btn.getAttribute('aria-label') || '').toUpperCase();
-                                if (text.includes('CREW') || ariaLabel.includes('CREW')) {
-                                    crewDropdown = btn;
-                                    console.log(`[CREW DEBUG] Leg ${legIdx}: Found crew dropdown with text "${btn.textContent}"`);
-                                }
-                            });
-                            
-                            if (!crewDropdown) {
-                                console.log(`[CREW DEBUG] Leg ${legIdx}: No crew dropdown found`);
-                            }
-                            
-                            // Click dropdown if found and not expanded
-                            if (crewDropdown) {
-                                const isExpanded = crewDropdown.getAttribute('aria-expanded');
-                                if (isExpanded !== 'true') {
+                            // Find the accordion button to expand crew section
+                            const crewAccordion = crewLabel.closest('.IADP-MuiAccordionSummary-root');
+                            if (crewAccordion) {
+                                const isExpanded = crewAccordion.classList.contains('Mui-expanded');
+                                if (!isExpanded) {
                                     try {
-                                        crewDropdown.click();
-                                        console.log(`Clicked crew dropdown for leg ${legIdx + 1}`);
+                                        crewAccordion.click();
                                     } catch (e) {
-                                        console.log(`Error clicking crew dropdown: ${e.message}`);
+                                        console.log(`Error clicking crew accordion: ${e.message}`);
                                     }
                                 }
                             }
                             
-                            // Extract crew information from this leg
-                            // Look in the leg details and any expanded sections
+                            // Extract crew information using data-test-id selectors
                             const crewForLeg = [];
-                            const processedNames = new Set();
+                            const crewCards = legDetails.querySelectorAll('[data-test-id="crew-member-card"]');
                             
-                            // Search all elements within this leg
-                            const allElements = legDetails.querySelectorAll('div, span, p, li, td');
-                            
-                            allElements.forEach(elem => {
-                                const text = elem.textContent || '';
+                            crewCards.forEach(card => {
+                                // Extract name
+                                const nameElem = card.querySelector('[data-test-id="crew-member-name"]');
+                                let name = nameElem ? nameElem.textContent.trim() : '';
                                 
-                                // Match crew patterns
-                                const patterns = [
-                                    // "CA: JOHN SMITH" or "Captain: JOHN SMITH"
-                                    { regex: /(?:CA|Captain|CPT)[\s:]+([A-Z][A-Z\s]+?)(?=\s*(?:FO|CA|Captain|Employee|Phone|Base|$|\d{5}))/gi, role: 'Captain' },
-                                    { regex: /(?:FO|First Officer|F\/O)[\s:]+([A-Z][A-Z\s]+?)(?=\s*(?:FO|CA|Captain|Employee|Phone|Base|$|\d{5}))/gi, role: 'First Officer' },
-                                    // "SMITH, JOHN - Captain"
-                                    { regex: /([A-Z][A-Z\s,]+?)\s*-\s*(?:Captain|CPT|CA)/gi, role: 'Captain' },
-                                    { regex: /([A-Z][A-Z\s,]+?)\s*-\s*(?:First Officer|FO|F\/O)/gi, role: 'First Officer' },
-                                    // "John Smith CA" or "John Smith Captain"
-                                    { regex: /([A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:CA|Captain|CPT)/gi, role: 'Captain' },
-                                    { regex: /([A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:FO|First Officer|F\/O)/gi, role: 'First Officer' }
-                                ];
+                                // Check if this is a deadhead crew member (name starts with "DH ")
+                                const isDeadhead = name.startsWith('DH ');
+                                if (isDeadhead) {
+                                    name = name.substring(3).trim(); // Remove "DH " prefix
+                                }
                                 
-                                patterns.forEach(({ regex, role }) => {
-                                    const matches = [...text.matchAll(regex)];
-                                    for (const match of matches) {
-                                        let name = match[1].trim();
-                                        
-                                        // Clean up name
-                                        name = name.replace(/\s+/g, ' ').trim();
-                                        
-                                        // Remove trailing punctuation or numbers
-                                        name = name.replace(/[,\-:]+$/, '').trim();
-                                        
-                                        // Convert "LAST, FIRST" to "FIRST LAST"
-                                        if (name.includes(',')) {
-                                            const parts = name.split(',').map(p => p.trim());
-                                            name = parts.length > 1 ? `${parts[1]} ${parts[0]}` : name;
+                                if (!name) return;
+                                
+                                // Extract details (Rank, HB, Seniority, Crew Id, Phone)
+                                const detailsElem = card.querySelector('[data-test-id="crew-member-details"]');
+                                let rank = '';
+                                let homeBase = '';
+                                let seniority = '';
+                                let employeeId = '';
+                                let phone = '';
+                                
+                                if (detailsElem) {
+                                    const spans = detailsElem.querySelectorAll('span');
+                                    spans.forEach(span => {
+                                        const text = span.textContent || '';
+                                        if (text.includes('Rank:')) {
+                                            rank = text.replace('Rank:', '').trim();
+                                        } else if (text.includes('HB:')) {
+                                            homeBase = text.replace('HB:', '').trim();
+                                        } else if (text.includes('Seniority:')) {
+                                            seniority = text.replace('Seniority:', '').trim();
+                                        } else if (text.includes('Crew Id:')) {
+                                            employeeId = text.replace('Crew Id:', '').trim();
+                                        } else if (text.includes('Phone:')) {
+                                            phone = text.replace('Phone:', '').trim();
                                         }
-                                        
-                                        // Capitalize properly (from "JOHN SMITH" to "John Smith")
-                                        if (name === name.toUpperCase()) {
-                                            name = name.split(' ').map(word => 
-                                                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-                                            ).join(' ');
-                                        }
-                                        
-                                        // Validate name and check uniqueness
-                                        const nameParts = name.split(' ').filter(p => p.length > 0);
-                                        if (nameParts.length >= 2 && name.length > 3 && name.length < 50 && !processedNames.has(name)) {
-                                            processedNames.add(name);
-                                            
-                                            // Look for additional info nearby
-                                            let employeeId = '';
-                                            let phone = '';
-                                            let base = '';
-                                            
-                                            // Search parent and surrounding text
-                                            const parentText = elem.parentElement?.textContent || text;
-                                            const nearbyText = elem.parentElement?.parentElement?.textContent || parentText;
-                                            
-                                            // Employee ID (5-8 digits)
-                                            const idMatch = nearbyText.match(/\b(\d{5,8})\b/);
-                                            if (idMatch && nearbyText.indexOf(idMatch[1]) > nearbyText.indexOf(name)) {
-                                                employeeId = idMatch[1];
-                                            }
-                                            
-                                            // Phone number
-                                            const phoneMatch = nearbyText.match(/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\(\d{3}\)\s*\d{3}[-.\s]?\d{4}/);
-                                            if (phoneMatch) phone = phoneMatch[0];
-                                            
-                                            // Base (3-letter airport code)
-                                            const baseMatch = nearbyText.match(/\b([A-Z]{3})\b/);
-                                            if (baseMatch && baseMatch[1] !== name.split(' ')[0].substring(0, 3)) {
-                                                base = baseMatch[1];
-                                            }
-                                            
-                                            crewForLeg.push({
-                                                name: name,
-                                                role: role,
-                                                employeeId: employeeId,
-                                                phone: phone,
-                                                base: base
-                                            });
-                                        }
-                                    }
+                                    });
+                                }
+                                
+                                // Extract previous and next event
+                                const prevEventElem = card.querySelector('[data-test-id="crew-member-previous-event"]');
+                                const nextEventElem = card.querySelector('[data-test-id="crew-member-next-event"]');
+                                const previousEvent = prevEventElem ? prevEventElem.textContent.trim() : '';
+                                const nextEvent = nextEventElem ? nextEventElem.textContent.trim() : '';
+                                
+                                // Convert rank abbreviations to full role names
+                                let role = rank;
+                                if (rank === 'CA') role = 'Captain';
+                                else if (rank === 'FO') role = 'First Officer';
+                                
+                                crewForLeg.push({
+                                    name: name,
+                                    role: role,
+                                    employeeId: employeeId,
+                                    phone: phone,
+                                    base: homeBase,
+                                    seniority: seniority,
+                                    isDeadhead: isDeadhead,
+                                    previousEvent: previousEvent,
+                                    nextEvent: nextEvent
                                 });
                             });
                             

@@ -1,6 +1,6 @@
 // Service Worker for FlightRosterIQ PWA Push Notifications
 
-const CACHE_NAME = 'flightrosteriq-v2';
+const CACHE_NAME = 'flightrosteriq-v3';
 const urlsToCache = [
   '/',
   '/index.html',
