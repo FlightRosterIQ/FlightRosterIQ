@@ -1753,6 +1753,31 @@ app.post('/api/search-users', async (req, res) => {
     }
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({
+        success: true,
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        zenrows: ZENROWS_ENABLED,
+        version: '2.0.0'
+    });
+});
+
+// Subscription status endpoint
+app.post('/api/subscription/status', (req, res) => {
+    const { employeeId } = req.body;
+    
+    // For now, return trial status
+    res.json({
+        success: true,
+        status: 'trial',
+        plan: null,
+        daysRemaining: 30,
+        trialStartDate: new Date().toISOString()
+    });
+});
+
 // Catch-all route to serve React app for any non-API routes
 app.get(/^(?!\/api).*$/, (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
@@ -1766,5 +1791,6 @@ app.listen(PORT, '0.0.0.0', () => {
 🔐 Real crew portal auth enabled
 🔄 Automatic scraping fixed
 ✅ Ready for production!
+🔄 ZenRows: ${ZENROWS_ENABLED ? 'ENABLED ✅' : 'DISABLED ⚠️'}
     `);
 });
