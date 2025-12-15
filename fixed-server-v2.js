@@ -1336,6 +1336,9 @@ async function scrapeWithZenRows(url, options = {}) {
             premium_proxy: 'true',
             proxy_country: 'us',
             autoparse: 'true',
+            wait_for: '.content',  // Wait for content to load
+            wait: '2500',  // Wait 2.5 seconds for JS to render
+            json_response: 'false',  // Get HTML response
             ...options
         };
 
