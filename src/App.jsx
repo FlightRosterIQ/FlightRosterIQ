@@ -41,7 +41,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -744,6 +744,7 @@ function App() {
         
         // Validate credentials by attempting to authenticate with crew portal
         try {
+          console.log('📡 Sending authentication request to:', '/api/authenticate')
           const authResponse = await apiCall('/api/authenticate', {
             method: 'POST',
             body: JSON.stringify({
@@ -753,11 +754,19 @@ function App() {
             })
           })
           
+          console.log('📥 Authentication response status:', authResponse.status)
           const authResult = await authResponse.json()
+          console.log('📥 Authentication result:', { 
+            success: authResult.success, 
+            credentialsValid: authResult.credentialsValid,
+            error: authResult.error,
+            hasMessage: !!authResult.message 
+          })
           
           // Check the validation response
           if (authResponse.status === 401) {
             // Credentials were definitely rejected
+            console.error('❌ 401 Unauthorized - Invalid credentials')
             setError('Invalid crew portal credentials. Please check your username and password.')
             setLoading(false)
             return
@@ -772,6 +781,7 @@ function App() {
             console.log('✅ Crew portal credentials validated successfully')
           } else if (!authResult.success && authResult.error) {
             // Authentication failed
+            console.error('❌ Authentication failed:', authResult.error)
             setError(`Authentication failed: ${authResult.error}`)
             setLoading(false)
             return
