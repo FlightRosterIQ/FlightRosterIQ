@@ -8,16 +8,24 @@ FlightRosterIQ v1.0.7+ includes direct integration with the ABX Air crew managem
 
 ### 1. Roster Updates Check
 
-**Endpoint:** `GET /api/roster-updates/{userId}`
+**Endpoint:** `GET /api/roster-updates`
 
 **Purpose:** Check for roster changes without fetching full data
 
+**Authentication:** Session-based via Bearer token. Backend extracts username from authenticated session.
+
 **Request:**
 ```
-GET https://crew.abxair.com/api/netline/crew/pems/rest/pems/idp/user/roster/{userId}/updates
+GET /api/roster-updates
 Authorization: Bearer {token}
 Accept: application/json
 ```
+
+**Backend Flow:**
+1. Validate Bearer token
+2. Extract username (employee ID) from session
+3. Call ABX Air API: `https://crew.abxair.com/api/netline/crew/pems/rest/pems/idp/user/roster/{username}/updates`
+4. Return result to client
 
 **Response:**
 ```json
@@ -48,16 +56,24 @@ Accept: application/json
 
 ### 2. Full Roster Data Fetch
 
-**Endpoint:** `GET /api/roster/{userId}`
+**Endpoint:** `GET /api/roster`
 
 **Purpose:** Fetch complete roster data when updates are detected
 
+**Authentication:** Session-based via Bearer token. Backend extracts username from authenticated session.
+
 **Request:**
 ```
-GET https://crew.abxair.com/api/netline/crew/pems/rest/pems/idp/user/roster/{userId}
+GET /api/roster
 Authorization: Bearer {token}
 Accept: application/json
 ```
+
+**Backend Flow:**
+1. Validate Bearer token
+2. Extract username (employee ID) from session
+3. Call ABX Air API: `https://crew.abxair.com/api/netline/crew/pems/rest/pems/idp/user/roster/{username}`
+4. Return complete roster to client
 
 **Response:** Complete roster object with flights, duties, and reserve assignments
 
@@ -82,18 +98,20 @@ Polls the roster updates endpoint to detect changes without fetching full data.
 
 **Features:**
 - Lightweight API call (~124ms)
+- Session-based authentication (no userId in URL)
 - Detects roster changes via `lastRosterChange` timestamp
 - Identifies new check-in information
 - Triggers notifications when updates are found
 - Runs every 5 minutes when `settings.autoRefresh` is enabled
 
 **Flow:**
-1. Check if userId and token are available
-2. Call `/api/roster-updates/{userId}`
-3. Compare `lastRosterChange` with cached timestamp
-4. If changed, set `rosterUpdateAvailable = true`
-5. Show notification banner and send push notification
-6. Add entry to schedule changes
+1. Check if token is available
+2. Call `/api/roster-updates` with Bearer token
+3. Backend extracts username from session
+4. Compare `lastRosterChange` with cached timestamp
+5. If changed, set `rosterUpdateAvailable = true`
+6. Show notification banner and send push notification
+7. Add entry to schedule changes
 
 #### `fetchRosterData()`
 Fetches complete roster data when user clicks "Fetch Update" button.
@@ -170,18 +188,34 @@ if (cachedUserId) {
 
 ### Vercel Configuration
 
-The app uses relative URLs (`/api/...`) which Vercel proxies to the VPS backend. The backend server must implement:
+The app uses relative URLs (`/api/...`) which Vercel proxies to the VPS backend. The backend server must implement session-based authentication.
 
-#### `/api/roster-updates/:userId` Handler
+### Session Management
+
+The backend must:
+1. Store username (employee ID) in session during `/api/authenticate`
+2. Retrieve username from session for roster API calls
+3. Use username to construct ABX Air API URLs
+
+#### `/api/roster-updates` Handler
 
 ```javascript
-app.get('/api/roster-updates/:userId', async (req, res) => {
-  const { userId } = req.params
+app.get('/api/roster-updates', async (req, res) => {
   const authToken = req.headers.authorization
+  
+  // Extract username from session (implementation depends on your session strategy)
+  const username = req.session?.username || req.user?.employeeId
+  
+  if (!username) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Not authenticated' 
+    })
+  }
   
   try {
     const response = await fetch(
-      `https://crew.abxair.com/api/netline/crew/pems/rest/pems/idp/user/roster/${userId}/updates`,
+      `https://crew.abxair.com/api/netline/crew/pems/rest/pems/idp/user/roster/${username}/updates`,
       {
         headers: {
           'Authorization': authToken,
@@ -202,16 +236,25 @@ app.get('/api/roster-updates/:userId', async (req, res) => {
 })
 ```
 
-#### `/api/roster/:userId` Handler
+#### `/api/roster` Handler
 
 ```javascript
-app.get('/api/roster/:userId', async (req, res) => {
-  const { userId } = req.params
+app.get('/api/roster', async (req, res) => {
   const authToken = req.headers.authorization
+  
+  // Extract username from session
+  const username = req.session?.username || req.user?.employeeId
+  
+  if (!username) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Not authenticated' 
+    })
+  }
   
   try {
     const response = await fetch(
-      `https://crew.abxair.com/api/netline/crew/pems/rest/pems/idp/user/roster/${userId}`,
+      `https://crew.abxair.com/api/netline/crew/pems/rest/pems/idp/user/roster/${username}`,
       {
         headers: {
           'Authorization': authToken,
@@ -227,6 +270,31 @@ app.get('/api/roster/:userId', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to fetch roster data' 
+    })
+  }
+})
+```
+
+#### `/api/authenticate` Handler Update
+
+Ensure the authentication endpoint stores username in session:
+
+```javascript
+app.post('/api/authenticate', async (req, res) => {
+  const { employeeId, password, airline } = req.body
+  
+  // Validate credentials against ABX Air API
+  // ... authentication logic ...
+  
+  if (authSuccess) {
+    // Store username in session for roster API calls
+    req.session.username = employeeId
+    req.session.airline = airline
+    
+    res.json({ 
+      success: true, 
+      credentialsValid: true,
+      token: sessionToken 
     })
   }
 })

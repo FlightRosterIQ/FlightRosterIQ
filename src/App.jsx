@@ -564,7 +564,7 @@ function App() {
 
   // Poll for roster updates every 5 minutes when logged in
   useEffect(() => {
-    if (!userId || !token || !isOnline) return
+    if (!token || !isOnline) return
 
     // Initial check
     checkRosterUpdates()
@@ -577,7 +577,7 @@ function App() {
     }, 5 * 60 * 1000) // 5 minutes
 
     return () => clearInterval(interval)
-  }, [userId, token, isOnline, settings.autoRefresh])
+  }, [token, isOnline, settings.autoRefresh])
 
   const fetchSubscriptionStatus = async (employeeId) => {
     try {
@@ -1054,15 +1054,15 @@ function App() {
 
   // Check for roster updates from ABX Air NetLine/Crew API
   const checkRosterUpdates = async () => {
-    if (!userId || !token) {
-      console.log('⏸️ Skipping roster update check - no userId or token')
+    if (!token) {
+      console.log('⏸️ Skipping roster update check - not logged in')
       return
     }
 
     try {
-      console.log(`🔍 Checking roster updates for user ${userId}`)
+      console.log(`🔍 Checking roster updates for authenticated user`)
       
-      const response = await apiCall(`/api/roster-updates/${userId}`, {
+      const response = await apiCall('/api/roster-updates', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
 
@@ -1126,8 +1126,8 @@ function App() {
 
   // Fetch full roster data when updates are detected
   const fetchRosterData = async () => {
-    if (!userId || !token) {
-      setError('User ID required to fetch roster')
+    if (!token) {
+      setError('Please login to fetch roster')
       return
     }
 
@@ -1135,7 +1135,7 @@ function App() {
     setLoadingMessage('Fetching updated roster from crew portal...')
 
     try {
-      const response = await apiCall(`/api/roster/${userId}`, {
+      const response = await apiCall('/api/roster', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
 
@@ -3302,7 +3302,7 @@ function App() {
         )}
         
         {/* Manual roster check button */}
-        {userId && !rosterUpdateAvailable && (
+        {token && !rosterUpdateAvailable && (
           <Box sx={{ mb: 2 }}>
             <Button 
               variant="outlined" 
@@ -5463,9 +5463,9 @@ function App() {
                         // Use originalDate for departure date if this is an arrival day view
                         const departureDate = new Date(selectedFlight.originalDate || selectedFlight.date)
                         
-                        // Compare LOCAL times to determine if arrival is next day
-                        const deptMatch = selectedFlight.departure.match(/(\d{2})(\d{2})/)
-                        const arrMatch = selectedFlight.arrival.match(/(\d{2})(\d{2})/)
+                        // Parse departure and arrival times
+                        const deptMatch = selectedFlight.departure.match(/(\d{2}):?(\d{2})/)
+                        const arrMatch = selectedFlight.arrival.match(/(\d{2}):?(\d{2})/)
                         
                         if (deptMatch && arrMatch) {
                           const deptHour = parseInt(deptMatch[1])
@@ -5478,6 +5478,7 @@ function App() {
                           const arrMinutes = arrHour * 60 + arrMin
                           
                           if (arrMinutes < deptMinutes) {
+                            // Next day arrival
                             const arrivalDate = new Date(departureDate)
                             arrivalDate.setDate(arrivalDate.getDate() + 1)
                             return (
@@ -5491,6 +5492,7 @@ function App() {
                           }
                         }
                         
+                        // Same day arrival
                         return (
                           <>
                             <span className="time-lt">{departureDate.toLocaleDateString()} - {selectedFlight.arrival} LT</span>
@@ -6219,12 +6221,12 @@ function App() {
         <Box
           sx={{
             position: 'fixed',
-            bottom: { xs: 80, sm: 20 },
+            bottom: { xs: 60, sm: 20 },
             left: 0,
             right: 0,
             textAlign: 'center',
-            py: 1,
-            zIndex: 900,
+            py: 0.5,
+            zIndex: 1200,
             pointerEvents: 'none'
           }}
         >
@@ -6232,13 +6234,17 @@ function App() {
             variant="caption"
             sx={{
               color: 'text.secondary',
-              fontSize: '0.75rem',
-              opacity: 0.7,
+              fontSize: '0.7rem',
+              opacity: 0.6,
               fontWeight: 500,
-              textShadow: theme === 'dark' ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
+              textShadow: theme === 'dark' ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)',
+              backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)',
+              px: 1.5,
+              py: 0.25,
+              borderRadius: 1
             }}
           >
-            FlightRosterIQ v{APP_VERSION}
+            v{APP_VERSION}
           </Typography>
         </Box>
       )}
