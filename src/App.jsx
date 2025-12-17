@@ -41,7 +41,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -478,28 +478,50 @@ function App() {
     const now = new Date()
     const upcomingFlights = schedule.flights
       .filter(f => {
-        const flightDate = new Date(f.date)
-        return flightDate >= now
+        // Only consider flights with scheduled time report
+        if (!f.timeReport) return false
+        
+        // Parse the flight date and time report
+        const dateStr = f.date
+        const timeReportStr = f.timeReport
+        
+        // Check if time report has LT time
+        const ltMatch = timeReportStr.match(/LT:(\d{2})(\d{2})/)
+        if (!ltMatch) return false
+        
+        const hours = parseInt(ltMatch[1])
+        const minutes = parseInt(ltMatch[2])
+        const reportDateTime = new Date(dateStr)
+        reportDateTime.setHours(hours, minutes, 0, 0)
+        
+        return reportDateTime > now
       })
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .sort((a, b) => {
+        const aTime = new Date(a.date)
+        const aMatch = a.timeReport.match(/LT:(\d{2})(\d{2})/)
+        if (aMatch) {
+          aTime.setHours(parseInt(aMatch[1]), parseInt(aMatch[2]), 0, 0)
+        }
+        
+        const bTime = new Date(b.date)
+        const bMatch = b.timeReport.match(/LT:(\d{2})(\d{2})/)
+        if (bMatch) {
+          bTime.setHours(parseInt(bMatch[1]), parseInt(bMatch[2]), 0, 0)
+        }
+        
+        return aTime - bTime
+      })
 
     if (upcomingFlights.length > 0) {
       const nextFlight = upcomingFlights[0]
-      const flightDateTime = new Date(nextFlight.date)
-      
-      // Use the report time (1 hour before departure) from the flight data
-      if (nextFlight.departure) {
-        const reportTime = calculateReportTime(nextFlight.departure)
-        if (reportTime.lt) {
-          const timeMatch = reportTime.lt.match(/(\d{1,2}):(\d{2})/);
-          if (timeMatch) {
-            const hours = parseInt(timeMatch[1]);
-            const minutes = parseInt(timeMatch[2]);
-            flightDateTime.setHours(hours, minutes, 0, 0)
-            setNextDutyCheckIn(flightDateTime)
-          }
-        }
+      const reportDateTime = new Date(nextFlight.date)
+      const ltMatch = nextFlight.timeReport.match(/LT:(\d{2})(\d{2})/)
+      if (ltMatch) {
+        reportDateTime.setHours(parseInt(ltMatch[1]), parseInt(ltMatch[2]), 0, 0)
+        setNextDutyCheckIn(reportDateTime)
       }
+    } else {
+      setNextDutyCheckIn(null)
     }
   }, [schedule])
 
@@ -2524,6 +2546,7 @@ function App() {
   const goToNextMonth = async () => {
     const newDate = new Date(currentMonth)
     newDate.setMonth(newDate.getMonth() + 1)
+    newDate.setDate(1) // Set to first day for accurate comparison
     
     // Calculate the latest allowed month (next month from today)
     const today = new Date()
@@ -2531,8 +2554,9 @@ function App() {
     latestDate.setMonth(latestDate.getMonth() + 1)
     latestDate.setDate(1) // First day of next month
     
-    // Prevent going beyond next month
-    if (newDate.getMonth() > latestDate.getMonth() || newDate.getFullYear() > latestDate.getFullYear()) {
+    // Prevent going beyond next month (compare year and month properly)
+    if (newDate.getFullYear() > latestDate.getFullYear() || 
+        (newDate.getFullYear() === latestDate.getFullYear() && newDate.getMonth() > latestDate.getMonth())) {
       console.log('⚠️ Cannot navigate beyond next month - no cached data')
       setError('Schedule data only available for previous, current, and next month.')
       setTimeout(() => setError(null), 3000)
@@ -4039,22 +4063,40 @@ function App() {
     }
     
     const nextMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1)
+    const prevMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)
     const hasNextMonthSchedule = hasScheduleForMonth(nextMonth.getFullYear(), nextMonth.getMonth())
     const isCurrentMonth = viewMonth.getMonth() === today.getMonth() && viewMonth.getFullYear() === today.getFullYear()
+    
+    // Check if we're at the earliest allowed month (previous month from today)
+    const earliestDate = new Date(today)
+    earliestDate.setMonth(earliestDate.getMonth() - 1)
+    earliestDate.setDate(1)
+    const isAtEarliestMonth = viewMonth.getFullYear() === earliestDate.getFullYear() && 
+                              viewMonth.getMonth() === earliestDate.getMonth()
+    
+    // Check if we're at the latest allowed month (next month from today)
+    const latestDate = new Date(today)
+    latestDate.setMonth(latestDate.getMonth() + 1)
+    latestDate.setDate(1)
+    const isAtLatestMonth = viewMonth.getFullYear() === latestDate.getFullYear() && 
+                            viewMonth.getMonth() === latestDate.getMonth()
     
     return (
       <div className="monthly-view">
         <div className="month-navigation">
-          <button className="nav-arrow" onClick={goToPreviousMonth}>
-            ← Previous
-          </button>
+          {!isAtEarliestMonth ? (
+            <button className="nav-arrow" onClick={goToPreviousMonth}>
+              ← Previous
+            </button>
+          ) : (
+            <div className="nav-arrow-placeholder"></div>
+          )}
           <h2>{viewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
-          {(!isCurrentMonth || hasNextMonthSchedule) && (
+          {!isAtLatestMonth ? (
             <button className="nav-arrow" onClick={goToNextMonth}>
               Next →
             </button>
-          )}
-          {isCurrentMonth && !hasNextMonthSchedule && (
+          ) : (
             <div className="nav-arrow-placeholder"></div>
           )}
         </div>
@@ -4255,8 +4297,8 @@ function App() {
                           destination: flight.destination
                         })
                         setActiveTab('tracking')
-                        // Fetch real flight tracking data
-                        const trackingData = await fetchFlightAwareData(tailNum, flight.flightNumber)
+                        // Fetch real flight tracking data using TAIL NUMBER only
+                        const trackingData = await fetchFlightAwareData(tailNum, null, flight.date, flight.origin, flight.destination)
                         setFlightTrackingData(trackingData)
                       }}
                       title="Click to track aircraft location"
@@ -5131,7 +5173,7 @@ function App() {
                   <span className="detail-label">Departure:</span>
                   <span className="detail-value">
                     <div className="time-display">
-                      <span className="time-lt">{selectedFlight.departure} LT</span>
+                      <span className="time-lt">{new Date(selectedFlight.date).toLocaleDateString()} - {selectedFlight.departure} LT</span>
                       <span className="time-utc">{convertToUTC(selectedFlight.departure)} UTC</span>
                     </div>
                     {selectedFlight.actualDeparture ? (
@@ -5146,8 +5188,41 @@ function App() {
                   <span className="detail-label">Arrival:</span>
                   <span className="detail-value">
                     <div className="time-display">
-                      <span className="time-lt">{selectedFlight.arrival} LT</span>
-                      <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
+                      {(() => {
+                        const deptMatch = selectedFlight.departure.match(/(\d{2})(\d{2})/)
+                        const arrMatch = selectedFlight.arrival.match(/(\d{2})(\d{2})/)
+                        if (deptMatch && arrMatch) {
+                          const deptUTC = convertToUTC(selectedFlight.departure)
+                          const arrUTC = convertToUTC(selectedFlight.arrival)
+                          const deptUTCMatch = deptUTC.match(/(\d{2})(\d{2})/)
+                          const arrUTCMatch = arrUTC.match(/(\d{2})(\d{2})/)
+                          
+                          if (deptUTCMatch && arrUTCMatch) {
+                            const deptHour = parseInt(deptUTCMatch[1])
+                            const arrHour = parseInt(arrUTCMatch[1])
+                            
+                            if (arrHour < deptHour || (arrHour === deptHour && parseInt(arrUTCMatch[2]) < parseInt(deptUTCMatch[2]))) {
+                              const arrivalDate = new Date(selectedFlight.date)
+                              arrivalDate.setDate(arrivalDate.getDate() + 1)
+                              return (
+                                <>
+                                  <span className="time-lt" style={{color: '#f59e0b', fontWeight: '600'}}>
+                                    {arrivalDate.toLocaleDateString()} - {selectedFlight.arrival} LT (Next Day)
+                                  </span>
+                                  <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
+                                </>
+                              )
+                            }
+                          }
+                        }
+                        
+                        return (
+                          <>
+                            <span className="time-lt">{new Date(selectedFlight.date).toLocaleDateString()} - {selectedFlight.arrival} LT</span>
+                            <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
+                          </>
+                        )
+                      })()}
                     </div>
                     {selectedFlight.actualArrival ? (
                       <div className="time-display actual-time">
@@ -5183,8 +5258,8 @@ function App() {
                         })
                         setSelectedFlight(null)
                         setActiveTab('tracking')
-                        // Fetch real flight tracking data
-                        const trackingData = await fetchFlightAwareData(tailNum, selectedFlight.flightNumber)
+                        // Fetch real flight tracking data using TAIL NUMBER only
+                        const trackingData = await fetchFlightAwareData(tailNum, null, selectedFlight.date, selectedFlight.origin, selectedFlight.destination)
                         setFlightTrackingData(trackingData)
                       }
                     }}
