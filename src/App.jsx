@@ -4462,6 +4462,7 @@ function App() {
                               borderWidth: 2,
                               '&:hover': {
                                 borderWidth: 2,
+                                bgcolor: 'rgba(30, 58, 138, 0.04)',
                               },
                               display: 'flex',
                               flexDirection: 'column',
@@ -4472,7 +4473,13 @@ function App() {
                             <Typography variant="body1" sx={{ fontWeight: 600 }}>
                               Family Account
                             </Typography>
-                            <Typography variant="caption">
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                color: 'text.secondary',
+                                fontWeight: 500
+                              }}
+                            >
                               View schedule (limited access)
                             </Typography>
                           </Button>
