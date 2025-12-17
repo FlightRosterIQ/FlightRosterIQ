@@ -72,7 +72,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.7';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -258,6 +258,12 @@ function App() {
   const [subscriptionStatus, setSubscriptionStatus] = useState('trial') // 'trial', 'active', 'expired'
   const [subscriptionPlan, setSubscriptionPlan] = useState(null) // 'monthly', 'yearly', null
   const [subscriptionExpiry, setSubscriptionExpiry] = useState(null)
+  
+  // Roster Updates API Integration (ABX Air NetLine/Crew)
+  const [rosterUpdates, setRosterUpdates] = useState(null)
+  const [lastRosterCheck, setLastRosterCheck] = useState(null)
+  const [rosterUpdateAvailable, setRosterUpdateAvailable] = useState(false)
+  const [userId, setUserId] = useState(null) // Employee ID from ABX Air system
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   const [daysRemaining, setDaysRemaining] = useState(30)
   const [familyMemberName, setFamilyMemberName] = useState('')
@@ -556,6 +562,23 @@ function App() {
     }
   }, [schedule])
 
+  // Poll for roster updates every 5 minutes when logged in
+  useEffect(() => {
+    if (!userId || !token || !isOnline) return
+
+    // Initial check
+    checkRosterUpdates()
+
+    // Set up polling interval (5 minutes)
+    const interval = setInterval(() => {
+      if (settings.autoRefresh) {
+        checkRosterUpdates()
+      }
+    }, 5 * 60 * 1000) // 5 minutes
+
+    return () => clearInterval(interval)
+  }, [userId, token, isOnline, settings.autoRefresh])
+
   const fetchSubscriptionStatus = async (employeeId) => {
     try {
       const response = await apiCall('/api/subscription/status', {
@@ -621,6 +644,13 @@ function App() {
       if (cachedSubscription) setSubscriptionStatus(cachedSubscription)
       if (cachedSubscriptionPlan) setSubscriptionPlan(cachedSubscriptionPlan)
       if (cachedSubscriptionExpiry) setSubscriptionExpiry(cachedSubscriptionExpiry)
+      
+      // Load userId for roster updates
+      const cachedUserId = await localforage.getItem('userId')
+      if (cachedUserId) {
+        setUserId(cachedUserId)
+        console.log(`👤 Restored user ID for roster updates: ${cachedUserId}`)
+      }
       
       // Fetch subscription status from server on load
       if (cachedToken && cachedUsername) {
@@ -876,6 +906,14 @@ function App() {
       await localforage.setItem('username', credentials.username.trim())
       if (airline) await localforage.setItem('airline', airline)
       
+      // Store userId (employee ID) for roster updates API
+      if (accountType === 'pilot' && credentials.username.trim()) {
+        const employeeId = credentials.username.trim()
+        setUserId(employeeId)
+        await localforage.setItem('userId', employeeId)
+        console.log(`👤 User ID stored for roster updates: ${employeeId}`)
+      }
+      
       // For family accounts, look up the assigned name from the code
       if (accountType === 'family') {
         const accessCode = credentials.username.trim()
@@ -1009,6 +1047,118 @@ function App() {
     } catch (err) {
       setError('Failed to fetch schedule')
       console.error('Fetch schedule error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Check for roster updates from ABX Air NetLine/Crew API
+  const checkRosterUpdates = async () => {
+    if (!userId || !token) {
+      console.log('⏸️ Skipping roster update check - no userId or token')
+      return
+    }
+
+    try {
+      console.log(`🔍 Checking roster updates for user ${userId}`)
+      
+      const response = await apiCall(`/api/roster-updates/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      const data = await response.json()
+      
+      if (data.success && data.result) {
+        setRosterUpdates(data.result)
+        setLastRosterCheck(new Date().toISOString())
+        
+        // Check if there are roster changes
+        const hasRosterUpdate = data.result.roster === true
+        const hasCheckIns = data.result.checkins && data.result.checkins.length > 0
+        const lastChange = data.result.lastRosterChange
+        
+        if (hasRosterUpdate || hasCheckIns) {
+          setRosterUpdateAvailable(true)
+          console.log('✨ Roster update available:', {
+            roster: hasRosterUpdate,
+            checkIns: hasCheckIns,
+            lastChange: lastChange
+          })
+          
+          // Show notification if enabled
+          if (settings.notifications && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('Schedule Update Available', {
+              body: hasRosterUpdate ? 'Your flight schedule has been updated' : 'New check-in information available',
+              icon: '/icons/android/android-launchericon-192-192.png',
+              badge: '/icons/android/android-launchericon-96-96.png'
+            })
+          }
+          
+          // Add to schedule changes
+          const changeMessage = hasRosterUpdate 
+            ? `Roster updated on ${new Date(lastChange).toLocaleString()}`
+            : `New check-in information (${hasCheckIns} items)`
+          
+          setScheduleChanges(prev => [{
+            type: 'schedule',
+            message: changeMessage,
+            date: new Date().toISOString(),
+            read: false,
+            flightNumber: null
+          }, ...prev])
+        } else {
+          setRosterUpdateAvailable(false)
+          console.log('✅ Roster is up to date')
+        }
+        
+        // Store last check timestamps
+        await localforage.setItem('lastRosterCheck', new Date().toISOString())
+        await localforage.setItem('lastKnownRosterChange', lastChange)
+        
+      } else {
+        console.error('❌ Failed to check roster updates:', data.error)
+      }
+    } catch (err) {
+      console.error('❌ Error checking roster updates:', err)
+      // Don't show error to user for background checks
+    }
+  }
+
+  // Fetch full roster data when updates are detected
+  const fetchRosterData = async () => {
+    if (!userId || !token) {
+      setError('User ID required to fetch roster')
+      return
+    }
+
+    setLoading(true)
+    setLoadingMessage('Fetching updated roster from crew portal...')
+
+    try {
+      const response = await apiCall(`/api/roster/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      const data = await response.json()
+      
+      if (data.success && data.roster) {
+        // Update schedule with new roster data
+        setSchedule(data.roster)
+        await localforage.setItem('schedule', data.roster)
+        
+        // Clear update flag
+        setRosterUpdateAvailable(false)
+        
+        // Mark schedule changes as read
+        setScheduleChanges(prev => prev.map(change => ({ ...change, read: true })))
+        
+        console.log('✅ Roster data updated successfully')
+      } else {
+        setError(data.error || 'Failed to fetch roster data')
+      }
+    } catch (err) {
+      setError('Failed to fetch roster data')
+      console.error('Fetch roster error:', err)
     } finally {
       setLoading(false)
     }
@@ -3117,6 +3267,59 @@ function App() {
         <div className="notifications-header">
           <h2>🔔 Notifications</h2>
         </div>
+        
+        {/* Roster Update Banner */}
+        {rosterUpdateAvailable && (
+          <Card sx={{ mb: 2, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box sx={{ fontSize: '2rem' }}>✨</Box>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="h6" component="div">
+                    Roster Update Available
+                  </Typography>
+                  <Typography variant="body2">
+                    Your schedule has been updated in the crew portal
+                  </Typography>
+                  {lastRosterCheck && (
+                    <Typography variant="caption" display="block" sx={{ mt: 0.5, opacity: 0.9 }}>
+                      Last checked: {new Date(lastRosterCheck).toLocaleString()}
+                    </Typography>
+                  )}
+                </Box>
+                <Button 
+                  variant="contained" 
+                  color="secondary"
+                  onClick={fetchRosterData}
+                  disabled={loading}
+                  startIcon={<Badge badgeContent="!" color="error">📅</Badge>}
+                >
+                  {loading ? 'Loading...' : 'Fetch Update'}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Manual roster check button */}
+        {userId && !rosterUpdateAvailable && (
+          <Box sx={{ mb: 2 }}>
+            <Button 
+              variant="outlined" 
+              fullWidth
+              onClick={checkRosterUpdates}
+              disabled={loading || !isOnline}
+              startIcon={<span>🔄</span>}
+            >
+              Check for Roster Updates
+            </Button>
+            {lastRosterCheck && (
+              <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 1 }}>
+                Last checked: {new Date(lastRosterCheck).toLocaleString()}
+              </Typography>
+            )}
+          </Box>
+        )}
         
         {!hasNotifications && (
           <div className="no-notifications">
