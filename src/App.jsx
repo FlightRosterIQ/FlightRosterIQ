@@ -3420,51 +3420,27 @@ function App() {
 
   const renderSettingsView = () => {
     return (
-      <div className="settings-view">
-        <h2>⚙️ Settings</h2>
+      <Box className="settings-view" sx={{ px: 2, pb: 4 }}>
+        <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>⚙️ Settings</Typography>
         
-        <div className="settings-tabs">
-          <button 
-            className={settingsTab === 'pilotInfo' ? 'active' : ''}
-            onClick={() => setSettingsTab('pilotInfo')}
-          >
-            👤 Pilot Info
-          </button>
+        <Tabs 
+          value={settingsTab} 
+          onChange={(e, newValue) => setSettingsTab(newValue)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
+        >
+          <Tab label="👤 Pilot Info" value="pilotInfo" />
           {userType !== 'family' && (
-            <button 
-              className={settingsTab === 'subscription' ? 'active' : ''}
-              onClick={() => setSettingsTab('subscription')}
-            >
-              💳 Subscription
-            </button>
+            <Tab label="💳 Subscription" value="subscription" />
           )}
-          <button 
-            className={settingsTab === 'features' ? 'active' : ''}
-            onClick={() => setSettingsTab('features')}
-          >
-            🌟 Features
-          </button>
+          <Tab label="🌟 Features" value="features" />
           {userType !== 'family' && (
-            <button 
-              className={settingsTab === 'family' ? 'active' : ''}
-              onClick={() => setSettingsTab('family')}
-            >
-              👨‍👩‍👧‍👦 Family
-            </button>
+            <Tab label="👨‍👩‍👧‍👦 Family" value="family" />
           )}
-          <button 
-            className={settingsTab === 'faqs' ? 'active' : ''}
-            onClick={() => setSettingsTab('faqs')}
-          >
-            ❓ FAQs
-          </button>
-          <button 
-            className={settingsTab === 'contact' ? 'active' : ''}
-            onClick={() => setSettingsTab('contact')}
-          >
-            📧 Contact
-          </button>
-        </div>
+          <Tab label="❓ FAQs" value="faqs" />
+          <Tab label="📧 Contact" value="contact" />
+        </Tabs>
 
         {settingsTab === 'pilotInfo' && (
           <div className="settings-content">
@@ -4092,10 +4068,18 @@ function App() {
             >
               💰 Donate
             </a>
-            <button onClick={handleLogout} className="logout-btn">Logout</button>
+            <Button 
+              onClick={handleLogout} 
+              variant="outlined" 
+              color="error"
+              startIcon={<LogoutIcon />}
+              fullWidth
+            >
+              Logout
+            </Button>
           </div>
         </div>
-      </div>
+      </Box>
     )
   }
 
@@ -4285,59 +4269,67 @@ function App() {
         <div className="pairing-card">
           {/* Check if this is a training duty */}
           {flights[0]?.isTraining ? (
-            <div className="training-duty-card">
-              <h3 className="training-duty-header">
-                🎓 Training: {flights[0]?.dutyType || flights[0]?.pairingId}
-              </h3>
-              <div className="training-duty-info">
-                <div className="training-time">
-                  <span className="training-label">Start:</span>
-                  <span className="training-value">{flights[0]?.departure || flights[0]?.startTime}</span>
-                </div>
-                <div className="training-time">
-                  <span className="training-label">End:</span>
-                  <span className="training-value">{flights[0]?.arrival || flights[0]?.endTime}</span>
-                </div>
-                <div className="training-location">
-                  <span className="training-label">Location:</span>
-                  <span className="training-value">{flights[0]?.origin || flights[0]?.startLocation || 'Training Facility'}</span>
-                </div>
-              </div>
-            </div>
+            <Card sx={{ mb: 2 }} elevation={2}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box>🎓</Box>
+                  Training: {flights[0]?.dutyType || flights[0]?.pairingId}
+                </Typography>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">Start:</Typography>
+                    <Typography variant="body1">{flights[0]?.departure || flights[0]?.startTime}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">End:</Typography>
+                    <Typography variant="body1">{flights[0]?.arrival || flights[0]?.endTime}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">Location:</Typography>
+                    <Typography variant="body1">{flights[0]?.origin || flights[0]?.startLocation || 'Training Facility'}</Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
           ) : flights[0]?.isReserveDuty ? (
-            <div className="reserve-duty-card">
-              <h3 className="reserve-duty-header">
-                📅 Reserve Duty: {flights[0]?.dutyType || flights[0]?.pairingId}
-              </h3>
-              <div className="reserve-duty-info">
-                <div className="reserve-time">
-                  <span className="reserve-label">Start:</span>
-                  <span className="reserve-value">{flights[0]?.departure || flights[0]?.startTime}</span>
-                </div>
-                <div className="reserve-time">
-                  <span className="reserve-label">End:</span>
-                  <span className="reserve-value">{flights[0]?.arrival || flights[0]?.endTime}</span>
-                </div>
-                <div className="reserve-location">
-                  <span className="reserve-label">Location:</span>
-                  <span className="reserve-value">{flights[0]?.origin || flights[0]?.startLocation || 'Base'}</span>
-                </div>
-              </div>
-            </div>
+            <Card sx={{ mb: 2 }} elevation={2}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ color: 'info.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box>📅</Box>
+                  Reserve Duty: {flights[0]?.dutyType || flights[0]?.pairingId}
+                </Typography>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">Start:</Typography>
+                    <Typography variant="body1">{flights[0]?.departure || flights[0]?.startTime}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">End:</Typography>
+                    <Typography variant="body1">{flights[0]?.arrival || flights[0]?.endTime}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">Location:</Typography>
+                    <Typography variant="body1">{flights[0]?.origin || flights[0]?.startLocation || 'Base'}</Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
           ) : (
             <>
-              <h3>Pairing: {flights[0]?.pairingId || 'N/A'}</h3>
+              <Typography variant="h6" sx={{ mb: 2 }}>Pairing: {flights[0]?.pairingId || 'N/A'}</Typography>
               {flights.map((flight, idx) => (
-            <div key={idx} className="flight-card" onClick={() => setSelectedFlight(flight)}>
+            <Card 
+              key={idx} 
+              sx={{ mb: 2, cursor: 'pointer', '&:hover': { boxShadow: 4 } }} 
+              onClick={() => setSelectedFlight(flight)}
+              elevation={2}
+            >
+              <CardContent>
               {flight.isDeadhead && (
-                <div className="deadhead-badge">
-                  DH - Deadhead Flight
-                </div>
+                <Chip label="DH - Deadhead Flight" size="small" color="warning" sx={{ mb: 1 }} />
               )}
               {flight.isGroundTransport && (
-                <div className="ground-transport-badge">
-                  🚗 Ground Transportation
-                </div>
+                <Chip label="🚗 Ground Transportation" size="small" color="info" sx={{ mb: 1 }} />
               )}
               <div className="flight-row">
                 <div className="flight-header-section">
@@ -4477,7 +4469,8 @@ function App() {
                   )}
                 </div>
               )}
-            </div>
+            </CardContent>
+          </Card>
           ))}
             </>
           )}
