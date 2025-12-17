@@ -716,16 +716,23 @@ function App() {
           
         } catch (authError) {
           console.error('Authentication error:', authError)
+          console.error('Error details:', {
+            message: authError.message,
+            type: authError.name,
+            stack: authError.stack
+          })
           
           // Provide more specific error messages
           if (!navigator.onLine) {
             setError('No internet connection. Please check your network and try again.')
-          } else if (authError.message && authError.message.includes('fetch')) {
-            setError('Cannot connect to server. The crew portal scraper may be offline. Please try again later.')
+          } else if (authError.message && (authError.message.includes('fetch') || authError.message.includes('Failed to fetch'))) {
+            setError(`Cannot connect to authentication server. Error: ${authError.message}`)
           } else if (authError.message && authError.message.includes('timeout')) {
             setError('Connection timeout. The crew portal is taking too long to respond. Please try again.')
+          } else if (authError.name === 'TypeError') {
+            setError(`Network error: ${authError.message}. The server may be temporarily unavailable.`)
           } else {
-            setError('Unable to validate credentials. Please check your connection and try again.')
+            setError(`Unable to validate credentials: ${authError.message || 'Unknown error'}. Please try again.`)
           }
           
           setLoading(false)
