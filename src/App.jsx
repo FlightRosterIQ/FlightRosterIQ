@@ -2377,6 +2377,20 @@ function App() {
     const newDate = new Date(currentMonth)
     newDate.setMonth(newDate.getMonth() - 1)
     
+    // Calculate the earliest allowed month (previous month from today)
+    const today = new Date()
+    const earliestDate = new Date(today)
+    earliestDate.setMonth(earliestDate.getMonth() - 1)
+    earliestDate.setDate(1) // First day of previous month
+    
+    // Prevent going before the earliest scraped month
+    if (newDate < earliestDate) {
+      console.log('⚠️ Cannot navigate before previous month - no cached data')
+      setError('Schedule data only available for previous, current, and next month.')
+      setTimeout(() => setError(null), 3000)
+      return
+    }
+    
     // Try to load cached data for this month
     const month = newDate.getMonth() + 1
     const year = newDate.getFullYear()
@@ -2449,6 +2463,20 @@ function App() {
   const goToNextMonth = async () => {
     const newDate = new Date(currentMonth)
     newDate.setMonth(newDate.getMonth() + 1)
+    
+    // Calculate the latest allowed month (next month from today)
+    const today = new Date()
+    const latestDate = new Date(today)
+    latestDate.setMonth(latestDate.getMonth() + 1)
+    latestDate.setDate(1) // First day of next month
+    
+    // Prevent going beyond next month
+    if (newDate.getMonth() > latestDate.getMonth() || newDate.getFullYear() > latestDate.getFullYear()) {
+      console.log('⚠️ Cannot navigate beyond next month - no cached data')
+      setError('Schedule data only available for previous, current, and next month.')
+      setTimeout(() => setError(null), 3000)
+      return
+    }
     
     // Try to load cached data for this month
     const month = newDate.getMonth() + 1

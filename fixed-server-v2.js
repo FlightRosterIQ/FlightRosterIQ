@@ -985,41 +985,97 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
         const remarks = await page.evaluate(() => {
             const remarksList = [];
             
-            // Look for news items using the specific data-test-id
-            const newsItems = document.querySelectorAll('[data-test-id^="news-item"]');
+            // Strategy 1: Look for news items using data-test-id
+            const newsItems = document.querySelectorAll('[data-test-id^="news-item"], [data-test-id*="notification"], [data-test-id*="message"]');
             
             newsItems.forEach(item => {
-                // Get the parent element to capture full news item
-                const newsContainer = item.closest('[class*="news"]') || item.parentElement;
+                const newsContainer = item.closest('[class*="news"]') || item.closest('[class*="notification"]') || item.parentElement;
                 
                 // Extract title/message
                 const titleElem = newsContainer.querySelector('[data-test-id="news-item-title"]') || 
+                                newsContainer.querySelector('[data-test-id*="title"]') ||
                                 newsContainer.querySelector('[class*="title"]') ||
-                                newsContainer.querySelector('h3, h4, h5, h6');
+                                newsContainer.querySelector('h3, h4, h5, h6, strong, b');
                 const title = titleElem ? titleElem.textContent.trim() : '';
                 
-                // Extract date from subtitle
-                const dateElem = newsContainer.querySelector('[data-test-id="news-item-subtitle"]');
+                // Extract date
+                const dateElem = newsContainer.querySelector('[data-test-id="news-item-subtitle"]') ||
+                               newsContainer.querySelector('[data-test-id*="date"]') ||
+                               newsContainer.querySelector('[class*="date"]') ||
+                               newsContainer.querySelector('time');
                 const date = dateElem ? dateElem.textContent.trim() : '';
                 
                 // Extract body/content
                 const bodyElem = newsContainer.querySelector('[data-test-id="news-item-body"]') ||
+                               newsContainer.querySelector('[data-test-id*="body"]') ||
+                               newsContainer.querySelector('[data-test-id*="content"]') ||
                                newsContainer.querySelector('[class*="body"]') ||
-                               newsContainer.querySelector('p');
+                               newsContainer.querySelector('[class*="content"]') ||
+                               newsContainer.querySelector('p, div[class*="text"]');
                 const body = bodyElem ? bodyElem.textContent.trim() : '';
                 
-                // Combine title and body for the message
-                const message = [title, body].filter(Boolean).join(' - ');
+                // Get full text if nothing found
+                const fullText = !title && !body ? newsContainer.textContent.trim() : '';
+                
+                // Combine for message
+                const message = fullText || [title, body].filter(Boolean).join(' - ');
                 
                 if (message && message.length > 5) {
                     remarksList.push({
                         message: message,
                         date: date || new Date().toISOString(),
                         type: 'news',
-                        read: false
+                        read: false,
+                        title: title || '',
+                        body: body || ''
                     });
                 }
             });
+            
+            // Strategy 2: Look for any notification/alert boxes
+            if (remarksList.length === 0) {
+                const alertBoxes = document.querySelectorAll('[role="alert"], [class*="alert"], [class*="notification"], .news-item, .message-item');
+                alertBoxes.forEach(box => {
+                    const text = box.textContent.trim();
+                    if (text && text.length > 10) {
+                        remarksList.push({
+                            message: text,
+                            date: new Date().toISOString(),
+                            type: 'notification',
+                            read: false
+                        });
+                    }
+                });
+            }
+            
+            // Strategy 3: Look in lists or tables
+            if (remarksList.length === 0) {
+                const rows = document.querySelectorAll('tr, li, [class*="list-item"]');
+                rows.forEach(row => {
+                    // Skip if it looks like a calendar row
+                    if (row.querySelector('[class*="duty"]') || row.querySelector('[class*="flight"]')) {
+                        return;
+                    }
+                    
+                    const text = row.textContent.trim();
+                    // Look for typical notification/message patterns
+                    if (text && text.length > 15 && (
+                        text.match(/\d{1,2}\/\d{1,2}/) || // dates
+                        text.toLowerCase().includes('schedule') ||
+                        text.toLowerCase().includes('change') ||
+                        text.toLowerCase().includes('update') ||
+                        text.toLowerCase().includes('notice') ||
+                        text.toLowerCase().includes('reminder')
+                    )) {
+                        remarksList.push({
+                            message: text,
+                            date: new Date().toISOString(),
+                            type: 'notice',
+                            read: false
+                        });
+                    }
+                });
+            }
             
             return remarksList;
         });
