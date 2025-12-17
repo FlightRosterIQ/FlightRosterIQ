@@ -94,5 +94,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('🚀 FlightRosterIQ - REAL AUTHENTICATION!');
     console.log(`🌐 Server running on port ${PORT}`);
     console.log('🔐 Real login form authentication enabled');
-    console.log(`🌐 Access at: http://157.245.126.24:${PORT}`);
+    console.log(`🌐 Access at: h2780ttp://157.245.126.24:${PORT}`);
 });

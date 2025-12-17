@@ -1,6 +1,43 @@
 import { useState, useEffect } from 'react'
 import localforage from 'localforage'
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
+import { 
+  ThemeProvider, 
+  createTheme, 
+  Box, 
+  Container,
+  Card,
+  CardContent,
+  TextField,
+  Button,
+  Typography,
+  Avatar,
+  Chip,
+  IconButton,
+  CircularProgress,
+  Alert,
+  Collapse,
+  Paper,
+  Fade,
+  Zoom,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
+} from '@mui/material'
+import {
+  Flight as FlightIcon,
+  FamilyRestroom as FamilyIcon,
+  ArrowBack as ArrowBackIcon,
+  Info as InfoIcon,
+  Security as SecurityIcon,
+  Speed as SpeedIcon,
+  People as PeopleIcon,
+  ConnectingAirports as AirlinesIcon,
+  ExpandMore as ExpandMoreIcon,
+  Lock as LockIcon,
+  AccessTime as AccessTimeIcon
+} from '@mui/icons-material'
 import './App.css'
 
 // FlightRosterIQ Server Configuration
@@ -27,6 +64,58 @@ const apiCall = async (endpoint, options = {}) => {
     throw error;
   }
 };
+
+// Material-UI Theme Configuration
+const muiTheme = createTheme({
+  palette: {
+    primary: {
+      main: '#1e3a8a',
+      light: '#3b82f6',
+      dark: '#1e40af',
+    },
+    secondary: {
+      main: '#0891b2',
+      light: '#06b6d4',
+      dark: '#0e7490',
+    },
+    background: {
+      default: '#f1f5f9',
+      paper: '#ffffff',
+    },
+  },
+  typography: {
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    h4: {
+      fontWeight: 700,
+      fontSize: '2rem',
+    },
+    h6: {
+      fontWeight: 600,
+    },
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          fontWeight: 600,
+          padding: '12px 24px',
+          fontSize: '1rem',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        },
+      },
+    },
+  },
+});
 
 localforage.config({
   name: 'FlightRosterIQ',
@@ -4233,168 +4322,339 @@ function App() {
 
   if (!token) {
     return (
-      <div className="app" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
-        {/* Pull to Refresh Indicator */}
-        {isPulling && (
-          <div className="pull-refresh-indicator" style={{ transform: `translateX(-50%) translateY(${Math.min(pullRefreshDistance - 60, 0)}px)` }}>
-            <span className="pull-refresh-icon">↻</span>
-            <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
-          </div>
-        )}
-        
-        <div className="login-container">
-          <div className="login-logo">
-            <div className="login-logo-icon">✈️</div>
-            <h1 className="login-logo-text">FlightRosterIQ</h1>
-          </div>
-
-          {!accountType ? (
-            <div className="account-selection">
-              <h2>Select Account Type</h2>
-              <div className="account-buttons">
-                <button className="account-btn pilot-btn" onClick={() => setAccountType('pilot')}>
-                  <span className="account-icon">✈️</span>
-                  <span className="account-label">Pilot Account</span>
-                  <span className="account-desc">Full access to schedule, friends & more</span>
-                </button>
-                <button className="account-btn family-btn" onClick={() => setAccountType('family')}>
-                  <span className="account-icon">👪</span>
-                  <span className="account-label">Family Account</span>
-                  <span className="account-desc">View schedule (limited access)</span>
-                </button>
-              </div>
-              
-              <div className="home-info-section">
-                <button 
-                  className="info-toggle-btn"
-                  onClick={() => setShowHomeInfo(!showHomeInfo)}
-                >
-                  <span className="info-icon">ℹ️</span>
-                  <span>How This Works</span>
-                  <span className={`chevron ${showHomeInfo ? 'expanded' : ''}`}>▼</span>
-                </button>
-                
-                {showHomeInfo && (
-                  <div className="home-info-content">
-                    <div className="info-grid">
-                      <div className="info-item">
-                        <span className="info-icon">🔒</span>
-                        <div className="info-content">
-                          <strong>Secure:</strong> Your credentials are never stored
-                        </div>
-                      </div>
-                      <div className="info-item">
-                        <span className="info-icon">⚡</span>
-                        <div className="info-content">
-                          <strong>Real-Time:</strong> Data fetched directly from crew portals
-                        </div>
-                      </div>
-                      <div className="info-item">
-                        <span className="info-icon">👥</span>
-                        <div className="info-content">
-                          <strong>Multi-User:</strong> Each pilot sees their own schedule
-                        </div>
-                      </div>
-                      <div className="info-item">
-                        <span className="info-icon">🛩️</span>
-                        <div className="info-content">
-                          <strong>Multi-Airline:</strong> Supports ABX Air & ATI
-                        </div>
-                      </div>
-                    </div>
-                    <div className="beta-notice">
-                      <span className="beta-badge">BETA</span>
-                    </div>
-                  </div>
-                )}
-              </div>
+      <ThemeProvider theme={muiTheme}>
+        <Box 
+          className="app" 
+          onTouchStart={handleTouchStart} 
+          onTouchMove={handleTouchMove} 
+          onTouchEnd={handleTouchEnd}
+          sx={{
+            minHeight: '100vh',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 2
+          }}
+        >
+          {/* Pull to Refresh Indicator */}
+          {isPulling && (
+            <div className="pull-refresh-indicator" style={{ transform: `translateX(-50%) translateY(${Math.min(pullRefreshDistance - 60, 0)}px)` }}>
+              <span className="pull-refresh-icon">↻</span>
+              <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
             </div>
-          ) : (
-            <>
-              <div className="account-type-badge">
-                {accountType === 'pilot' ? '✈️ Pilot Login' : '👪 Family Login'}
-              </div>
-              <button className="back-btn" onClick={() => setAccountType(null)}>
-                ← Back
-              </button>
-
-              {accountType === 'pilot' && (
-                <div className="airline-selector">
-                  <label>Select Airline:</label>
-                  <select value={airline || ''} onChange={(e) => setAirline(e.target.value)} required>
-                    <option value="">Choose airline...</option>
-                    <option value="abx">ABX AIR (GB)</option>
-                    <option value="ati">Air Transport International (8C)</option>
-                  </select>
-                </div>
-              )}
-
-              <form onSubmit={(e) => handleLogin(e, accountType)}>
-                {accountType === 'pilot' ? (
-                  <>
-                    <input
-                      id="username"
-                      name="username"
-                      type="text"
-                      placeholder="Username"
-                      autoComplete="username"
-                      value={credentials.username}
-                      onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
-                      required
-                    />
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      placeholder="Password"
-                      autoComplete="current-password"
-                      value={credentials.password}
-                      onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-                      required
-                    />
-                  </>
-                ) : (
-                  <input
-                    id="access-code"
-                    name="access-code"
-                    type="text"
-                    placeholder="Enter Family Access Code"
-                    autoComplete="off"
-                    value={credentials.username}
-                    onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
-                    required
-                  />
-                )}
-                <button type="submit" disabled={loading || (accountType === 'pilot' && !airline)}>
-                  {loading ? 'Logging in...' : 'Login'}
-                </button>
-              </form>
-
-              {accountType === 'pilot' && (
-                <>
-                  <div className="security-note">
-                    🔒 Enter your actual crew portal username and password. Your credentials will be validated against the {airline} crew portal before access is granted.
-                  </div>
-                  <div className="info-note">
-                    ⏱️ First login may take 30-60 seconds while we sync your schedule from the crew portal.
-                  </div>
-                </>
-              )}
-
-              {accountType === 'family' && (
-                <div className="family-note">
-                  Family accounts use codes provided by pilots. Enter the code to view the schedule.
-                </div>
-              )}
-            </>
           )}
-          {error && <div className="error">{error}</div>}
-        </div>
-      </div>
+          
+          <Container maxWidth="sm">
+            <Zoom in={true} timeout={500}>
+              <Card 
+                elevation={8}
+                sx={{
+                  borderRadius: 4,
+                  overflow: 'visible',
+                  position: 'relative'
+                }}
+              >
+                {/* Offline Banner */}
+                {!isOnline && (
+                  <Alert severity="warning" sx={{ borderRadius: 0 }}>
+                    You are offline. Cached data will be used.
+                  </Alert>
+                )}
+
+                <CardContent sx={{ p: 4 }}>
+                  {/* Logo Section */}
+                  <Box sx={{ textAlign: 'center', mb: 4 }}>
+                    <Avatar 
+                      sx={{ 
+                        width: 80, 
+                        height: 80, 
+                        margin: '0 auto 16px',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        fontSize: '2.5rem'
+                      }}
+                    >
+                      ✈️
+                    </Avatar>
+                    <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, color: '#1e3a8a' }}>
+                      FlightRosterIQ
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Smart Crew Scheduling Platform
+                    </Typography>
+                  </Box>
+
+                  {!accountType ? (
+                    <Fade in={true} timeout={600}>
+                      <Box>
+                        <Typography variant="h6" gutterBottom sx={{ textAlign: 'center', mb: 3 }}>
+                          Select Account Type
+                        </Typography>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+                          <Button
+                            variant="contained"
+                            size="large"
+                            startIcon={<FlightIcon />}
+                            onClick={() => setAccountType('pilot')}
+                            sx={{
+                              py: 2,
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              '&:hover': {
+                                background: 'linear-gradient(135deg, #5568d3 0%, #6b4193 100%)',
+                              },
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 0.5
+                            }}
+                          >
+                            <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                              Pilot Account
+                            </Typography>
+                            <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                              Full access to schedule, friends & more
+                            </Typography>
+                          </Button>
+                          
+                          <Button
+                            variant="outlined"
+                            size="large"
+                            startIcon={<FamilyIcon />}
+                            onClick={() => setAccountType('family')}
+                            sx={{
+                              py: 2,
+                              borderWidth: 2,
+                              '&:hover': {
+                                borderWidth: 2,
+                              },
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 0.5
+                            }}
+                          >
+                            <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                              Family Account
+                            </Typography>
+                            <Typography variant="caption">
+                              View schedule (limited access)
+                            </Typography>
+                          </Button>
+                        </Box>
+
+                        {/* Info Section */}
+                        <Paper 
+                          elevation={0} 
+                          sx={{ 
+                            bgcolor: '#f8fafc', 
+                            p: 2, 
+                            borderRadius: 2,
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => setShowHomeInfo(!showHomeInfo)}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <InfoIcon color="primary" />
+                              <Typography variant="body2" fontWeight={600}>
+                                How This Works
+                              </Typography>
+                            </Box>
+                            <ExpandMoreIcon 
+                              sx={{ 
+                                transform: showHomeInfo ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.3s'
+                              }} 
+                            />
+                          </Box>
+                          
+                          <Collapse in={showHomeInfo}>
+                            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                                <SecurityIcon color="primary" fontSize="small" />
+                                <Box>
+                                  <Typography variant="body2" fontWeight={600}>Secure</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Your credentials are never stored
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                                <SpeedIcon color="primary" fontSize="small" />
+                                <Box>
+                                  <Typography variant="body2" fontWeight={600}>Real-Time</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Data fetched directly from crew portals
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                                <PeopleIcon color="primary" fontSize="small" />
+                                <Box>
+                                  <Typography variant="body2" fontWeight={600}>Multi-User</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Each pilot sees their own schedule
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                                <AirlinesIcon color="primary" fontSize="small" />
+                                <Box>
+                                  <Typography variant="body2" fontWeight={600}>Multi-Airline</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Supports ABX Air & ATI
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              <Chip 
+                                label="BETA" 
+                                size="small" 
+                                color="secondary" 
+                                sx={{ alignSelf: 'flex-start', mt: 1 }}
+                              />
+                            </Box>
+                          </Collapse>
+                        </Paper>
+                      </Box>
+                    </Fade>
+                  ) : (
+                    <Fade in={true} timeout={600}>
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+                          <IconButton onClick={() => setAccountType(null)} color="primary">
+                            <ArrowBackIcon />
+                          </IconButton>
+                          <Chip 
+                            icon={accountType === 'pilot' ? <FlightIcon /> : <FamilyIcon />}
+                            label={accountType === 'pilot' ? 'Pilot Login' : 'Family Login'}
+                            color="primary"
+                            sx={{ px: 1 }}
+                          />
+                          <Box sx={{ width: 40 }} />
+                        </Box>
+
+                        {accountType === 'pilot' && (
+                          <FormControl fullWidth sx={{ mb: 3 }}>
+                            <InputLabel>Select Airline</InputLabel>
+                            <Select
+                              value={airline || ''}
+                              onChange={(e) => setAirline(e.target.value)}
+                              label="Select Airline"
+                              required
+                            >
+                              <MenuItem value="abx">ABX AIR (GB)</MenuItem>
+                              <MenuItem value="ati">Air Transport International (8C)</MenuItem>
+                            </Select>
+                          </FormControl>
+                        )}
+
+                        <Box component="form" onSubmit={(e) => handleLogin(e, accountType)} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {accountType === 'pilot' ? (
+                            <>
+                              <TextField
+                                id="username"
+                                name="username"
+                                label="Username"
+                                type="text"
+                                autoComplete="username"
+                                value={credentials.username}
+                                onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
+                                required
+                                fullWidth
+                                variant="outlined"
+                              />
+                              <TextField
+                                id="password"
+                                name="password"
+                                label="Password"
+                                type="password"
+                                autoComplete="current-password"
+                                value={credentials.password}
+                                onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                                required
+                                fullWidth
+                                variant="outlined"
+                              />
+                            </>
+                          ) : (
+                            <TextField
+                              id="access-code"
+                              name="access-code"
+                              label="Family Access Code"
+                              type="text"
+                              autoComplete="off"
+                              value={credentials.username}
+                              onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
+                              required
+                              fullWidth
+                              variant="outlined"
+                              placeholder="Enter code provided by pilot"
+                            />
+                          )}
+                          
+                          <Button 
+                            type="submit" 
+                            variant="contained" 
+                            size="large"
+                            disabled={loading || (accountType === 'pilot' && !airline)}
+                            sx={{
+                              py: 1.5,
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              '&:hover': {
+                                background: 'linear-gradient(135deg, #5568d3 0%, #6b4193 100%)',
+                              }
+                            }}
+                          >
+                            {loading ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={20} sx={{ color: 'white' }} />
+                                <span>Logging in...</span>
+                              </Box>
+                            ) : (
+                              'Login'
+                            )}
+                          </Button>
+                        </Box>
+
+                        {accountType === 'pilot' && (
+                          <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <Alert severity="info" icon={<LockIcon />} sx={{ fontSize: '0.875rem' }}>
+                              Enter your crew portal credentials. They will be validated against {airline?.toUpperCase()} crew portal.
+                            </Alert>
+                            <Alert severity="warning" icon={<AccessTimeIcon />} sx={{ fontSize: '0.875rem' }}>
+                              First login may take 30-60 seconds while syncing your schedule.
+                            </Alert>
+                          </Box>
+                        )}
+
+                        {accountType === 'family' && (
+                          <Alert severity="info" sx={{ mt: 3, fontSize: '0.875rem' }}>
+                            Family accounts use codes provided by pilots. Enter the code to view the schedule.
+                          </Alert>
+                        )}
+                      </Box>
+                    </Fade>
+                  )}
+                  
+                  {error && (
+                    <Fade in={true}>
+                      <Alert severity="error" sx={{ mt: 2 }}>
+                        {error}
+                      </Alert>
+                    </Fade>
+                  )}
+                </CardContent>
+              </Card>
+            </Zoom>
+          </Container>
+        </Box>
+      </ThemeProvider>
     )
   }
 
   return (
+    <ThemeProvider theme={muiTheme}>
     <div 
       className={`app ${theme === 'dark' ? 'dark-theme' : ''}`}
       onTouchStart={handleTouchStart}
@@ -4525,10 +4785,18 @@ function App() {
       
       {/* Offline Mode Banner */}
       {!isOnline && token && schedule && (
-        <div className="offline-banner">
-          <span className="offline-icon">✈️</span>
-          <span className="offline-message">Offline Mode - Showing cached schedule</span>
-        </div>
+        <Alert 
+          severity="warning" 
+          sx={{ 
+            borderRadius: 0,
+            mb: 0
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <span>✈️</span>
+            <span>Offline Mode - Showing cached schedule</span>
+          </Box>
+        </Alert>
       )}
       
       <header>
@@ -5404,6 +5672,7 @@ function App() {
         </div>
       )}
     </div>
+    </ThemeProvider>
   )
 }
 
