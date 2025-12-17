@@ -627,7 +627,18 @@ function App() {
           
         } catch (authError) {
           console.error('Authentication error:', authError)
-          setError('Unable to validate credentials. Please check your connection and try again.')
+          
+          // Provide more specific error messages
+          if (!navigator.onLine) {
+            setError('No internet connection. Please check your network and try again.')
+          } else if (authError.message && authError.message.includes('fetch')) {
+            setError('Cannot connect to server. The crew portal scraper may be offline. Please try again later.')
+          } else if (authError.message && authError.message.includes('timeout')) {
+            setError('Connection timeout. The crew portal is taking too long to respond. Please try again.')
+          } else {
+            setError('Unable to validate credentials. Please check your connection and try again.')
+          }
+          
           setLoading(false)
           return
         }
