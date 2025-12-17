@@ -41,7 +41,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -5920,7 +5920,8 @@ function App() {
             right: 0,
             textAlign: 'center',
             py: 1,
-            zIndex: 1
+            zIndex: 9999,
+            pointerEvents: 'none'
           }}
         >
           <Typography
@@ -5928,7 +5929,9 @@ function App() {
             sx={{
               color: 'text.secondary',
               fontSize: '0.75rem',
-              opacity: 0.6
+              opacity: 0.7,
+              fontWeight: 500,
+              textShadow: theme === 'dark' ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
             }}
           >
             FlightRosterIQ v{APP_VERSION}
