@@ -41,7 +41,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.4';
+const APP_VERSION = '1.0.5';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -2407,6 +2407,19 @@ function App() {
     try {
       const monthData = {}
       
+      // Helper function to check if arrival is next day based on local times
+      const isNextDayArrival = (departure, arrival) => {
+        const deptMatch = departure?.match(/(\d{2})(\d{2})/)
+        const arrMatch = arrival?.match(/(\d{2})(\d{2})/)
+        
+        if (deptMatch && arrMatch) {
+          const deptMinutes = parseInt(deptMatch[1]) * 60 + parseInt(deptMatch[2])
+          const arrMinutes = parseInt(arrMatch[1]) * 60 + parseInt(arrMatch[2])
+          return arrMinutes < deptMinutes
+        }
+        return false
+      }
+      
       // Handle new format from scraper: { flights: [...] }
       if (schedule.flights && Array.isArray(schedule.flights)) {
         schedule.flights.forEach(flight => {
@@ -2415,6 +2428,24 @@ function App() {
             monthData[dateKey] = []
           }
           monthData[dateKey].push({ ...flight, pairingId: flight.pairingId || 'N/A' })
+          
+          // If flight lands next day (based on local times), add to next day too
+          if (flight.departure && flight.arrival && isNextDayArrival(flight.departure, flight.arrival)) {
+            const nextDate = new Date(flight.date)
+            nextDate.setDate(nextDate.getDate() + 1)
+            const nextDateKey = nextDate.toISOString().split('T')[0]
+            
+            if (!monthData[nextDateKey]) {
+              monthData[nextDateKey] = []
+            }
+            // Mark this as a continuation from previous day
+            monthData[nextDateKey].push({ 
+              ...flight, 
+              pairingId: flight.pairingId || 'N/A',
+              isArrivalDay: true,
+              originalDate: flight.date
+            })
+          }
         })
       }
       // Handle old format: array of pairings
@@ -2427,6 +2458,23 @@ function App() {
                 monthData[dateKey] = []
               }
               monthData[dateKey].push({ ...flight, pairingId: pairing.pairingId })
+              
+              // If flight lands next day (based on local times), add to next day too
+              if (flight.departure && flight.arrival && isNextDayArrival(flight.departure, flight.arrival)) {
+                const nextDate = new Date(flight.date)
+                nextDate.setDate(nextDate.getDate() + 1)
+                const nextDateKey = nextDate.toISOString().split('T')[0]
+                
+                if (!monthData[nextDateKey]) {
+                  monthData[nextDateKey] = []
+                }
+                monthData[nextDateKey].push({ 
+                  ...flight, 
+                  pairingId: pairing.pairingId,
+                  isArrivalDay: true,
+                  originalDate: flight.date
+                })
+              }
             })
           }
         })
@@ -4042,6 +4090,8 @@ function App() {
           const dateKey = date.toISOString().split('T')[0]
           const daySchedule = monthData[dateKey]
           const hasFlights = daySchedule?.length > 0
+          const hasArrivalFlights = hasFlights && daySchedule.some(f => f.isArrivalDay)
+          const hasDepartureFlights = hasFlights && daySchedule.some(f => !f.isArrivalDay)
           const isTraining = hasFlights && daySchedule[0]?.isTraining
           const isReserve = hasFlights && daySchedule[0]?.isReserveDuty
           const dutyType = isTraining || isReserve ? (daySchedule[0]?.dutyType || daySchedule[0]?.pairingId) : null
@@ -4049,10 +4099,20 @@ function App() {
                           viewMonth.getMonth() === today.getMonth() && 
                           viewMonth.getFullYear() === today.getFullYear()
           
+          // Determine the CSS class for the day
+          let dayClass = 'calendar-day'
+          if (hasFlights) {
+            if (isTraining) dayClass += ' has-training'
+            else if (isReserve) dayClass += ' has-reserve'
+            else if (hasArrivalFlights && !hasDepartureFlights) dayClass += ' has-arrival'
+            else dayClass += ' has-duty'
+          }
+          if (isToday) dayClass += ' today'
+          
           week.push(
             <div 
               key={day} 
-              className={`calendar-day ${hasFlights ? (isTraining ? 'has-training' : isReserve ? 'has-reserve' : 'has-duty') : ''} ${isToday ? 'today' : ''}`}
+              className={dayClass}
               onClick={() => {
                 setSelectedDate(dateKey)
                 setActiveTab('daily')
@@ -4061,7 +4121,9 @@ function App() {
               <div className="day-number">{day}</div>
               {hasFlights && (
                 <div className="duty-indicator">
-                  {(isTraining || isReserve) ? dutyType : `${daySchedule.length} flight${daySchedule.length > 1 ? 's' : ''}`}
+                  {(isTraining || isReserve) ? dutyType : 
+                   hasArrivalFlights && !hasDepartureFlights ? `${daySchedule.length} arrival${daySchedule.length > 1 ? 's' : ''}` :
+                   `${daySchedule.length} flight${daySchedule.length > 1 ? 's' : ''}`}
                 </div>
               )}
             </div>
@@ -5199,30 +5261,31 @@ function App() {
                   <span className="detail-value">
                     <div className="time-display">
                       {(() => {
+                        // Compare LOCAL times to determine if arrival is next day
                         const deptMatch = selectedFlight.departure.match(/(\d{2})(\d{2})/)
                         const arrMatch = selectedFlight.arrival.match(/(\d{2})(\d{2})/)
+                        
                         if (deptMatch && arrMatch) {
-                          const deptUTC = convertToUTC(selectedFlight.departure)
-                          const arrUTC = convertToUTC(selectedFlight.arrival)
-                          const deptUTCMatch = deptUTC.match(/(\d{2})(\d{2})/)
-                          const arrUTCMatch = arrUTC.match(/(\d{2})(\d{2})/)
+                          const deptHour = parseInt(deptMatch[1])
+                          const deptMin = parseInt(deptMatch[2])
+                          const arrHour = parseInt(arrMatch[1])
+                          const arrMin = parseInt(arrMatch[2])
                           
-                          if (deptUTCMatch && arrUTCMatch) {
-                            const deptHour = parseInt(deptUTCMatch[1])
-                            const arrHour = parseInt(arrUTCMatch[1])
-                            
-                            if (arrHour < deptHour || (arrHour === deptHour && parseInt(arrUTCMatch[2]) < parseInt(deptUTCMatch[2]))) {
-                              const arrivalDate = new Date(selectedFlight.date)
-                              arrivalDate.setDate(arrivalDate.getDate() + 1)
-                              return (
-                                <>
-                                  <span className="time-lt" style={{color: '#f59e0b', fontWeight: '600'}}>
-                                    {arrivalDate.toLocaleDateString()} - {selectedFlight.arrival} LT (Next Day)
-                                  </span>
-                                  <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
-                                </>
-                              )
-                            }
+                          // If arrival LT is earlier than departure LT, it's next day
+                          const deptMinutes = deptHour * 60 + deptMin
+                          const arrMinutes = arrHour * 60 + arrMin
+                          
+                          if (arrMinutes < deptMinutes) {
+                            const arrivalDate = new Date(selectedFlight.date)
+                            arrivalDate.setDate(arrivalDate.getDate() + 1)
+                            return (
+                              <>
+                                <span className="time-lt" style={{color: '#f59e0b', fontWeight: '600'}}>
+                                  {arrivalDate.toLocaleDateString()} - {selectedFlight.arrival} LT (Next Day)
+                                </span>
+                                <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
+                              </>
+                            )
                           }
                         }
                         
