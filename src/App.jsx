@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import localforage from 'localforage'
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 import { 
@@ -40,6 +40,9 @@ import {
 } from '@mui/icons-material'
 import './App.css'
 
+// App Version - Update this with each build
+const APP_VERSION = '1.0.1';
+
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
 const API_BASE_URL = '';
@@ -64,58 +67,6 @@ const apiCall = async (endpoint, options = {}) => {
     throw error;
   }
 };
-
-// Material-UI Theme Configuration
-const muiTheme = createTheme({
-  palette: {
-    primary: {
-      main: '#1e3a8a',
-      light: '#3b82f6',
-      dark: '#1e40af',
-    },
-    secondary: {
-      main: '#0891b2',
-      light: '#06b6d4',
-      dark: '#0e7490',
-    },
-    background: {
-      default: '#f1f5f9',
-      paper: '#ffffff',
-    },
-  },
-  typography: {
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-    h4: {
-      fontWeight: 700,
-      fontSize: '2rem',
-    },
-    h6: {
-      fontWeight: 600,
-    },
-  },
-  shape: {
-    borderRadius: 12,
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          fontWeight: 600,
-          padding: '12px 24px',
-          fontSize: '1rem',
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        },
-      },
-    },
-  },
-});
 
 localforage.config({
   name: 'FlightRosterIQ',
@@ -150,11 +101,83 @@ function App() {
   })
   const [theme, setTheme] = useState('light')
   const [showThemeDropdown, setShowThemeDropdown] = useState(false)
+  
+  // Material-UI Theme Configuration (Dynamic based on theme state)
+  const muiTheme = useMemo(() => createTheme({
+    palette: {
+      mode: theme,
+      primary: {
+        main: theme === 'dark' ? '#3b82f6' : '#1e3a8a',
+        light: '#60a5fa',
+        dark: '#1e40af',
+      },
+      secondary: {
+        main: theme === 'dark' ? '#06b6d4' : '#0891b2',
+        light: '#22d3ee',
+        dark: '#0e7490',
+      },
+      background: {
+        default: theme === 'dark' ? '#0f172a' : '#f1f5f9',
+        paper: theme === 'dark' ? '#1e293b' : '#ffffff',
+      },
+      text: {
+        primary: theme === 'dark' ? '#f1f5f9' : '#0f172a',
+        secondary: theme === 'dark' ? '#94a3b8' : '#64748b',
+      },
+    },
+    typography: {
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      h4: {
+        fontWeight: 700,
+        fontSize: '2rem',
+      },
+      h5: {
+        fontWeight: 700,
+      },
+      h6: {
+        fontWeight: 600,
+      },
+    },
+    shape: {
+      borderRadius: 12,
+    },
+    components: {
+      MuiButton: {
+        styleOverrides: {
+          root: {
+            textTransform: 'none',
+            fontWeight: 600,
+            padding: '12px 24px',
+            fontSize: '1rem',
+          },
+        },
+      },
+      MuiCard: {
+        styleOverrides: {
+          root: {
+            boxShadow: theme === 'dark' 
+              ? '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)'
+              : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+          },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: {
+            fontWeight: 500,
+          },
+        },
+      },
+    },
+  }), [theme])
+  
   const [friendSearch, setFriendSearch] = useState('')
   const [selectedChat, setSelectedChat] = useState(null)
   const [messageInput, setMessageInput] = useState('')
   const [accountType, setAccountType] = useState(null)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [oldVersion, setOldVersion] = useState('')
   const [selectedFlight, setSelectedFlight] = useState(null)
   const [flightDetailTab, setFlightDetailTab] = useState('flight') // 'flight', 'weather', 'crew'
   const [contactMenuOpen, setContactMenuOpen] = useState(null)
@@ -211,6 +234,24 @@ function App() {
   const [isEditingName, setIsEditingName] = useState(false)
   const [editedName, setEditedName] = useState('')
   const [pilotAirline, setPilotAirline] = useState('')
+
+  // Check for app version updates
+  useEffect(() => {
+    const checkVersion = async () => {
+      const storedVersion = await localforage.getItem('appVersion')
+      
+      if (storedVersion && storedVersion !== APP_VERSION) {
+        // New version detected
+        setOldVersion(storedVersion)
+        setShowUpdateModal(true)
+      } else if (!storedVersion) {
+        // First time loading, store current version
+        await localforage.setItem('appVersion', APP_VERSION)
+      }
+    }
+    
+    checkVersion()
+  }, [])
 
   // Trigger background scraping when coming back online
   useEffect(() => {
@@ -1238,6 +1279,26 @@ function App() {
     
     setDeferredPrompt(null)
     setShowInstallPrompt(false)
+  }
+
+  const handleUpdateApp = async () => {
+    try {
+      // Store new version
+      await localforage.setItem('appVersion', APP_VERSION)
+      
+      // Clear cache and reload
+      if ('caches' in window) {
+        const cacheNames = await caches.keys()
+        await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)))
+      }
+      
+      // Force reload from server
+      window.location.reload(true)
+    } catch (error) {
+      console.error('Error updating app:', error)
+      // Fallback: just reload
+      window.location.reload()
+    }
   }
 
   const initializePushNotifications = async () => {
@@ -5712,6 +5773,92 @@ function App() {
             <p>Other pilots will be able to find and friend request you</p>
           </div>
         </div>
+      )}
+
+      {/* Update Available Modal */}
+      {showUpdateModal && (
+        <div className="modal-overlay" style={{zIndex: 10001}}>
+          <Card sx={{ maxWidth: 400, margin: 'auto', mt: 10 }}>
+            <CardContent>
+              <Box sx={{ textAlign: 'center', mb: 3 }}>
+                <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: 'primary.main' }}>
+                  🎉 Update Available!
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  A new version of FlightRosterIQ is available
+                </Typography>
+              </Box>
+
+              <Box sx={{ 
+                bgcolor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)', 
+                p: 2, 
+                borderRadius: 2, 
+                mb: 3,
+                border: 1,
+                borderColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+              }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Current Version:
+                  </Typography>
+                  <Chip label={oldVersion || 'Unknown'} size="small" />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    New Version:
+                  </Typography>
+                  <Chip label={APP_VERSION} size="small" color="primary" />
+                </Box>
+              </Box>
+
+              <Alert severity="info" sx={{ mb: 3, fontSize: '0.875rem' }}>
+                The app will reload automatically after updating. Your data will be preserved.
+              </Alert>
+
+              <Button
+                variant="contained"
+                fullWidth
+                size="large"
+                onClick={handleUpdateApp}
+                sx={{
+                  py: 1.5,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #5568d3 0%, #6b4193 100%)',
+                  }
+                }}
+              >
+                Update Now
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Version Display at Bottom */}
+      {token && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: { xs: 70, sm: 10 },
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            py: 1,
+            zIndex: 1
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              fontSize: '0.75rem',
+              opacity: 0.6
+            }}
+          >
+            FlightRosterIQ v{APP_VERSION}
+          </Typography>
+        </Box>
       )}
     </div>
     </ThemeProvider>
