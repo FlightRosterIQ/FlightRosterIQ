@@ -3431,9 +3431,6 @@ function App() {
           sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
         >
           <Tab label="👤 Pilot Info" value="pilotInfo" />
-          {userType !== 'family' && (
-            <Tab label="💳 Subscription" value="subscription" />
-          )}
           <Tab label="🌟 Features" value="features" />
           {userType !== 'family' && (
             <Tab label="👨‍👩‍👧‍👦 Family" value="family" />
@@ -3672,71 +3669,6 @@ function App() {
                 )}
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {settingsTab === 'subscription' && userType !== 'family' && (
-          <div className="settings-content">
-            <h3>💳 Subscription</h3>
-            
-            <div className="subscription-info-card">
-              <div className="subscription-status-header">
-                <h4>Current Status</h4>
-                <span className={`status-badge ${subscriptionStatus}`}>
-                  {subscriptionStatus === 'active' ? '✓ Active' : 
-                   subscriptionStatus === 'trial' ? '🔄 Trial' : 
-                   '⏰ Expired'}
-                </span>
-              </div>
-              
-              {subscriptionStatus === 'trial' && (
-                <div className="trial-info">
-                  <p><strong>Trial Period:</strong> {daysRemaining} days remaining</p>
-                  <p className="trial-hint">Your trial started on {trialStartDate ? new Date(trialStartDate).toLocaleDateString() : 'N/A'}</p>
-                </div>
-              )}
-              
-              {subscriptionStatus === 'active' && (
-                <div className="active-subscription-info">
-                  <p><strong>Plan:</strong> {subscriptionPlan === 'monthly' ? 'Monthly ($4.99/month)' : 'Yearly ($49.99/year)'}</p>
-                  <p><strong>Renews:</strong> {subscriptionExpiry ? new Date(subscriptionExpiry).toLocaleDateString() : 'N/A'}</p>
-                  <p className="employee-note">Linked to Employee ID: {username}</p>
-                </div>
-              )}
-              
-              {subscriptionStatus === 'expired' && (
-                <div className="expired-info">
-                  <p>Your subscription has expired. Reactivate to continue using FlightRosterIQ.</p>
-                </div>
-              )}
-            </div>
-            
-            <div className="subscription-actions">
-              {subscriptionStatus !== 'active' && (
-                <button 
-                  className="upgrade-btn"
-                  onClick={() => setShowSubscriptionModal(true)}
-                >
-                  {subscriptionStatus === 'expired' ? 'Reactivate Subscription' : 'Upgrade Now'}
-                </button>
-              )}
-              
-              {subscriptionStatus === 'active' && (
-                <button 
-                  className="manage-btn"
-                  onClick={() => {
-                    window.open('https://www.paypal.com/myaccount/autopay/', '_blank')
-                  }}
-                >
-                  Manage on PayPal
-                </button>
-              )}
-            </div>
-            
-            <div className="subscription-note">
-              <p><strong>Note:</strong> Your subscription is linked to your Employee ID ({username}). You can log in from any device and your subscription will be recognized.</p>
-              <p><strong>Family Accounts:</strong> Family members using your access code can use the app for free - no subscription required for them!</p>
             </div>
           </div>
         )}
@@ -4056,29 +3988,34 @@ function App() {
           </div>
         )}
 
-        <div className="settings-footer">
-          <p className="app-footer">Made with ❤️ for airline crew members</p>
-          <p className="app-supporter">Supported by Drew McGee (ABX AIR pilot)</p>
-          <div className="footer-actions">
-            <a 
+        <Box className="settings-footer" sx={{ mt: 4, pt: 3, borderTop: 1, borderColor: 'divider' }}>
+          <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
+            Made with ❤️ for airline crew members
+          </Typography>
+          <Typography variant="caption" color="text.secondary" align="center" display="block" gutterBottom>
+            Supported by Drew McGee (ABX AIR pilot)
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
+            <Button 
               href="https://cash.app/$FlightRosterIQ"
               target="_blank"
               rel="noopener noreferrer"
-              className="donate-btn"
+              variant="contained"
+              size="small"
             >
               💰 Donate
-            </a>
+            </Button>
             <Button 
               onClick={handleLogout} 
               variant="outlined" 
               color="error"
               startIcon={<LogoutIcon />}
-              fullWidth
+              size="small"
             >
               Logout
             </Button>
-          </div>
-        </div>
+          </Stack>
+        </Box>
       </Box>
     )
   }
@@ -5302,7 +5239,9 @@ function App() {
                   <span className="detail-label">Departure:</span>
                   <span className="detail-value">
                     <div className="time-display">
-                      <span className="time-lt">{new Date(selectedFlight.date).toLocaleDateString()} - {selectedFlight.departure} LT</span>
+                      <span className="time-lt">
+                        {new Date(selectedFlight.originalDate || selectedFlight.date).toLocaleDateString()} - {selectedFlight.departure} LT
+                      </span>
                       <span className="time-utc">{convertToUTC(selectedFlight.departure)} UTC</span>
                     </div>
                     {selectedFlight.actualDeparture ? (
@@ -5318,6 +5257,9 @@ function App() {
                   <span className="detail-value">
                     <div className="time-display">
                       {(() => {
+                        // Use originalDate for departure date if this is an arrival day view
+                        const departureDate = new Date(selectedFlight.originalDate || selectedFlight.date)
+                        
                         // Compare LOCAL times to determine if arrival is next day
                         const deptMatch = selectedFlight.departure.match(/(\d{2})(\d{2})/)
                         const arrMatch = selectedFlight.arrival.match(/(\d{2})(\d{2})/)
@@ -5333,7 +5275,7 @@ function App() {
                           const arrMinutes = arrHour * 60 + arrMin
                           
                           if (arrMinutes < deptMinutes) {
-                            const arrivalDate = new Date(selectedFlight.date)
+                            const arrivalDate = new Date(departureDate)
                             arrivalDate.setDate(arrivalDate.getDate() + 1)
                             return (
                               <>
@@ -5348,7 +5290,7 @@ function App() {
                         
                         return (
                           <>
-                            <span className="time-lt">{new Date(selectedFlight.date).toLocaleDateString()} - {selectedFlight.arrival} LT</span>
+                            <span className="time-lt">{departureDate.toLocaleDateString()} - {selectedFlight.arrival} LT</span>
                             <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
                           </>
                         )
@@ -6074,12 +6016,12 @@ function App() {
         <Box
           sx={{
             position: 'fixed',
-            bottom: { xs: 70, sm: 10 },
+            bottom: { xs: 80, sm: 20 },
             left: 0,
             right: 0,
             textAlign: 'center',
             py: 1,
-            zIndex: 9999,
+            zIndex: 900,
             pointerEvents: 'none'
           }}
         >
