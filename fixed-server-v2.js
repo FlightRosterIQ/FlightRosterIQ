@@ -273,17 +273,31 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                     const targetMonthNum = targetYear * 12 + (targetMonth - 1);
                     
                     if (targetMonthNum > currentMonthNum) {
-                        // Click next button
+                        // Click next button - try multiple selectors
                         await page.evaluate(() => {
-                            const nextButton = document.querySelector('.nav-arrow:last-child, button:contains("Next")');
-                            if (nextButton) nextButton.click();
+                            const nextButton = document.querySelector('button.nav-arrow:last-of-type') || 
+                                             document.querySelector('.nav-arrow:last-child') || 
+                                             document.querySelector('button[aria-label*="next"]') ||
+                                             document.querySelector('button:has(svg[data-testid="NavigateNextIcon"])');
+                            if (nextButton) {
+                                nextButton.click();
+                                return true;
+                            }
+                            return false;
                         });
                         console.log(`➡️ Clicking next month...`);
                     } else {
-                        // Click previous button
+                        // Click previous button - try multiple selectors
                         await page.evaluate(() => {
-                            const prevButton = document.querySelector('.nav-arrow:first-child, button:contains("Previous")');
-                            if (prevButton) prevButton.click();
+                            const prevButton = document.querySelector('button.nav-arrow:first-of-type') || 
+                                             document.querySelector('.nav-arrow:first-child') || 
+                                             document.querySelector('button[aria-label*="previous"]') ||
+                                             document.querySelector('button:has(svg[data-testid="NavigateBeforeIcon"])');
+                            if (prevButton) {
+                                prevButton.click();
+                                return true;
+                            }
+                            return false;
                         });
                         console.log(`⬅️ Clicking previous month...`);
                     }
@@ -296,6 +310,7 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
             
             if (!foundMonth) {
                 console.log(`⚠️ Could not navigate to target month after ${attempts} attempts`);
+                console.log(`💡 The crew portal may not have data available for ${targetMonthName} ${targetYear} yet`);
             }
         }
         
@@ -1391,6 +1406,60 @@ app.get('/api/notifications', (req, res) => {
         success: true,
         notifications: []
     });
+});
+
+// Accept notification - send back to crew portal
+app.post('/api/notifications/accept', async (req, res) => {
+    const { notificationId, message, type, date } = req.body;
+    
+    console.log(`✅ Notification acceptance received: ${notificationId} - ${message}`);
+    
+    try {
+        // In a real implementation, this would:
+        // 1. Authenticate with crew portal
+        // 2. Send acknowledgment/acceptance back to the portal
+        // 3. Update notification status in the portal system
+        
+        // For now, we'll log the acceptance
+        // Future: Integrate with crew portal API to POST acceptance
+        
+        res.json({
+            success: true,
+            message: 'Notification accepted',
+            notificationId: notificationId,
+            acknowledged: true
+        });
+    } catch (error) {
+        console.error('Error accepting notification:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process notification acceptance'
+        });
+    }
+});
+
+// Dismiss notification
+app.post('/api/notifications/dismiss', async (req, res) => {
+    const { notificationId } = req.body;
+    
+    console.log(`🗑️ Notification dismissed: ${notificationId}`);
+    
+    try {
+        // Log the dismissal
+        // Future: Could sync with crew portal to mark as read
+        
+        res.json({
+            success: true,
+            message: 'Notification dismissed',
+            notificationId: notificationId
+        });
+    } catch (error) {
+        console.error('Error dismissing notification:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to dismiss notification'
+        });
+    }
 });
 
 // Family access code generation

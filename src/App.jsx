@@ -123,6 +123,57 @@ function App() {
   const [editedName, setEditedName] = useState('')
   const [pilotAirline, setPilotAirline] = useState('')
 
+  // Trigger background scraping when coming back online
+  useEffect(() => {
+    const handleBackgroundScrape = async () => {
+      if (!isOnline || !token) return
+      
+      // Check if user has credentials stored
+      const storedUsername = await localforage.getItem('username')
+      const storedPassword = await localforage.getItem('tempPassword')
+      const storedAirline = await localforage.getItem('airline')
+      const storedUserType = await localforage.getItem('userType')
+      
+      if (!storedUsername || !storedPassword) return
+      
+      console.log('🌐 Online status detected - starting background scraping...')
+      setScrapingInProgress(true)
+      
+      try {
+        let employeeId = storedUsername
+        let password = storedPassword
+        let airline = storedAirline
+        
+        // For family accounts, get pilot credentials
+        if (storedUserType === 'family') {
+          const accessCode = await localforage.getItem('familyAccessCode')
+          const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+          const memberInfo = codeMapping[accessCode]
+          
+          if (memberInfo) {
+            employeeId = memberInfo.pilotEmployeeId
+            password = memberInfo.password
+            airline = memberInfo.airline
+          }
+        }
+        
+        // Scrape current and next month in background (skip previous month - should be cached)
+        await handleMultiMonthScraping(employeeId, password, airline, false)
+      } catch (error) {
+        console.error('Background scraping error:', error)
+      } finally {
+        setScrapingInProgress(false)
+      }
+    }
+    
+    // Debounce the scraping to avoid multiple triggers
+    const timeoutId = setTimeout(() => {
+      handleBackgroundScrape()
+    }, 2000)
+    
+    return () => clearTimeout(timeoutId)
+  }, [isOnline, token])
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
@@ -208,10 +259,21 @@ function App() {
     
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
 
+    // Disable mouse wheel scrolling for month navigation (use buttons only)
+    const handleWheel = (e) => {
+      // Only prevent scrolling on the monthly calendar view
+      if (activeTab === 'monthly' && e.target.closest('.calendar-container')) {
+        e.preventDefault()
+      }
+    }
+
+    window.addEventListener('wheel', handleWheel, { passive: false })
+
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('wheel', handleWheel)
     }
   }, [])
 
@@ -295,17 +357,17 @@ function App() {
       const nextFlight = upcomingFlights[0]
       const flightDateTime = new Date(nextFlight.date)
       
-      // Parse departure time from formats like "19Dec 05:00 LT" or "05:00"
+      // Use the report time (1 hour before departure) from the flight data
       if (nextFlight.departure) {
-        const timeMatch = nextFlight.departure.match(/(\d{1,2}):(\d{2})/);
-        if (timeMatch) {
-          const hours = parseInt(timeMatch[1]);
-          const minutes = parseInt(timeMatch[2]);
-          flightDateTime.setHours(hours, minutes, 0, 0)
-          
-          // Check-in is typically 1 hour before departure
-          const checkInTime = new Date(flightDateTime.getTime() - 60 * 60 * 1000)
-          setNextDutyCheckIn(checkInTime)
+        const reportTime = calculateReportTime(nextFlight.departure)
+        if (reportTime.lt) {
+          const timeMatch = reportTime.lt.match(/(\d{1,2}):(\d{2})/);
+          if (timeMatch) {
+            const hours = parseInt(timeMatch[1]);
+            const minutes = parseInt(timeMatch[2]);
+            flightDateTime.setHours(hours, minutes, 0, 0)
+            setNextDutyCheckIn(flightDateTime)
+          }
         }
       }
     }
@@ -638,13 +700,14 @@ function App() {
         setScrapingInProgress(true)
         // Store encrypted credentials for refresh (in production, use proper encryption)
         await localforage.setItem('tempPassword', credentials.password)
-        // Get current month being viewed for initial scrape
-        const viewingMonth = currentMonth.getMonth() + 1
-        const viewingYear = currentMonth.getFullYear()
+        
+        // Check if this is first login
+        const hasScrapedBefore = await localforage.getItem('hasScrapedBefore')
+        const isFirstLogin = !hasScrapedBefore
         
         // Run scraping in background without blocking UI
         setTimeout(() => {
-          handleAutomaticScraping(credentials.username.trim(), credentials.password, airline, viewingMonth, viewingYear).catch(err => {
+          handleMultiMonthScraping(credentials.username.trim(), credentials.password, airline, isFirstLogin).catch(err => {
             console.error('Auto-scraping error:', err)
             setScrapingInProgress(false)
           })
@@ -654,12 +717,13 @@ function App() {
         console.log('🔄 Starting automatic scraping for family member...')
         setScrapingInProgress(true)
         
-        const viewingMonth = currentMonth.getMonth() + 1
-        const viewingYear = currentMonth.getFullYear()
+        // Check if this is first login
+        const hasScrapedBefore = await localforage.getItem('hasScrapedBefore')
+        const isFirstLogin = !hasScrapedBefore
         
         // Run scraping with pilot's credentials
         setTimeout(() => {
-          handleAutomaticScraping(memberInfo.pilotEmployeeId, memberInfo.password, memberInfo.airline, viewingMonth, viewingYear).catch(err => {
+          handleMultiMonthScraping(memberInfo.pilotEmployeeId, memberInfo.password, memberInfo.airline, isFirstLogin).catch(err => {
             console.error('Auto-scraping error for family:', err)
             setScrapingInProgress(false)
           })
@@ -1031,11 +1095,21 @@ function App() {
     setFriendRequests(prev => prev.filter(r => r.employeeId !== request.employeeId))
   }
 
-  const dismissScheduleChange = (index) => {
-    // Dismiss just marks as read, doesn't remove
-    setScheduleChanges(prev => prev.map((change, i) => 
-      i === index ? { ...change, read: true } : change
-    ))
+  const dismissScheduleChange = async (index) => {
+    // Remove the notification from the list
+    const notification = scheduleChanges[index]
+    setScheduleChanges(prev => prev.filter((_, i) => i !== index))
+    
+    // Optionally send dismissal to backend
+    try {
+      await apiCall('/api/notifications/dismiss', {
+        method: 'POST',
+        body: JSON.stringify({ notificationId: notification.id || index })
+      })
+      console.log('✅ Notification dismissed and synced with server')
+    } catch (error) {
+      console.log('⚠️ Could not sync dismissal with server (offline or server unavailable)')
+    }
   }
 
   const handleInstallApp = async () => {
@@ -1133,35 +1207,66 @@ function App() {
   }
 
   const acceptNotification = async (notification, index) => {
-    // Trigger service worker push notification (works on phone)
-    await triggerPushNotification(notification)
-    
-    // Also show browser notification as fallback
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Flight Notification Accepted', {
-        body: notification.message,
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/icon-96x96.png',
-        tag: 'flight-notification',
-        requireInteraction: false,
-        vibrate: [200, 100, 200]
+    try {
+      // Send acceptance to crew portal backend
+      const response = await apiCall('/api/notifications/accept', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          notificationId: notification.id || index,
+          message: notification.message,
+          type: notification.type,
+          date: notification.date
+        })
       })
-    } else if ('Notification' in window && Notification.permission !== 'denied') {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('✅ Notification accepted and sent to crew portal:', result)
+        
+        // Trigger service worker push notification (works on phone)
+        await triggerPushNotification(notification)
+        
+        // Also show browser notification as fallback
+        if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('Flight Notification Accepted', {
             body: notification.message,
-            icon: '/icons/icon-192x192.png'
+            icon: '/icons/icon-192x192.png',
+            badge: '/icons/icon-96x96.png',
+            tag: 'flight-notification',
+            requireInteraction: false,
+            vibrate: [200, 100, 200]
+          })
+        } else if ('Notification' in window && Notification.permission !== 'denied') {
+          Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+              new Notification('Flight Notification Accepted', {
+                body: notification.message,
+                icon: '/icons/icon-192x192.png'
+              })
+            }
           })
         }
-      })
-    }
 
-    // Show in-app notification
-    alert(`✅ Notification Accepted!\n\n${notification.message}\n\nYou will be notified about updates for this ${notification.type === 'schedule' ? 'schedule change' : notification.type}.`)
-    
-    // Remove notification after acceptance
-    setScheduleChanges(prev => prev.filter((_, i) => i !== index))
+        // Show success message
+        setScheduleChanges(prev => [
+          {
+            type: 'general',
+            message: `✅ Notification accepted: ${notification.message}`,
+            date: new Date().toISOString(),
+            read: false
+          },
+          ...prev.filter((_, i) => i !== index)
+        ])
+      } else {
+        throw new Error('Failed to accept notification')
+      }
+    } catch (error) {
+      console.error('Error accepting notification:', error)
+      alert(`⚠️ Could not send acceptance to crew portal.\nYou may be offline or the server is unavailable.\n\nThe notification has been accepted locally.`)
+      
+      // Still remove notification locally even if backend fails
+      setScheduleChanges(prev => prev.filter((_, i) => i !== index))
+    }
   }
 
   const toggleChatSelection = (friendId) => {
@@ -1477,7 +1582,69 @@ function App() {
   }
 
   // Automatic Crew Portal Scraping Functions
-  const handleAutomaticScraping = async (employeeId, password, airline, month = null, year = null) => {
+  const handleMultiMonthScraping = async (employeeId, password, airline, isFirstLogin = false) => {
+    console.log('🚀 MULTI-MONTH SCRAPING: Starting crew portal scraping...')
+    console.log(`📋 First login: ${isFirstLogin}`)
+    
+    const now = new Date()
+    const currentMonth = now.getMonth() + 1
+    const currentYear = now.getFullYear()
+    
+    // Calculate previous month
+    const prevDate = new Date(now)
+    prevDate.setMonth(prevDate.getMonth() - 1)
+    const previousMonth = prevDate.getMonth() + 1
+    const previousYear = prevDate.getFullYear()
+    
+    // Calculate next month
+    const nextDate = new Date(now)
+    nextDate.setMonth(nextDate.getMonth() + 1)
+    const nextMonth = nextDate.getMonth() + 1
+    const nextYear = nextDate.getFullYear()
+    
+    console.log(`📅 Scraping plan:`)
+    console.log(`   - Previous: ${previousYear}-${String(previousMonth).padStart(2, '0')} ${isFirstLogin ? '(first login only)' : '(skip - should be cached)'}`)
+    console.log(`   - Current: ${currentYear}-${String(currentMonth).padStart(2, '0')}`)
+    console.log(`   - Next: ${nextYear}-${String(nextMonth).padStart(2, '0')}`)
+    
+    const monthsToScrape = []
+    
+    // Only scrape previous month on first login
+    if (isFirstLogin) {
+      monthsToScrape.push({ month: previousMonth, year: previousYear, label: 'Previous Month' })
+    }
+    
+    // Always scrape current month
+    monthsToScrape.push({ month: currentMonth, year: currentYear, label: 'Current Month' })
+    
+    // Always scrape next month (even if it's in next year)
+    monthsToScrape.push({ month: nextMonth, year: nextYear, label: 'Next Month' })
+    
+    for (const { month, year, label } of monthsToScrape) {
+      try {
+        console.log(`📅 Scraping ${label}: ${year}-${String(month).padStart(2, '0')}...`)
+        setLoadingMessage(`Loading ${label} (${year}-${String(month).padStart(2, '0')})...`)
+        
+        await handleAutomaticScraping(employeeId, password, airline, month, year, isFirstLogin && label === 'Current Month')
+        
+        console.log(`✅ Successfully scraped ${label}`)
+        
+        // Small delay between scrapes to avoid overwhelming the server
+        if (label !== 'Next Month') {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+      } catch (error) {
+        console.error(`❌ Failed to scrape ${label}:`, error)
+        // Continue with next month even if one fails
+      }
+    }
+    
+    setScrapingInProgress(false)
+    setLoadingMessage('')
+    console.log('✅ MULTI-MONTH SCRAPING: All months processed')
+  }
+
+  const handleAutomaticScraping = async (employeeId, password, airline, month = null, year = null, firstLogin = false) => {
     console.log('🚀 AUTOMATIC SCRAPING: Starting real crew portal authentication...')
     if (month && year) {
       console.log(`📅 Scraping for specific month: ${year}-${String(month).padStart(2, '0')}`)
@@ -1485,11 +1652,7 @@ function App() {
     setLoading(true)
     
     try {
-      // Check if this is first login
-      const hasScrapedBefore = await localforage.getItem('hasScrapedBefore')
-      const firstLogin = !hasScrapedBefore
-      
-      console.log(`📋 First login: ${firstLogin} - ${firstLogin ? 'Will scrape full profile' : 'Schedule only'}`)
+      console.log(`📋 First login parameter: ${firstLogin} - ${firstLogin ? 'Will scrape full profile' : 'Schedule only'}`)
       
       const requestBody = {
         employeeId: employeeId,
@@ -4346,6 +4509,14 @@ function App() {
         <div className="pull-refresh-indicator" style={{ transform: `translateX(-50%) translateY(${Math.min(pullRefreshDistance - 60, 0)}px)` }}>
           <span className="pull-refresh-icon">↻</span>
           <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
+        </div>
+      )}
+      
+      {/* Offline Mode Banner */}
+      {!isOnline && token && schedule && (
+        <div className="offline-banner">
+          <span className="offline-icon">✈️</span>
+          <span className="offline-message">Offline Mode - Showing cached schedule</span>
         </div>
       )}
       

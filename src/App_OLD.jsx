@@ -73,7 +73,8 @@ function App() {
     } catch (err) {
       console.error('Error loading cached data:', err)
     }
-  } }
+  }
+
   const handleLogin = async (e, accountType) => {
     e.preventDefault()
     setLoading(true)
@@ -543,9 +544,17 @@ function App() {
     }
   }
 
-  const goToToday = () => {
-    setCurrentMonth(new Date())
-  }
+  // Restrict scrolling to months via navigation buttons
+  const disableScroll = (e) => {
+    e.preventDefault();
+  };
+
+  useEffect(() => {
+    window.addEventListener('wheel', disableScroll, { passive: false });
+    return () => {
+      window.removeEventListener('wheel', disableScroll);
+    };
+  }, []);
 
   const renderMonthlyView = () => {
     const monthData = getMonthlySchedule()
@@ -576,9 +585,10 @@ function App() {
             <div 
               key={day} 
               className={`calendar-day ${hasFlights ? 'has-duty' : ''} ${isToday ? 'today' : ''}`}
+              style={{ minHeight: '48px' }} // Ensure minimum height for mobile
               onClick={() => hasFlights && setActiveTab('daily')}
             >
-              <div className="day-number">{day}</div>
+              <div className="day-number" style={{ fontSize: '16px' }}>{day}</div> {/* Larger font size for mobile */}
               {hasFlights && <div className="duty-indicator">{monthData[dateKey].length} flights</div>}
             </div>
           )
@@ -1141,16 +1151,15 @@ function App() {
             {activeTab === 'settings' && renderSettingsView()}
           </>
         )}
-      </main>
 
-      {!schedule && !loading && (
-        <div className="empty-state">
-          <p>No schedule data available</p>
-          {isOnline && <button onClick={() => fetchSchedule()}>Load Schedule</button>}
-        </div>
-      )}
+        {!schedule && !loading && (
+          <div className="empty-state">
+            <p>No schedule data available</p>
+            {isOnline && <button onClick={() => fetchSchedule()}>Load Schedule</button>}
+          </div>
+        )}
 
-      {schedule && activeTab === 'all' && (
+        {schedule && activeTab === 'all' && (
         <div className="schedule-container">
           {schedule.map((pairing, idx) => (
             <div key={idx} className="pairing-card">
@@ -1244,52 +1253,32 @@ function App() {
                             </div>
                           )}
                           {originWeather.taf && (
-      {token && (
-        <nav className="bottom-nav">
-          <button 
-            className={activeTab === 'monthly' ? 'active' : ''}
-            onClick={() => setActiveTab('monthly')}
-          >
-            <span className="nav-icon">📅</span>
-            <span className="nav-label">Monthly</span>
-          </button>
-          <button 
-            className={activeTab === 'daily' ? 'active' : ''}
-            onClick={() => setActiveTab('daily')}
-          >
-            <span className="nav-icon">📋</span>
-            <span className="nav-label">Daily</span>
-          </button>
-          {userType === 'pilot' && (
-            <>
-              <button 
-                className={`${activeTab === 'changes' ? 'active' : ''} ${scheduleChanges.length > 0 ? 'has-badge' : ''}`}
-                onClick={() => setActiveTab('changes')}
-                title="Changes"
-              >
-                <span className="nav-icon">
-                  📬
-                  {scheduleChanges.length > 0 && <span className="badge">{scheduleChanges.length}</span>}
-                </span>
-              </button>
-              <button 
-                className={activeTab === 'friends' ? 'active' : ''}
-                onClick={() => setActiveTab('friends')}
-                title="Friends"
-              >
-                <span className="nav-icon">👥</span>
-              </button>
-            </>
-          )}
-          <button 
-            className={activeTab === 'settings' ? 'active' : ''}
-            onClick={() => setActiveTab('settings')}
-            title="Settings"
-          >
-            <span className="nav-icon">⚙️</span>
-          </button>
-        </nav>
-      )}
+                            <div className="weather-item">
+                              <strong>TAF:</strong>
+                              <pre>{originWeather.taf.raw || JSON.stringify(originWeather.taf, null, 2)}</pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {destWeather && (
+                        <div className="weather-section">
+                          <h4>🌤️ {destICAO} Weather (Arrival)</h4>
+                          {destWeather.metar && (
+                            <div className="weather-item">
+                              <strong>METAR:</strong>
+                              <pre>{destWeather.metar.rawOb || JSON.stringify(destWeather.metar, null, 2)}</pre>
+                            </div>
+                          )}
+                          {destWeather.taf && (
+                            <div className="weather-item">
+                              <strong>TAF:</strong>
+                              <pre>{destWeather.taf.raw || JSON.stringify(destWeather.taf, null, 2)}</pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
               </div>
@@ -1313,45 +1302,44 @@ function App() {
             </div>
           ))}
         </div>
-            )}
-          </>
-        )}
-      </main>
-
-      {token && (
-        <nav className="bottom-nav">
-          <button 
-            className={activeTab === 'monthly' ? 'active' : ''}
-            onClick={() => setActiveTab('monthly')}
-            title="Monthly View"
-          >
-            <span className="nav-icon">📅</span>
-          </button>
-          <button 
-            className={activeTab === 'daily' ? 'active' : ''}
-            onClick={() => setActiveTab('daily')}
-            title="Daily View"
-          >
-            <span className="nav-icon">📋</span>
-          </button>
-          <button 
-            className={activeTab === 'friends' ? 'active' : ''}
-            onClick={() => setActiveTab('friends')}
-            title="Friends & Chat"
-          >
-            <span className="nav-icon">👥</span>
-          </button>
-          <button 
-            className={activeTab === 'settings' ? 'active' : ''}
-            onClick={() => setActiveTab('settings')}
-            title="Settings"
-          >
-            <span className="nav-icon">⚙️</span>
-          </button>
-        </nav>
       )}
+    </main>
+
+    {token && (
+      <nav className="bottom-nav">
+    <button 
+      className={activeTab === 'monthly' ? 'active' : ''}
+      onClick={() => setActiveTab('monthly')}
+      title="Monthly View"
+    >
+      <span className="nav-icon">📅</span>
+    </button>
+    <button 
+      className={activeTab === 'daily' ? 'active' : ''}
+      onClick={() => setActiveTab('daily')}
+      title="Daily View"
+    >
+      <span className="nav-icon">📋</span>
+    </button>
+    <button 
+      className={activeTab === 'friends' ? 'active' : ''}
+      onClick={() => setActiveTab('friends')}
+      title="Friends & Chat"
+    >
+      <span className="nav-icon">👥</span>
+    </button>
+    <button 
+      className={activeTab === 'settings' ? 'active' : ''}
+      onClick={() => setActiveTab('settings')}
+      title="Settings"
+    >
+      <span className="nav-icon">⚙️</span>
+    </button>
+  </nav>
+)}
     </div>
   )
 }
 
 export default App
+
