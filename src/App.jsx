@@ -36,6 +36,7 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
+  ListItemAvatar,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -2873,66 +2874,73 @@ function App() {
 
   const renderFriendsView = () => {
     return (
-      <div className="friends-view">
-        <h2>👥 Friends & Co-workers</h2>
+      <Box sx={{ px: 2 }}>
+        <Typography variant="h5" sx={{ mb: 2 }}>👥 Friends & Co-workers</Typography>
         
-        <div className="friends-subtabs">
-          <button 
-            className={friendsSubTab === 'chats' ? 'active' : ''}
-            onClick={() => setFriendsSubTab('chats')}
-          >
-            💬 Chats
-          </button>
-          <button 
-            className={friendsSubTab === 'nearby' ? 'active' : ''}
-            onClick={() => setFriendsSubTab('nearby')}
-          >
-            📍 Nearby
-          </button>
-          <button 
-            className={friendsSubTab === 'find' ? 'active' : ''}
-            onClick={() => setFriendsSubTab('find')}
-          >
-            🔍 Find
-          </button>
-        </div>
+        <Tabs 
+          value={friendsSubTab} 
+          onChange={(e, newValue) => setFriendsSubTab(newValue)}
+          variant="fullWidth"
+          sx={{ mb: 3 }}
+        >
+          <Tab label="💬 Chats" value="chats" />
+          <Tab label="📍 Nearby" value="nearby" />
+          <Tab label="🔍 Find" value="find" />
+        </Tabs>
 
         {friendsSubTab === 'chats' && (
-          <div className="chats-container">
+          <Box>
             {selectedChat ? (
-              <div className="chat-window">
-                <div className="chat-header">
-                  <button className="back-to-list" onClick={() => setSelectedChat(null)}>
-                    ← Back
-                  </button>
-                  <h3>{selectedChat.name && selectedChat.name.trim() !== '' ? selectedChat.name : selectedChat.employeeId}</h3>
-                </div>
+              <Box>
+                <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+                  <IconButton onClick={() => setSelectedChat(null)}>
+                    <ArrowBackIcon />
+                  </IconButton>
+                  <Typography variant="h6">
+                    {selectedChat.name && selectedChat.name.trim() !== '' ? selectedChat.name : selectedChat.employeeId}
+                  </Typography>
+                </Stack>
                 
-                <div className="messages-list">
+                <Box sx={{ mb: 2, minHeight: 400, maxHeight: 500, overflowY: 'auto' }}>
                   {(chatMessages[selectedChat.id] || []).map((msg) => (
-                    <div key={msg.id} className={`message ${msg.senderId === username ? 'sent' : 'received'}`}>
-                      <div className="message-bubble">
-                        <p>{msg.text}</p>
-                        <span className="message-time">
+                    <Box 
+                      key={msg.id} 
+                      sx={{ 
+                        display: 'flex',
+                        justifyContent: msg.senderId === username ? 'flex-end' : 'flex-start',
+                        mb: 1
+                      }}
+                    >
+                      <Paper 
+                        elevation={1}
+                        sx={{ 
+                          p: 1.5,
+                          maxWidth: '70%',
+                          bgcolor: msg.senderId === username ? 'primary.main' : 'background.paper',
+                          color: msg.senderId === username ? 'primary.contrastText' : 'text.primary'
+                        }}
+                      >
+                        <Typography variant="body2">{msg.text}</Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', mt: 0.5 }}>
                           {new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                    </div>
+                        </Typography>
+                      </Paper>
+                    </Box>
                   ))}
                   {(chatMessages[selectedChat.id] || []).length === 0 && (
-                    <div className="empty-chat">
-                      <p>👋 Start a conversation!</p>
-                    </div>
+                    <Box sx={{ textAlign: 'center', py: 8 }}>
+                      <Typography variant="body1" color="text.secondary">
+                        👋 Start a conversation!
+                      </Typography>
+                    </Box>
                   )}
-                </div>
+                </Box>
                 
-                <div className="message-input-container">
-                  <input
-                    id="chat-message"
-                    name="chat-message"
-                    type="text"
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    fullWidth
+                    size="small"
                     placeholder="Type a message..."
-                    autoComplete="off"
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyPress={(e) => {
@@ -2942,60 +2950,69 @@ function App() {
                       }
                     }}
                   />
-                  <button onClick={() => {
-                    sendChatMessage(selectedChat.id, messageInput)
-                    setMessageInput('')
-                  }}>
+                  <Button 
+                    variant="contained"
+                    onClick={() => {
+                      sendChatMessage(selectedChat.id, messageInput)
+                      setMessageInput('')
+                    }}
+                  >
                     Send
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                </Stack>
+              </Box>
             ) : (
-              <div className="friends-list-container">
-                <div className="friends-list">
-                  <div className="conversations-header">
-                    <h3>Conversations</h3>
-                    {friends.length > 0 && (
-                      <button 
-                        className="edit-chats-btn"
-                        onClick={() => {
-                          setChatEditMode(!chatEditMode)
-                          setSelectedChatsToDelete([])
-                        }}
-                      >
-                        {chatEditMode ? 'Done' : 'Edit'}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {chatEditMode && friends.length > 0 && (
-                    <div className="chat-edit-actions">
-                      <button 
-                        className="select-all-btn"
-                        onClick={selectAllChats}
-                      >
-                        {selectedChatsToDelete.length === friends.length ? '☑️ Deselect All' : '☐ Select All'}
-                      </button>
-                      <button 
-                        className="delete-chats-btn"
-                        onClick={deleteSelectedChats}
-                        disabled={selectedChatsToDelete.length === 0}
-                      >
-                        🗑️ Delete ({selectedChatsToDelete.length})
-                      </button>
-                    </div>
+              <Box>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                  <Typography variant="h6">Conversations</Typography>
+                  {friends.length > 0 && (
+                    <Button 
+                      size="small"
+                      onClick={() => {
+                        setChatEditMode(!chatEditMode)
+                        setSelectedChatsToDelete([])
+                      }}
+                    >
+                      {chatEditMode ? 'Done' : 'Edit'}
+                    </Button>
                   )}
-                  
-                  {friends.length === 0 ? (
-                    <div className="empty-friends">
-                      <p>👋 No friends yet</p>
-                      <p className="empty-hint">Search and add coworkers to start chatting</p>
-                    </div>
-                  ) : (
-                    friends.map((friend, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`friend-item chat-item ${chatEditMode ? 'edit-mode' : ''} ${selectedChatsToDelete.includes(friend.id) ? 'selected' : ''}`}
+                </Stack>
+                
+                {chatEditMode && friends.length > 0 && (
+                  <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                    <Button 
+                      variant="outlined"
+                      size="small"
+                      onClick={selectAllChats}
+                    >
+                      {selectedChatsToDelete.length === friends.length ? '☑️ Deselect All' : '☐ Select All'}
+                    </Button>
+                    <Button 
+                      variant="contained"
+                      color="error"
+                      size="small"
+                      onClick={deleteSelectedChats}
+                      disabled={selectedChatsToDelete.length === 0}
+                    >
+                      🗑️ Delete ({selectedChatsToDelete.length})
+                    </Button>
+                  </Stack>
+                )}
+                
+                {friends.length === 0 ? (
+                  <Box sx={{ textAlign: 'center', py: 8 }}>
+                    <Typography variant="body1" gutterBottom>👋 No friends yet</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Search and add coworkers to start chatting
+                    </Typography>
+                  </Box>
+                ) : (
+                  <List>
+                    {friends.map((friend, idx) => (
+                      <ListItem 
+                        key={idx}
+                        button
+                        selected={selectedChatsToDelete.includes(friend.id)}
                         onClick={() => {
                           if (chatEditMode) {
                             toggleChatSelection(friend.id)
@@ -3005,116 +3022,129 @@ function App() {
                         }}
                       >
                         {chatEditMode && (
-                          <div className="chat-checkbox">
+                          <ListItemIcon>
                             <input 
-                              id={`chat-select-${friend.id}`}
-                              name={`chat-select-${friend.id}`}
                               type="checkbox" 
                               checked={selectedChatsToDelete.includes(friend.id)}
                               onChange={() => toggleChatSelection(friend.id)}
                               onClick={(e) => e.stopPropagation()}
-                              aria-label={`Select chat with ${friend.name || friend.employeeId}`}
                             />
-                          </div>
+                          </ListItemIcon>
                         )}
-                        <div className="friend-avatar">{(friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId).charAt(0)}</div>
-                        <div className="friend-info">
-                          <span className="friend-name">{friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId}</span>
-                          <span className="last-message">
-                            {chatMessages[friend.id]?.length > 0 
+                        <ListItemAvatar>
+                          <Avatar>
+                            {(friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId).charAt(0)}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId}
+                          secondary={
+                            chatMessages[friend.id]?.length > 0 
                               ? chatMessages[friend.id][chatMessages[friend.id].length - 1].text 
-                              : 'Start a conversation'}
-                          </span>
-                        </div>
+                              : 'Start a conversation'
+                          }
+                        />
                         {!chatEditMode && chatMessages[friend.id]?.length > 0 && (
-                          <span className="message-count">{chatMessages[friend.id].length}</span>
+                          <Chip label={chatMessages[friend.id].length} size="small" color="primary" />
                         )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </Box>
             )}
-          </div>
+          </Box>
         )}
 
         {friendsSubTab === 'nearby' && (
-          <div className="nearby-container">
-            <div className="nearby-header">
-              <h3>📍 Nearby Crewmates</h3>
-              <p className="nearby-subtitle">Friends in your current location</p>
+          <Box>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" gutterBottom>📍 Nearby Crewmates</Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Friends in your current location
+              </Typography>
               {!userLocation && (
-                <button 
+                <Button 
+                  variant="contained"
+                  color="success"
                   onClick={requestGeolocation}
-                  style={{
-                    marginTop: '10px',
-                    padding: '8px 16px',
-                    background: '#4CAF50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '600'
-                  }}
+                  startIcon={<Box>📍</Box>}
+                  sx={{ mt: 1 }}
                 >
-                  📍 Enable Location
-                </button>
+                  Enable Location
+                </Button>
               )}
-            </div>
+            </Box>
             
             {!window.location.protocol.startsWith('https') && window.location.hostname !== 'localhost' ? (
-              <div className="empty-nearby">
-                <p>🔒 Location services require HTTPS</p>
-                <p className="empty-hint">This feature is only available on secure connections</p>
-              </div>
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Typography variant="body1" gutterBottom>🔒 Location services require HTTPS</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  This feature is only available on secure connections
+                </Typography>
+              </Box>
             ) : !userLocation ? (
-              <div className="empty-nearby">
-                <p>📍 Location access not enabled</p>
-                <p className="empty-hint">Click "Enable Location" above to find nearby crewmates</p>
-              </div>
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Typography variant="body1" gutterBottom>📍 Location access not enabled</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Click "Enable Location" above to find nearby crewmates
+                </Typography>
+              </Box>
             ) : getNearbyCrewmates().length === 0 ? (
-              <div className="empty-nearby">
-                <p>🌍 No nearby crewmates found</p>
-                <p className="empty-hint">Friends at your current base will appear here</p>
-              </div>
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Typography variant="body1" gutterBottom>🌍 No nearby crewmates found</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Friends at your current base will appear here
+                </Typography>
+              </Box>
             ) : (
-              <div className="nearby-list">
+              <List>
                 {getNearbyCrewmates().map((friend, idx) => (
-                  <div key={idx} className="nearby-item">
-                    <div className="friend-avatar">{(friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId).charAt(0)}</div>
-                    <div className="friend-info">
-                      <span className="friend-name">{friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId}</span>
-                      <span className="friend-location">📍 {friend.currentLocation}</span>
-                    </div>
-                    <button className="chat-nearby-btn" onClick={() => {
-                      setFriendsSubTab('chats')
-                      setSelectedChat(friend)
-                    }}>
-                      💬 Chat
-                    </button>
-                  </div>
+                  <ListItem 
+                    key={idx}
+                    secondaryAction={
+                      <Button 
+                        size="small"
+                        variant="contained"
+                        onClick={() => {
+                          setFriendsSubTab('chats')
+                          setSelectedChat(friend)
+                        }}
+                      >
+                        💬 Chat
+                      </Button>
+                    }
+                  >
+                    <ListItemAvatar>
+                      <Avatar>
+                        {(friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId).charAt(0)}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId}
+                      secondary={`📍 ${friend.currentLocation}`}
+                    />
+                  </ListItem>
                 ))}
-              </div>
+              </List>
             )}
-          </div>
+          </Box>
         )}
 
         {friendsSubTab === 'find' && (
-          <div className="find-container">
-            <div className="find-header">
-              <h3>🔍 Find Crew Members</h3>
-              <p className="find-subtitle">Search registered app users by name or employee number</p>
-            </div>
+          <Box>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" gutterBottom>🔍 Find Crew Members</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Search registered app users by name or employee number
+              </Typography>
+            </Box>
             
-            <div className="search-box">
-              <label htmlFor="crew-search" className="visually-hidden">Search crew members</label>
-              <input
-                id="crew-search"
-                name="crew-search"
-                type="text"
+            <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
+              <TextField
+                fullWidth
+                size="small"
                 placeholder="Search by name (e.g., John Smith) or employee number (e.g., 152780)..."
-                autoComplete="off"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
@@ -3130,68 +3160,91 @@ function App() {
                   }
                 }}
               />
-              <button 
-                className="search-btn"
+              <Button 
+                variant="contained"
                 onClick={handleSearch}
                 disabled={!searchQuery.trim() || searchLoading}
               >
-                {searchLoading ? '⏳ Searching...' : '🔍 Search'}
-              </button>
-            </div>
+                {searchLoading ? '⏳' : '🔍'}
+              </Button>
+            </Stack>
 
             {searchResults.length > 0 && (
-              <div className="search-results">
-                <h4>Search Results ({searchResults.length})</h4>
-                {searchResults.map((person, idx) => (
-                  <div key={idx} className="search-result-item">
-                    <div className="result-avatar">{person.name.charAt(0)}</div>
-                    <div className="result-info">
-                      <span className="result-name">{person.name}</span>
-                      <span className="result-role">{person.role} • #{person.employeeId}</span>
-                      {person.airline && <span className="result-airline">✈️ {person.airline}</span>}
-                      {person.base && <span className="result-base">📍 {person.base}</span>}
-                    </div>
-                    {person.isCurrentUser ? (
-                      <span className="current-user-badge">👤 You</span>
-                    ) : friends.some(f => f.employeeId === person.employeeId) ? (
-                      <span className="already-friends">✓ Friends</span>
-                    ) : friendRequests.some(r => r.employeeId === person.employeeId) ? (
-                      <span className="request-pending">⏳ Pending</span>
-                    ) : (
-                      <button 
-                        className="send-request-btn"
-                        onClick={() => handleSendRequest(person)}
-                      >
-                        ➕ Send Request
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <Box>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  Search Results ({searchResults.length})
+                </Typography>
+                <List>
+                  {searchResults.map((person, idx) => (
+                    <ListItem 
+                      key={idx}
+                      secondaryAction={
+                        person.isCurrentUser ? (
+                          <Chip label="👤 You" size="small" />
+                        ) : friends.some(f => f.employeeId === person.employeeId) ? (
+                          <Chip label="✓ Friends" size="small" color="success" />
+                        ) : friendRequests.some(r => r.employeeId === person.employeeId) ? (
+                          <Chip label="⏳ Pending" size="small" color="warning" />
+                        ) : (
+                          <Button 
+                            size="small"
+                            variant="contained"
+                            onClick={() => handleSendRequest(person)}
+                          >
+                            ➕ Send Request
+                          </Button>
+                        )
+                      }
+                    >
+                      <ListItemAvatar>
+                        <Avatar>{person.name.charAt(0)}</Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={person.name}
+                        secondary={
+                          <Stack spacing={0.5}>
+                            <Typography variant="caption">
+                              {person.role} • #{person.employeeId}
+                            </Typography>
+                            {person.airline && (
+                              <Typography variant="caption">✈️ {person.airline}</Typography>
+                            )}
+                            {person.base && (
+                              <Typography variant="caption">📍 {person.base}</Typography>
+                            )}
+                          </Stack>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
             )}
 
             {searchQuery && searchResults.length === 0 && !searchLoading && (
-              <div className="no-results">
-                <p>😔 No registered users found</p>
-                <p className="no-results-hint">Make sure they're registered in the app and try their full name or employee number</p>
-              </div>
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Typography variant="body1" gutterBottom>😔 No registered users found</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Make sure they're registered in the app and try their full name or employee number
+                </Typography>
+              </Box>
             )}
 
             {!searchQuery && (
-              <div className="search-suggestions">
-                <h4>💡 Tips</h4>
-                <ul>
-                  <li>Search by first or last name</li>
-                  <li>Search by employee number (e.g., 12345)</li>
-                  <li>Searches both ABX and ATI registered users</li>
-                  <li>Only finds crew members who are registered on the app</li>
-                  <li>Send a friend request to start chatting</li>
-                </ul>
-              </div>
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="h6" gutterBottom>💡 Tips</Typography>
+                <Box component="ul" sx={{ pl: 3 }}>
+                  <Typography component="li" variant="body2">Search by first or last name</Typography>
+                  <Typography component="li" variant="body2">Search by employee number (e.g., 12345)</Typography>
+                  <Typography component="li" variant="body2">Searches both ABX and ATI registered users</Typography>
+                  <Typography component="li" variant="body2">Only finds crew members who are registered on the app</Typography>
+                  <Typography component="li" variant="body2">Send a friend request to start chatting</Typography>
+                </Box>
+              </Box>
             )}
-          </div>
+          </Box>
         )}
-      </div>
+      </Box>
     )
   }
 
@@ -3330,42 +3383,65 @@ function App() {
         )}
 
         {userType !== 'family' && friendRequests.length > 0 && (
-          <div className="notification-section">
-            <h3>👥 Friend Requests ({friendRequests.length})</h3>
-            <div className="notification-list">
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+              👥 Friend Requests ({friendRequests.length})
+            </Typography>
+            <List sx={{ bgcolor: 'background.paper', borderRadius: 2 }}>
               {friendRequests.map((request, idx) => (
-                <div key={idx} className="notification-item friend-request-item">
-                  <div className="notif-avatar">{request.name.charAt(0)}</div>
-                  <div className="notif-content">
-                    <p className="notif-title">
-                      <strong>{request.name}</strong> sent you a friend request
-                    </p>
-                    <p className="notif-details">{request.role} • #{request.employeeId} • 📍 {request.base}</p>
-                  </div>
-                  <div className="notif-actions">
-                    <button 
-                      className="accept-btn"
+                <ListItem 
+                  key={idx}
+                  sx={{ 
+                    borderBottom: idx < friendRequests.length - 1 ? 1 : 0,
+                    borderColor: 'divider',
+                    py: 2
+                  }}
+                >
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: 'primary.main' }}>
+                      {request.name.charAt(0)}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                        {request.name} sent you a friend request
+                      </Typography>
+                    }
+                    secondary={`${request.role} • #${request.employeeId} • 📍 ${request.base}`}
+                  />
+                  <Stack direction="row" spacing={1}>
+                    <Button 
+                      variant="contained"
+                      color="success"
+                      size="small"
+                      startIcon={<span>✓</span>}
                       onClick={() => handleAcceptRequest(request)}
                     >
-                      ✓ Accept
-                    </button>
-                    <button 
-                      className="decline-btn"
+                      Accept
+                    </Button>
+                    <Button 
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      startIcon={<span>✕</span>}
                       onClick={() => handleDeclineRequest(request)}
                     >
-                      ✕ Decline
-                    </button>
-                  </div>
-                </div>
+                      Decline
+                    </Button>
+                  </Stack>
+                </ListItem>
               ))}
-            </div>
-          </div>
+            </List>
+          </Box>
         )}
 
         {scheduleChanges.length > 0 && (
-          <div className="notification-section">
-            <h3>📬 Crew Portal Updates ({scheduleChanges.length})</h3>
-            <div className="notification-list">
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+              📬 Crew Portal Updates ({scheduleChanges.length})
+            </Typography>
+            <List sx={{ bgcolor: 'background.paper', borderRadius: 2 }}>
               {scheduleChanges.map((change, idx) => {
                 const icon = change.type === 'schedule' ? '📅' :
                             change.type === 'aircraft' ? '✈️' :
@@ -3378,47 +3454,70 @@ function App() {
                              change.type === 'cancellation' ? 'Cancellation' : 'Remark'
                              
                 return (
-                  <div key={idx} className="notification-item schedule-change-item">
-                    <div className="notif-icon-wrapper">
-                      {icon}
-                    </div>
-                    <div className="notif-content">
-                      <p className="notif-title">
-                        <strong>{title}</strong>
-                        {change.accepted && <span style={{marginLeft: '8px', color: '#4CAF50', fontSize: '0.9em'}}>✓ Accepted</span>}
-                      </p>
-                      <p className="notif-details">{change.message}</p>
-                      {change.date && (
-                        <p className="notif-flight">
-                          {change.flightNumber ? `Flight ${change.flightNumber} • ` : ''}
-                          {change.date}
-                        </p>
-                      )}
-                    </div>
-                    <div className="notif-actions">
+                  <ListItem 
+                    key={idx}
+                    sx={{ 
+                      borderBottom: idx < scheduleChanges.length - 1 ? 1 : 0,
+                      borderColor: 'divider',
+                      py: 2,
+                      alignItems: 'flex-start'
+                    }}
+                  >
+                    <ListItemAvatar>
+                      <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                        {icon}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                            {title}
+                          </Typography>
+                          {change.accepted && (
+                            <Chip label="Accepted" size="small" color="success" sx={{ height: 20 }} />
+                          )}
+                        </Stack>
+                      }
+                      secondary={
+                        <>
+                          <Typography variant="body2" color="text.primary" sx={{ mt: 0.5 }}>
+                            {change.message}
+                          </Typography>
+                          {change.date && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                              {change.flightNumber ? `Flight ${change.flightNumber} • ` : ''}
+                              {change.date}
+                            </Typography>
+                          )}
+                        </>
+                      }
+                    />
+                    <Stack direction="row" spacing={1} sx={{ ml: 2 }}>
                       {!change.accepted && (
-                        <button 
-                          className="accept-btn"
+                        <Button 
+                          variant="contained"
+                          color="primary"
+                          size="small"
+                          startIcon={<span>✓</span>}
                           onClick={() => acceptNotification(change, idx)}
-                          title="Accept & Enable Notifications"
-                          style={{marginRight: '8px', padding: '6px 12px', fontSize: '0.85em'}}
                         >
-                          ✓ Accept
-                        </button>
+                          Accept
+                        </Button>
                       )}
-                      <button 
-                        className="dismiss-btn"
+                      <IconButton 
+                        size="small"
+                        color="error"
                         onClick={() => dismissScheduleChange(idx)}
-                        title="Dismiss"
                       >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
+                        <span>✕</span>
+                      </IconButton>
+                    </Stack>
+                  </ListItem>
                 )
               })}
-            </div>
-          </div>
+            </List>
+          </Box>
         )}
       </div>
     )
@@ -4237,9 +4336,17 @@ function App() {
       const week = []
       for (let j = 0; j < 7; j++) {
         if (i === 0 && j < firstDay) {
-          week.push(<div key={`empty-${j}`} className="calendar-day empty"></div>)
+          week.push(
+            <Grid item xs={12/7} key={`empty-${j}`}>
+              <Box sx={{ minHeight: 80 }} />
+            </Grid>
+          )
         } else if (day > daysInMonth) {
-          week.push(<div key={`empty-${j}`} className="calendar-day empty"></div>)
+          week.push(
+            <Grid item xs={12/7} key={`empty-${j}`}>
+              <Box sx={{ minHeight: 80 }} />
+            </Grid>
+          )
         } else {
           const date = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day)
           const dateKey = date.toISOString().split('T')[0]
@@ -4254,39 +4361,89 @@ function App() {
                           viewMonth.getMonth() === today.getMonth() && 
                           viewMonth.getFullYear() === today.getFullYear()
           
-          // Determine the CSS class for the day
-          let dayClass = 'calendar-day'
-          if (hasFlights) {
-            if (isTraining) dayClass += ' has-training'
-            else if (isReserve) dayClass += ' has-reserve'
-            else if (hasArrivalFlights && !hasDepartureFlights) dayClass += ' has-arrival'
-            else dayClass += ' has-duty'
+          // Determine colors and styles
+          let bgColor = 'background.paper'
+          let borderColor = 'divider'
+          let dayColor = 'text.primary'
+          
+          if (isToday) {
+            borderColor = 'primary.main'
           }
-          if (isToday) dayClass += ' today'
+          
+          if (hasFlights) {
+            if (isTraining) {
+              bgColor = 'rgba(33, 150, 243, 0.08)'
+              dayColor = 'primary.main'
+            } else if (isReserve) {
+              bgColor = 'rgba(3, 169, 244, 0.08)'
+              dayColor = 'info.main'
+            } else if (hasArrivalFlights && !hasDepartureFlights) {
+              bgColor = 'rgba(255, 152, 0, 0.08)'
+              dayColor = 'warning.main'
+            } else {
+              bgColor = 'rgba(76, 175, 80, 0.08)'
+              dayColor = 'success.main'
+            }
+          }
           
           week.push(
-            <div 
-              key={day} 
-              className={dayClass}
-              onClick={() => {
-                setSelectedDate(dateKey)
-                setActiveTab('daily')
-              }}
-            >
-              <div className="day-number">{day}</div>
-              {hasFlights && (
-                <div className="duty-indicator">
-                  {(isTraining || isReserve) ? dutyType : 
-                   hasArrivalFlights && !hasDepartureFlights ? `${daySchedule.length} arrival${daySchedule.length > 1 ? 's' : ''}` :
-                   `${daySchedule.length} flight${daySchedule.length > 1 ? 's' : ''}`}
-                </div>
-              )}
-            </div>
+            <Grid item xs={12/7} key={day}>
+              <Box 
+                onClick={() => {
+                  setSelectedDate(dateKey)
+                  setActiveTab('daily')
+                }}
+                sx={{ 
+                  minHeight: 80,
+                  p: 1,
+                  border: 1,
+                  borderColor: borderColor,
+                  borderWidth: isToday ? 2 : 1,
+                  bgcolor: bgColor,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    bgcolor: hasFlights ? bgColor : 'action.hover',
+                    boxShadow: 1
+                  }
+                }}
+              >
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    fontWeight: isToday ? 700 : 600,
+                    color: dayColor,
+                    mb: 0.5
+                  }}
+                >
+                  {day}
+                </Typography>
+                {hasFlights && (
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      display: 'block',
+                      fontSize: '0.7rem',
+                      color: dayColor,
+                      fontWeight: 500
+                    }}
+                  >
+                    {(isTraining || isReserve) ? dutyType : 
+                     hasArrivalFlights && !hasDepartureFlights ? `${daySchedule.length} arrival${daySchedule.length > 1 ? 's' : ''}` :
+                     `${daySchedule.length} flight${daySchedule.length > 1 ? 's' : ''}`}
+                  </Typography>
+                )}
+              </Box>
+            </Grid>
           )
           day++
         }
       }
-      calendar.push(<div key={i} className="calendar-week">{week}</div>)
+      calendar.push(
+        <Grid container spacing={0} key={i}>
+          {week}
+        </Grid>
+      )
     }
     
     const nextMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1)
@@ -4339,12 +4496,16 @@ function App() {
             <Box sx={{ width: 100 }} />
           )}
         </Stack>
-        <div className="calendar-header">
+        <Grid container spacing={0} sx={{ mb: 2 }}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="day-name">{day}</div>
+            <Grid item xs={12/7} key={day}>
+              <Box sx={{ textAlign: 'center', py: 1, fontWeight: 600, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography variant="body2">{day}</Typography>
+              </Box>
+            </Grid>
           ))}
-        </div>
-        <div className="calendar-grid">{calendar}</div>
+        </Grid>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>{calendar}</Box>
       </Box>
     )
   }
@@ -4406,7 +4567,7 @@ function App() {
             <Box>→</Box>
           </IconButton>
         </Stack>
-        <div className="pairing-card">
+        <Box>
           {/* Check if this is a training duty */}
           {flights[0]?.isTraining ? (
             <Card sx={{ mb: 2 }} elevation={2}>
@@ -4465,162 +4626,242 @@ function App() {
               elevation={2}
             >
               <CardContent>
-              {flight.isDeadhead && (
-                <Chip label="DH - Deadhead Flight" size="small" color="warning" sx={{ mb: 1 }} />
-              )}
-              {flight.isGroundTransport && (
-                <Chip label="🚗 Ground Transportation" size="small" color="info" sx={{ mb: 1 }} />
-              )}
-              <div className="flight-row">
-                <div className="flight-header-section">
-                  <strong>{flight.flightNumber}</strong>
-                  {flight.operatingAirline && flight.isCodeshare && (
-                    <span className="airline-badge" title={`Operated by ${flight.operatingAirline}`}>
-                      {flight.operatingAirline}
-                    </span>
+                <Stack spacing={2}>
+                  {flight.isDeadhead && (
+                    <Chip label="DH - Deadhead Flight" size="small" color="warning" />
                   )}
-                  <span>
-                    <span 
-                      className="airport-code" 
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        setWeatherAirport(flight.origin)
-                        const weather = await fetchRealWeather(flight.origin)
-                        setWeatherData(prev => ({ ...prev, [flight.origin]: weather }))
-                      }}
-                    >
-                      {flight.origin}
-                    </span>
-                    {' → '}
-                    <span 
-                      className="airport-code" 
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        setWeatherAirport(flight.destination)
-                        const weather = await fetchRealWeather(flight.destination)
-                        setWeatherData(prev => ({ ...prev, [flight.destination]: weather }))
-                      }}
-                    >
-                      {flight.destination}
-                    </span>
-                  </span>
-                </div>
-                <div className="report-time-section">
-                  <span className="report-label">Report Time:</span>
-                  <div className="report-time-value">
-                    <div>{calculateReportTime(flight.departure).lt} LT</div>
-                    <div className="time-utc-small">{calculateReportTime(flight.departure).utc} UTC</div>
-                  </div>
-                </div>
-                <div className="flight-times">
-                  <div className="time-group">
-                    <span className="time-label">Scheduled:</span>
-                    <div className="time-value">
-                      <div>{flight.departure} - {flight.arrival} LT</div>
-                      <div className="time-utc-small">{convertToUTC(flight.departure)} - {convertToUTC(flight.arrival)} UTC</div>
-                    </div>
-                  </div>
-                  {(flight.actualDeparture || flight.actualArrival) && (
-                    <div className="time-group actual">
-                      <span className="time-label">Actual:</span>
-                      <div className="time-value">
-                        <div>
-                          {flight.actualDeparture || flight.departure} - {flight.actualArrival || flight.arrival} LT
-                        </div>
-                        <div className="time-utc-small">
-                          {convertToUTC(flight.actualDeparture || flight.departure)} - {convertToUTC(flight.actualArrival || flight.arrival)} UTC
-                        </div>
-                      </div>
-                    </div>
+                  {flight.isGroundTransport && (
+                    <Chip label="🚗 Ground Transportation" size="small" color="info" />
                   )}
-                </div>
-                <div className="aircraft-info">
-                  <span className="aircraft-type">{flight.aircraft}</span>
-                  {(flight.tail || flight.tailNumber) && (
-                    <span 
-                      className="tail-number clickable-tail" 
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        const tailNum = flight.tail || flight.tailNumber
-                        setTrackedAircraft({
-                          tail: tailNum,
-                          aircraft: flight.aircraft,
-                          flightNumber: flight.flightNumber,
-                          origin: flight.origin,
-                          destination: flight.destination
-                        })
-                        setActiveTab('tracking')
-                        // Fetch real flight tracking data using TAIL NUMBER only
-                        const trackingData = await fetchFlightAwareData(tailNum, null, flight.date, flight.origin, flight.destination)
-                        setFlightTrackingData(trackingData)
-                      }}
-                      title="Click to track aircraft location"
-                    >
-                      ✈️ {flight.tail || flight.tailNumber}
-                    </span>
+                  
+                  {/* Flight Header */}
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="h6" component="strong">
+                        {flight.flightNumber}
+                      </Typography>
+                      {flight.operatingAirline && flight.isCodeshare && (
+                        <Chip 
+                          label={flight.operatingAirline} 
+                          size="small" 
+                          variant="outlined"
+                          title={`Operated by ${flight.operatingAirline}`}
+                        />
+                      )}
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography 
+                        component="span"
+                        sx={{ 
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          color: 'primary.main',
+                          '&:hover': { textDecoration: 'underline' }
+                        }}
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          setWeatherAirport(flight.origin)
+                          const weather = await fetchRealWeather(flight.origin)
+                          setWeatherData(prev => ({ ...prev, [flight.origin]: weather }))
+                        }}
+                      >
+                        {flight.origin}
+                      </Typography>
+                      <Typography>→</Typography>
+                      <Typography 
+                        component="span"
+                        sx={{ 
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          color: 'primary.main',
+                          '&:hover': { textDecoration: 'underline' }
+                        }}
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          setWeatherAirport(flight.destination)
+                          const weather = await fetchRealWeather(flight.destination)
+                          setWeatherData(prev => ({ ...prev, [flight.destination]: weather }))
+                        }}
+                      >
+                        {flight.destination}
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  {/* Report Time */}
+                  <Box sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                      Report Time:
+                    </Typography>
+                    <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {calculateReportTime(flight.departure).lt} LT
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {calculateReportTime(flight.departure).utc} UTC
+                      </Typography>
+                    </Stack>
+                  </Box>
+
+                  {/* Flight Times */}
+                  <Stack spacing={1.5}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        Scheduled:
+                      </Typography>
+                      <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                        <Typography variant="body2">
+                          {flight.departure} - {flight.arrival} LT
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {convertToUTC(flight.departure)} - {convertToUTC(flight.arrival)} UTC
+                        </Typography>
+                      </Stack>
+                    </Box>
+                    {(flight.actualDeparture || flight.actualArrival) && (
+                      <Box sx={{ bgcolor: 'success.light', p: 1, borderRadius: 1 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: 'success.dark' }}>
+                          Actual:
+                        </Typography>
+                        <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                          <Typography variant="body2" sx={{ color: 'success.dark' }}>
+                            {flight.actualDeparture || flight.departure} - {flight.actualArrival || flight.arrival} LT
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: 'success.dark', opacity: 0.8 }}>
+                            {convertToUTC(flight.actualDeparture || flight.departure)} - {convertToUTC(flight.actualArrival || flight.arrival)} UTC
+                          </Typography>
+                        </Stack>
+                      </Box>
+                    )}
+                  </Stack>
+
+                  {/* Aircraft Info */}
+                  <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {flight.aircraft}
+                    </Typography>
+                    {(flight.tail || flight.tailNumber) && (
+                      <Chip
+                        label={`✈️ ${flight.tail || flight.tailNumber}`}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          const tailNum = flight.tail || flight.tailNumber
+                          setTrackedAircraft({
+                            tail: tailNum,
+                            aircraft: flight.aircraft,
+                            flightNumber: flight.flightNumber,
+                            origin: flight.origin,
+                            destination: flight.destination
+                          })
+                          setActiveTab('tracking')
+                          const trackingData = await fetchFlightAwareData(tailNum, null, flight.date, flight.origin, flight.destination)
+                          setFlightTrackingData(trackingData)
+                        }}
+                        sx={{ cursor: 'pointer' }}
+                        title="Click to track aircraft location"
+                      />
+                    )}
+                  </Stack>
+
+                  {/* Crew Members */}
+                  {flight.crewMembers && flight.crewMembers.length > 0 && (
+                    <Box sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 1 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                        <Typography>👥</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          Crew Members
+                        </Typography>
+                      </Stack>
+                      <Stack spacing={1}>
+                        {flight.crewMembers.map((crew, cIdx) => (
+                          <Stack key={cIdx} direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                            <Chip label={crew.role} size="small" color="primary" variant="outlined" />
+                            <Typography variant="body2">{crew.name}</Typography>
+                            {crew.phone && (
+                              <Typography
+                                component="a"
+                                href={`tel:${crew.phone}`}
+                                variant="body2"
+                                onClick={(e) => e.stopPropagation()}
+                                sx={{ 
+                                  color: 'primary.main',
+                                  textDecoration: 'none',
+                                  '&:hover': { textDecoration: 'underline' }
+                                }}
+                              >
+                                📞 {crew.phone}
+                              </Typography>
+                            )}
+                          </Stack>
+                        ))}
+                      </Stack>
+                    </Box>
                   )}
-                </div>
-                {flight.crewMembers && flight.crewMembers.length > 0 && (
-                  <div className="crew-info">
-                    <span className="crew-icon">👥</span>
-                    <div className="crew-list">
-                      {flight.crewMembers.map((crew, cIdx) => (
-                        <div key={cIdx} className="crew-member">
-                          <span className="crew-role">{crew.role}</span>
-                          <span className="crew-name">{crew.name}</span>
-                          {crew.phone && (
-                            <a href={`tel:${crew.phone}`} className="crew-phone" onClick={(e) => e.stopPropagation()}>
-                              📞 {crew.phone}
-                            </a>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div className="click-hint">Click for details →</div>
-              </div>
-              {flight.layover && (
-                <div className="layover-details">
-                  {flight.layover.hotel && (
-                    <div 
-                      className="hotel-info clickable-hotel"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedFlight({...flight, showHotelDetails: true})
-                      }}
-                    >
-                      <span className="info-icon">🏨</span>
-                      <div className="info-content">
-                        <strong>{flight.layover.hotel.name}</strong>
-                        <span className="hotel-preview">Click for details</span>
-                        <div className="hotel-times">
-                          <span className="hotel-time">
+
+                  <Typography 
+                    variant="caption" 
+                    color="text.secondary" 
+                    sx={{ textAlign: 'center', fontStyle: 'italic' }}
+                  >
+                    Click for details →
+                  </Typography>
+                </Stack>
+
+                {/* Layover/Hotel Info */}
+                {flight.layover && flight.layover.hotel && (
+                  <Box 
+                    sx={{ 
+                      mt: 2, 
+                      p: 1.5, 
+                      bgcolor: 'info.light', 
+                      borderRadius: 1,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'info.main', '& *': { color: 'white' } }
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedFlight({...flight, showHotelDetails: true})
+                    }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography>🏨</Typography>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {flight.layover.hotel.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Click for details
+                        </Typography>
+                        <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                          <Typography variant="caption">
                             ✅ Check-in: {calculateCheckinTime(flight.actualArrival || flight.arrival)}
-                          </span>
+                          </Typography>
                           {flights[idx + 1] && (
-                            <span className="hotel-time">
+                            <Typography variant="caption">
                               🚪 Check-out: {calculateCheckoutTime(flights[idx + 1].departure)}
-                            </span>
+                            </Typography>
                           )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
+                        </Stack>
+                      </Box>
+                    </Stack>
+                  </Box>
+                )}
+              </CardContent>
           </Card>
           ))}
             </>
           )}
-        </div>
+        </Box>
         
         {/* Hotel Information at end of daily schedule */}
         {schedule?.hotelsByDate && schedule.hotelsByDate[selectedDate] && schedule.hotelsByDate[selectedDate].length > 0 && (
-          <div className="daily-hotel-section">
-            <h3>🏨 Hotel Information</h3>
-            {schedule.hotelsByDate[selectedDate].map((hotel, hIdx) => {
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>🏨 Hotel Information</Typography>
+            <Stack spacing={2}>
+              {schedule.hotelsByDate[selectedDate].map((hotel, hIdx) => {
               // Calculate check-in/check-out times based on surrounding flights
               const selectedFlights = getScheduleForDate(selectedDate)
               const lastFlight = selectedFlights[selectedFlights.length - 1]
@@ -4656,57 +4897,81 @@ function App() {
               })() : 'Next day at 10:00 AM'
               
               return (
-                <div key={hIdx} className="hotel-card">
-                  <div 
-                    className="hotel-header" 
+                <Card key={hIdx} elevation={2}>
+                  <CardContent 
+                    sx={{ cursor: 'pointer' }}
                     onClick={() => {
                       const query = encodeURIComponent(`${hotel.name} ${hotel.address || hotel.location || ''}`);
                       window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
                     }}
-                    style={{cursor: 'pointer'}}
                     title="Click to view on Google Maps"
                   >
-                    <span className="hotel-icon">🏨</span>
-                    <div className="hotel-details">
-                      <strong className="hotel-name">{hotel.name}</strong>
-                      <span className="hotel-location">📍 {hotel.location}</span>
-                    </div>
-                  </div>
-                  <div className="hotel-info-grid">
-                    <div className="hotel-info-item">
-                      <span className="hotel-info-label">Check-in:</span>
-                      <span className="hotel-info-value">{checkInTime}</span>
-                    </div>
-                    <div className="hotel-info-item">
-                      <span className="hotel-info-label">Check-out:</span>
-                      <span className="hotel-info-value">{checkOutTime}</span>
-                    </div>
-                    {hotel.address && (
-                      <div className="hotel-info-item hotel-address">
-                        <span className="hotel-info-label">Address:</span>
-                        <a 
-                          href={`https://maps.google.com/?q=${encodeURIComponent(hotel.address)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hotel-link"
-                        >
-                          📍 {hotel.address}
-                        </a>
-                      </div>
-                    )}
-                    {hotel.phone && (
-                      <div className="hotel-info-item hotel-phone">
-                        <span className="hotel-info-label">Phone:</span>
-                        <a href={`tel:${hotel.phone}`} className="hotel-link">
-                          📞 {hotel.phone}
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                      <Typography variant="h5">🏨</Typography>
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          {hotel.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          📍 {hotel.location}
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="caption" color="text.secondary">Check-in:</Typography>
+                        <Typography variant="body2">{checkInTime}</Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="caption" color="text.secondary">Check-out:</Typography>
+                        <Typography variant="body2">{checkOutTime}</Typography>
+                      </Grid>
+                      {hotel.address && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">Address:</Typography>
+                          <Typography 
+                            component="a"
+                            href={`https://maps.google.com/?q=${encodeURIComponent(hotel.address)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            variant="body2"
+                            sx={{ 
+                              color: 'primary.main',
+                              textDecoration: 'none',
+                              display: 'block',
+                              '&:hover': { textDecoration: 'underline' }
+                            }}
+                          >
+                            📍 {hotel.address}
+                          </Typography>
+                        </Grid>
+                      )}
+                      {hotel.phone && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">Phone:</Typography>
+                          <Typography 
+                            component="a"
+                            href={`tel:${hotel.phone}`}
+                            variant="body2"
+                            sx={{ 
+                              color: 'primary.main',
+                              textDecoration: 'none',
+                              display: 'block',
+                              '&:hover': { textDecoration: 'underline' }
+                            }}
+                          >
+                            📞 {hotel.phone}
+                          </Typography>
+                        </Grid>
+                      )}
+                    </Grid>
+                  </CardContent>
+                </Card>
               )
             })}
-          </div>
+            </Stack>
+          </Box>
         )}
       </Box>
     )
@@ -5427,101 +5692,101 @@ function App() {
             {/* Flight Tab Content */}
             {flightDetailTab === 'flight' && (
             <>
-            <div className="detail-section">
-              <h3>Flight Information</h3>
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <span className="detail-label">Flight Number:</span>
-                  <span className="detail-value">{selectedFlight.flightNumber}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Route:</span>
-                  <span className="detail-value">{selectedFlight.origin} → {selectedFlight.destination}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Departure:</span>
-                  <span className="detail-value">
-                    <div className="time-display">
-                      <span className="time-lt">
-                        {new Date(selectedFlight.originalDate || selectedFlight.date).toLocaleDateString()} - {selectedFlight.departure} LT
-                      </span>
-                      <span className="time-utc">{convertToUTC(selectedFlight.departure)} UTC</span>
-                    </div>
-                    {selectedFlight.actualDeparture ? (
-                      <div className="time-display actual-time">
-                        <span className="time-lt">Actual: {selectedFlight.actualDeparture} LT</span>
-                        <span className="time-utc">{convertToUTC(selectedFlight.actualDeparture)} UTC</span>
-                      </div>
-                    ) : null}
-                  </span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Arrival:</span>
-                  <span className="detail-value">
-                    <div className="time-display">
-                      {(() => {
-                        // Use originalDate for departure date if this is an arrival day view
-                        const departureDate = new Date(selectedFlight.originalDate || selectedFlight.date)
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Flight Information</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Flight Number</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedFlight.flightNumber}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Route</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedFlight.origin} → {selectedFlight.destination}</Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">Departure</Typography>
+                  <Box>
+                    <Typography variant="body2">
+                      {new Date(selectedFlight.originalDate || selectedFlight.date).toLocaleDateString()} - {selectedFlight.departure} LT
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.departure)} UTC</Typography>
+                    {selectedFlight.actualDeparture && (
+                      <Box sx={{ mt: 0.5 }}>
+                        <Typography variant="body2" color="warning.main">
+                          Actual: {selectedFlight.actualDeparture} LT
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.actualDeparture)} UTC</Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">Arrival</Typography>
+                  <Box>
+                    {(() => {
+                      const departureDate = new Date(selectedFlight.originalDate || selectedFlight.date)
+                      const deptMatch = selectedFlight.departure.match(/(\d{2}):?(\d{2})/)
+                      const arrMatch = selectedFlight.arrival.match(/(\d{2}):?(\d{2})/)
+                      
+                      if (deptMatch && arrMatch) {
+                        const deptMinutes = parseInt(deptMatch[1]) * 60 + parseInt(deptMatch[2])
+                        const arrMinutes = parseInt(arrMatch[1]) * 60 + parseInt(arrMatch[2])
                         
-                        // Parse departure and arrival times
-                        const deptMatch = selectedFlight.departure.match(/(\d{2}):?(\d{2})/)
-                        const arrMatch = selectedFlight.arrival.match(/(\d{2}):?(\d{2})/)
-                        
-                        if (deptMatch && arrMatch) {
-                          const deptHour = parseInt(deptMatch[1])
-                          const deptMin = parseInt(deptMatch[2])
-                          const arrHour = parseInt(arrMatch[1])
-                          const arrMin = parseInt(arrMatch[2])
-                          
-                          // If arrival LT is earlier than departure LT, it's next day
-                          const deptMinutes = deptHour * 60 + deptMin
-                          const arrMinutes = arrHour * 60 + arrMin
-                          
-                          if (arrMinutes < deptMinutes) {
-                            // Next day arrival
-                            const arrivalDate = new Date(departureDate)
-                            arrivalDate.setDate(arrivalDate.getDate() + 1)
-                            return (
-                              <>
-                                <span className="time-lt" style={{color: '#f59e0b', fontWeight: '600'}}>
-                                  {arrivalDate.toLocaleDateString()} - {selectedFlight.arrival} LT (Next Day)
-                                </span>
-                                <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
-                              </>
-                            )
-                          }
+                        if (arrMinutes < deptMinutes) {
+                          const arrivalDate = new Date(departureDate)
+                          arrivalDate.setDate(arrivalDate.getDate() + 1)
+                          return (
+                            <>
+                              <Typography variant="body2" sx={{ color: 'warning.main', fontWeight: 600 }}>
+                                {arrivalDate.toLocaleDateString()} - {selectedFlight.arrival} LT (Next Day)
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.arrival)} UTC</Typography>
+                            </>
+                          )
                         }
-                        
-                        // Same day arrival
-                        return (
-                          <>
-                            <span className="time-lt">{departureDate.toLocaleDateString()} - {selectedFlight.arrival} LT</span>
-                            <span className="time-utc">{convertToUTC(selectedFlight.arrival)} UTC</span>
-                          </>
-                        )
-                      })()}
-                    </div>
-                    {selectedFlight.actualArrival ? (
-                      <div className="time-display actual-time">
-                        <span className="time-lt">Actual: {selectedFlight.actualArrival} LT</span>
-                        <span className="time-utc">{convertToUTC(selectedFlight.actualArrival)} UTC</span>
-                      </div>
-                    ) : null}
-                  </span>
-                </div>
-              </div>
-            </div>
+                      }
+                      
+                      return (
+                        <>
+                          <Typography variant="body2">
+                            {departureDate.toLocaleDateString()} - {selectedFlight.arrival} LT
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.arrival)} UTC</Typography>
+                        </>
+                      )
+                    })()}
+                    {selectedFlight.actualArrival && (
+                      <Box sx={{ mt: 0.5 }}>
+                        <Typography variant="body2" color="warning.main">
+                          Actual: {selectedFlight.actualArrival} LT
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.actualArrival)} UTC</Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
 
-            <div className="detail-section">
-              <h3>Aircraft Information</h3>
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <span className="detail-label">Aircraft Type:</span>
-                  <span className="detail-value">{selectedFlight.aircraft}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Tail Number:</span>
-                  <span className="detail-value clickable-tail" 
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Aircraft Information</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Aircraft Type</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedFlight.aircraft}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Tail Number</Typography>
+                  <Typography 
+                    variant="body1" 
+                    sx={{ 
+                      fontWeight: 600,
+                      color: (selectedFlight.tail || selectedFlight.tailNumber) ? 'primary.main' : 'text.primary',
+                      cursor: (selectedFlight.tail || selectedFlight.tailNumber) ? 'pointer' : 'default',
+                      '&:hover': {
+                        textDecoration: (selectedFlight.tail || selectedFlight.tailNumber) ? 'underline' : 'none'
+                      }
+                    }}
                     onClick={async (e) => {
                       e.stopPropagation()
                       const tailNum = selectedFlight.tail || selectedFlight.tailNumber
@@ -5535,104 +5800,99 @@ function App() {
                         })
                         setSelectedFlight(null)
                         setActiveTab('tracking')
-                        // Fetch real flight tracking data using TAIL NUMBER only
                         const trackingData = await fetchFlightAwareData(tailNum, null, selectedFlight.date, selectedFlight.origin, selectedFlight.destination)
                         setFlightTrackingData(trackingData)
                       }
                     }}
-                    style={{ cursor: (selectedFlight.tail || selectedFlight.tailNumber) ? 'pointer' : 'default' }}
                   >
                     {selectedFlight.tail || selectedFlight.tailNumber || 'Not Available'}
-                  </span>
-                </div>
+                  </Typography>
+                </Grid>
                 {selectedFlight.gate && (
-                  <div className="detail-item">
-                    <span className="detail-label">Gate:</span>
-                    <span className="detail-value">{selectedFlight.gate}</span>
-                  </div>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Gate</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedFlight.gate}</Typography>
+                  </Grid>
                 )}
                 {selectedFlight.terminal && (
-                  <div className="detail-item">
-                    <span className="detail-label">Terminal:</span>
-                    <span className="detail-value">{selectedFlight.terminal}</span>
-                  </div>
+                  <Grid item xs={6} sm={3}>
+                    <Typography variant="caption" color="text.secondary">Terminal</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedFlight.terminal}</Typography>
+                  </Grid>
                 )}
                 {selectedFlight.aircraftLocation && (
-                  <div className="detail-item">
-                    <span className="detail-label">Aircraft Location:</span>
-                    <span className="detail-value">{selectedFlight.aircraftLocation}</span>
-                  </div>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="caption" color="text.secondary">Aircraft Location</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600 }}>{selectedFlight.aircraftLocation}</Typography>
+                  </Grid>
                 )}
                 {selectedFlight.aircraftStatus && (
-                  <div className="detail-item">
-                    <span className="detail-label">Status:</span>
-                    <span className="detail-value status-badge">{selectedFlight.aircraftStatus}</span>
-                  </div>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="caption" color="text.secondary">Status</Typography>
+                    <Chip label={selectedFlight.aircraftStatus} color="primary" size="small" />
+                  </Grid>
                 )}
-              </div>
-            </div>
+              </Grid>
+            </Box>
             </>
             )}
             
             {/* Crew Tab Content */}
             {flightDetailTab === 'crew' && userType !== 'family' && (
-              <>
-            {selectedFlight.crewMembers && selectedFlight.crewMembers.length > 0 ? (
-              <div className="detail-section">
-                <h3>👥 Crew Members</h3>
-                <div className="crew-list">
-                  {selectedFlight.crewMembers.map((member, idx) => (
-                    <div key={idx} className="crew-member">
-                      <div className="crew-avatar">{member.name.charAt(0)}</div>
-                      <div className="crew-info">
-                        <div className="crew-name">{member.name}</div>
-                        <div className="crew-role">{member.role}</div>
-                        <div className="crew-id">ID: {member.employeeId}</div>
-                        {member.phone && (
-                          <div className="crew-phone-container">
-                            <div 
-                              className="crew-phone" 
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setContactMenuOpen(contactMenuOpen === idx ? null : idx)
-                              }}
-                            >
-                              📞 {member.phone}
-                            </div>
-                            {contactMenuOpen === idx && (
-                              <div className="contact-menu">
-                                <a 
-                                  href={`tel:${member.phone.replace(/\D/g, '')}`}
-                                  className="contact-option"
-                                  onClick={() => setContactMenuOpen(null)}
-                                >
-                                  📞 Call
-                                </a>
-                                <a 
-                                  href={`sms:${member.phone.replace(/\D/g, '')}`}
-                                  className="contact-option"
-                                  onClick={() => setContactMenuOpen(null)}
-                                >
-                                  💬 Text
-                                </a>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="detail-section">
-                <h3>👥 Crew Members</h3>
-                <p style={{color: '#666', fontStyle: 'italic', padding: '20px'}}>
-                  No crew information available for this flight
-                </p>
-              </div>
-            )}
-              </>
+              <Box>
+                {selectedFlight.crewMembers && selectedFlight.crewMembers.length > 0 ? (
+                  <Box>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>👥 Crew Members</Typography>
+                    <List>
+                      {selectedFlight.crewMembers.map((member, idx) => (
+                        <ListItem key={idx} alignItems="flex-start">
+                          <ListItemAvatar>
+                            <Avatar>{member.name.charAt(0)}</Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={<Typography variant="body1" sx={{ fontWeight: 600 }}>{member.name}</Typography>}
+                            secondary={
+                              <Stack spacing={0.5}>
+                                <Typography variant="body2" color="text.secondary">{member.role}</Typography>
+                                <Typography variant="caption" color="text.secondary">ID: {member.employeeId}</Typography>
+                                {member.phone && (
+                                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                    <Button
+                                      component="a"
+                                      href={`tel:${member.phone.replace(/\D/g, '')}`}
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<Box>📞</Box>}
+                                    >
+                                      Call
+                                    </Button>
+                                    <Button
+                                      component="a"
+                                      href={`sms:${member.phone.replace(/\D/g, '')}`}
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<Box>💬</Box>}
+                                    >
+                                      Text
+                                    </Button>
+                                  </Stack>
+                                )}
+                              </Stack>
+                            }
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Box>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 8 }}>
+                    <Typography variant="h6" gutterBottom>👥 Crew Members</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      No crew information available for this flight
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
             )}
             
             {/* Weather Tab Content */}
