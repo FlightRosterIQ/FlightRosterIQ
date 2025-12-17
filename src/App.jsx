@@ -23,7 +23,25 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  AppBar,
+  Toolbar,
+  Tabs,
+  Tab,
+  BottomNavigation,
+  BottomNavigationAction,
+  Badge,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Stack,
+  Grid
 } from '@mui/material'
 import {
   Flight as FlightIcon,
@@ -36,12 +54,25 @@ import {
   ConnectingAirports as AirlinesIcon,
   ExpandMore as ExpandMoreIcon,
   Lock as LockIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  CalendarMonth as CalendarIcon,
+  Today as TodayIcon,
+  Notifications as NotificationsIcon,
+  Settings as SettingsIcon,
+  Logout as LogoutIcon,
+  Home as HomeIcon,
+  ChatBubble as ChatIcon,
+  Group as GroupIcon,
+  BarChart as StatsIcon,
+  FlightTakeoff as TakeoffIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material'
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '1.0.6';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -4154,31 +4185,43 @@ function App() {
                             viewMonth.getMonth() === latestDate.getMonth()
     
     return (
-      <div className="monthly-view">
-        <div className="month-navigation">
+      <Box className="monthly-view" sx={{ px: 2 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
           {!isAtEarliestMonth ? (
-            <button className="nav-arrow" onClick={goToPreviousMonth}>
-              ← Previous
-            </button>
+            <Button 
+              variant="outlined" 
+              size="small"
+              onClick={goToPreviousMonth}
+              startIcon={<Box>←</Box>}
+            >
+              Previous
+            </Button>
           ) : (
-            <div className="nav-arrow-placeholder"></div>
+            <Box sx={{ width: 100 }} />
           )}
-          <h2>{viewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
+          <Typography variant="h6" component="h2">
+            {viewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </Typography>
           {!isAtLatestMonth ? (
-            <button className="nav-arrow" onClick={goToNextMonth}>
-              Next →
-            </button>
+            <Button 
+              variant="outlined" 
+              size="small"
+              onClick={goToNextMonth}
+              endIcon={<Box>→</Box>}
+            >
+              Next
+            </Button>
           ) : (
-            <div className="nav-arrow-placeholder"></div>
+            <Box sx={{ width: 100 }} />
           )}
-        </div>
+        </Stack>
         <div className="calendar-header">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
             <div key={day} className="day-name">{day}</div>
           ))}
         </div>
         <div className="calendar-grid">{calendar}</div>
-      </div>
+      </Box>
     )
   }
 
@@ -4205,34 +4248,40 @@ function App() {
 
     if (!flights) {
       return (
-        <div className="daily-view">
-          <div className="day-navigation">
-            <button className="nav-arrow" onClick={goToPreviousDay}>
-              ← Previous Day
-            </button>
-            <h2>📋 {formattedDate}</h2>
-            <button className="nav-arrow" onClick={goToNextDay}>
-              Next Day →
-            </button>
-          </div>
-          <div className="empty-state">
-            <p>No flights scheduled for this day</p>
-          </div>
-        </div>
+        <Box className="daily-view" sx={{ px: 2 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+            <IconButton onClick={goToPreviousDay} size="large">
+              <Box>←</Box>
+            </IconButton>
+            <Typography variant="h6" component="h2">
+              📋 {formattedDate}
+            </Typography>
+            <IconButton onClick={goToNextDay} size="large">
+              <Box>→</Box>
+            </IconButton>
+          </Stack>
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Typography variant="body1" color="text.secondary">
+              No flights scheduled for this day
+            </Typography>
+          </Box>
+        </Box>
       )
     }
 
     return (
-      <div className="daily-view">
-        <div className="day-navigation">
-          <button className="nav-arrow" onClick={goToPreviousDay}>
-            ← Previous Day
-          </button>
-          <h2>📋 {formattedDate}</h2>
-          <button className="nav-arrow" onClick={goToNextDay}>
-            Next Day →
-          </button>
-        </div>
+      <Box className="daily-view" sx={{ px: 2 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+          <IconButton onClick={goToPreviousDay} size="large">
+            <Box>←</Box>
+          </IconButton>
+          <Typography variant="h6" component="h2">
+            📋 {formattedDate}
+          </Typography>
+          <IconButton onClick={goToNextDay} size="large">
+            <Box>→</Box>
+          </IconButton>
+        </Stack>
         <div className="pairing-card">
           {/* Check if this is a training duty */}
           {flights[0]?.isTraining ? (
@@ -4526,7 +4575,7 @@ function App() {
             })}
           </div>
         )}
-      </div>
+      </Box>
     )
   }
 
@@ -4909,10 +4958,22 @@ function App() {
       
       {/* Trial Expiration Modal */}
       {showSubscriptionModal && subscriptionStatus === 'expired' && userType !== 'family' && (
-        <div className="modal-overlay" style={{zIndex: 10000}}>
-          <div className="subscription-modal">
-            <h2>⏰ {trialStartDate ? 'Trial Period Ended' : 'Subscription Required'}</h2>
-            <p>Continue using FlightRosterIQ with a subscription</p>
+        <Dialog
+          open={showSubscriptionModal && subscriptionStatus === 'expired' && userType !== 'family'}
+          onClose={() => setShowSubscriptionModal(false)}
+          maxWidth="md"
+          fullWidth
+          disableEscapeKeyDown
+        >
+          <DialogTitle>
+            <Typography variant="h5" align="center">
+              ⏰ {trialStartDate ? 'Trial Period Ended' : 'Subscription Required'}
+            </Typography>
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" align="center" gutterBottom>
+              Continue using FlightRosterIQ with a subscription
+            </Typography>
             
             <div className="subscription-plans">
               <div className="plan-card monthly">
@@ -4968,15 +5029,17 @@ function App() {
                 </button>
               </div>
             </div>
-            
-            <button 
-              className="close-modal-btn"
+          </DialogContent>
+          <DialogActions>
+            <Button 
               onClick={() => setShowSubscriptionModal(false)}
+              fullWidth
+              variant="outlined"
             >
               Maybe Later
-            </button>
-          </div>
-        </div>
+            </Button>
+          </DialogActions>
+        </Dialog>
       )}
       
       {/* Trial Warning Banner */}
@@ -5016,93 +5079,80 @@ function App() {
         </Alert>
       )}
       
-      <header>
-        <div className="header-logo">
-          <div className="app-logo">✈️</div>
-          <h1>FlightRosterIQ</h1>
-        </div>
-        {token && (
-          <div className="header-info-section">
-            <div className="welcome-message">
-              {userType === 'family' && familyMemberName 
-                ? `Welcome ${familyMemberName}!` 
-                : `Welcome ${pilotProfile?.name || username || 'Pilot'}!`}
-            </div>
-            {nextDutyCheckIn && userType === 'pilot' && (
-              <div className="next-duty-timer">
-                <span className="timer-label">Next Duty Check-in:</span>
-                <span className="timer-value">
-                  {(() => {
-                    const now = new Date()
-                    const diff = nextDutyCheckIn - now
-                    
-                    if (diff < 0) return 'Check schedule'
-                    
-                    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-                    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-                    
-                    if (days > 0) {
-                      return `${days}d ${hours}h ${minutes}m`
-                    } else if (hours > 0) {
-                      return `${hours}h ${minutes}m`
-                    } else {
-                      return `${minutes}m`
-                    }
-                  })()}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-        <div className="header-actions">
-          {token && (userType === 'pilot' || userType === 'family') && (
-            <button 
-              className="refresh-btn-icon"
-              onClick={handleRefreshScraping}
-              disabled={loading || scrapingInProgress}
-              title="Refresh Schedule from Crew Portal"
-            >
-              {(loading || scrapingInProgress) ? '⟳' : '🔄'}
-            </button>
+      <AppBar position="sticky" elevation={1} sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+        <Toolbar>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexGrow: 1 }}>
+            <FlightIcon sx={{ fontSize: 32, color: 'primary.main' }} />
+            <Typography variant="h6" component="h1" sx={{ fontWeight: 700, color: 'primary.main' }}>
+              FlightRosterIQ
+            </Typography>
+          </Stack>
+          
+          {token && (
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                <Typography variant="body2" color="text.secondary">
+                  {userType === 'family' && familyMemberName 
+                    ? `Welcome ${familyMemberName}!` 
+                    : `Welcome ${pilotProfile?.name || username || 'Pilot'}!`}
+                </Typography>
+                {nextDutyCheckIn && userType === 'pilot' && (
+                  <Typography variant="caption" color="primary" sx={{ display: 'block' }}>
+                    Next Check-in: {(() => {
+                      const now = new Date()
+                      const diff = nextDutyCheckIn - now
+                      
+                      if (diff < 0) return 'Check schedule'
+                      
+                      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+                      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+                      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+                      
+                      if (days > 0) {
+                        return `${days}d ${hours}h ${minutes}m`
+                      } else if (hours > 0) {
+                        return `${hours}h ${minutes}m`
+                      } else {
+                        return `${minutes}m`
+                      }
+                    })()}
+                  </Typography>
+                )}
+              </Box>
+              
+              {(userType === 'pilot' || userType === 'family') && (
+                <IconButton
+                  onClick={handleRefreshScraping}
+                  disabled={loading || scrapingInProgress}
+                  title="Refresh Schedule from Crew Portal"
+                  color="primary"
+                  size="small"
+                >
+                  <CircularProgress size={20} sx={{ display: loading || scrapingInProgress ? 'block' : 'none' }} />
+                  <Box sx={{ display: loading || scrapingInProgress ? 'none' : 'block' }}>🔄</Box>
+                </IconButton>
+              )}
+              
+              <Chip 
+                label={isOnline ? 'Online' : 'Offline'}
+                size="small"
+                color={isOnline ? 'success' : 'error'}
+                icon={isOnline ? <Box>🟢</Box> : <Box>🔴</Box>}
+              />
+              
+              <IconButton
+                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                size="small"
+                color="primary"
+              >
+                {theme === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
+              </IconButton>
+            </Stack>
           )}
-          <div className={`status ${isOnline ? 'online' : 'offline'}`}>
-            {isOnline ? '🟢 Online' : '🔴 Offline'}
-          </div>
-          <div className="theme-toggle-container">
-            <button 
-              className="theme-toggle-btn"
-              onClick={() => setShowThemeDropdown(!showThemeDropdown)}
-            >
-              Theme ▼
-            </button>
-            {showThemeDropdown && (
-              <div className="theme-dropdown">
-                <button 
-                  className={`theme-option ${theme === 'light' ? 'active' : ''}`}
-                  onClick={() => {
-                    setTheme('light')
-                    setShowThemeDropdown(false)
-                  }}
-                >
-                  ☀️ Light
-                </button>
-                <button 
-                  className={`theme-option ${theme === 'dark' ? 'active' : ''}`}
-                  onClick={() => {
-                    setTheme('dark')
-                    setShowThemeDropdown(false)
-                  }}
-                >
-                  🌙 Dark
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+        </Toolbar>
+      </AppBar>
 
-      <main>
+      <Box component="main" sx={{ pb: 8 }}>
         {activeTab === 'monthly' && renderMonthlyView()}
         {activeTab === 'daily' && renderDailyView()}
         {activeTab === 'friends' && renderFriendsView()}
@@ -5111,122 +5161,136 @@ function App() {
         {activeTab === 'stats' && renderStatsView()}
         
         {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'friends' && activeTab !== 'notifications' && activeTab !== 'stats' && (
-          <div className="empty-state">
-            <p>No schedule data available</p>
-            <p className="empty-hint">Use the refresh button above to load your schedule</p>
-          </div>
+          <Box sx={{ textAlign: 'center', py: 8, px: 2 }}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No schedule data available
+            </Typography>
+            <Typography variant="body2" color="text.disabled">
+              Use the refresh button above to load your schedule
+            </Typography>
+          </Box>
         )}
         
         {!schedule && !loading && userType === 'family' && activeTab !== 'settings' && activeTab !== 'notifications' && activeTab !== 'stats' && (
-          <div className="empty-state">
-            <p>No schedule data available</p>
-            <p className="empty-hint">Use the refresh button above to load the pilot's schedule</p>
-          </div>
+          <Box sx={{ textAlign: 'center', py: 8, px: 2 }}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No schedule data available
+            </Typography>
+            <Typography variant="body2" color="text.disabled">
+              Use the refresh button above to load the pilot's schedule
+            </Typography>
+          </Box>
         )}
-      </main>
+      </Box>
 
       {token && (
-        <nav className="bottom-nav">
-          <button 
-            className={activeTab === 'monthly' ? 'active' : ''}
-            onClick={() => setActiveTab('monthly')}
-            title="Monthly Calendar View"
+        <Paper 
+          elevation={3} 
+          sx={{ 
+            position: 'fixed', 
+            bottom: 0, 
+            left: 0, 
+            right: 0, 
+            zIndex: 1100 
+          }}
+        >
+          <BottomNavigation
+            value={activeTab}
+            onChange={(event, newValue) => setActiveTab(newValue)}
+            showLabels
           >
-            <span className="nav-icon">📅</span>
-            <span className="nav-label">Month</span>
-          </button>
-          <button 
-            className={activeTab === 'daily' ? 'active' : ''}
-            onClick={() => setActiveTab('daily')}
-            title="Daily View"
-          >
-            <span className="nav-icon">📋</span>
-            <span className="nav-label">Daily</span>
-          </button>
-          {userType === 'pilot' && (
-            <button 
-              className={activeTab === 'friends' ? 'active' : ''}
-              onClick={() => setActiveTab('friends')}
-              title="Friends & Chat"
-            >
-              <span className="nav-icon">👥</span>
-              <span className="nav-label">Friends</span>
-            </button>
-          )}
-          <button 
-            className={`${activeTab === 'notifications' ? 'active' : ''} notification-btn`}
-            onClick={() => setActiveTab('notifications')}
-            title="Notifications"
-          >
-            <span className="nav-icon">
-              🔔
-              {getNotificationCount() > 0 && (
-                <span className="notification-badge">{getNotificationCount()}</span>
-              )}
-            </span>
-            <span className="nav-label">Alerts</span>
-          </button>
-          <button 
-            className={activeTab === 'stats' ? 'active' : ''}
-            onClick={() => setActiveTab('stats')}
-            title="Statistics"
-          >
-            <span className="nav-icon">📊</span>
-            <span className="nav-label">Stats</span>
-          </button>
-          <button 
-            className={activeTab === 'settings' ? 'active' : ''}
-            onClick={() => setActiveTab('settings')}
-            title="Settings"
-          >
-            <span className="nav-icon">⚙️</span>
-            <span className="nav-label">Settings</span>
-          </button>
-        </nav>
+            <BottomNavigationAction
+              label="Month"
+              value="monthly"
+              icon={<CalendarIcon />}
+            />
+            <BottomNavigationAction
+              label="Daily"
+              value="daily"
+              icon={<TodayIcon />}
+            />
+            {userType === 'pilot' && (
+              <BottomNavigationAction
+                label="Friends"
+                value="friends"
+                icon={<GroupIcon />}
+              />
+            )}
+            <BottomNavigationAction
+              label="Alerts"
+              value="notifications"
+              icon={
+                <Badge badgeContent={getNotificationCount()} color="error">
+                  <NotificationsIcon />
+                </Badge>
+              }
+            />
+            <BottomNavigationAction
+              label="Stats"
+              value="stats"
+              icon={<StatsIcon />}
+            />
+            <BottomNavigationAction
+              label="Settings"
+              value="settings"
+              icon={<SettingsIcon />}
+            />
+          </BottomNavigation>
+        </Paper>
       )}
 
       {selectedFlight && (
-        <div className="modal-overlay" onClick={() => setSelectedFlight(null)}>
-          <div className="flight-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setSelectedFlight(null)}>✕</button>
-            
-            <h2>✈️ Flight Details</h2>
-            
-            {/* Tab Navigation */}
-            <div className="flight-modal-tabs">
-              <button 
-                className={`flight-tab ${flightDetailTab === 'flight' ? 'active' : ''}`}
-                onClick={() => setFlightDetailTab('flight')}
-              >
-                ✈️ Flight
-              </button>
-              {userType !== 'family' && (
-                <button 
-                  className={`flight-tab ${flightDetailTab === 'crew' ? 'active' : ''}`}
-                  onClick={() => setFlightDetailTab('crew')}
-                >
-                  👥 Crew
-                </button>
-              )}
-              <button 
-                className={`flight-tab ${flightDetailTab === 'weather' ? 'active' : ''}`}
-                onClick={async () => {
-                  setFlightDetailTab('weather');
-                  // Auto-load weather for origin and destination
-                  if (selectedFlight.origin && !weatherData[selectedFlight.origin]) {
-                    const originWeather = await fetchRealWeather(selectedFlight.origin);
-                    setWeatherData(prev => ({ ...prev, [selectedFlight.origin]: originWeather }));
-                  }
-                  if (selectedFlight.destination && !weatherData[selectedFlight.destination]) {
-                    const destWeather = await fetchRealWeather(selectedFlight.destination);
-                    setWeatherData(prev => ({ ...prev, [selectedFlight.destination]: destWeather }));
-                  }
-                }}
-              >
-                🌤️ Weather
-              </button>
-            </div>
-            
+        <Dialog
+          open={Boolean(selectedFlight)}
+          onClose={() => setSelectedFlight(null)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{
+            sx: { maxHeight: '90vh' }
+          }}
+        >
+          <DialogTitle>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <TakeoffIcon />
+                <Typography variant="h6">Flight Details</Typography>
+              </Stack>
+              <IconButton onClick={() => setSelectedFlight(null)} size="small">
+                ✕
+              </IconButton>
+            </Stack>
+          </DialogTitle>
+          
+          <Tabs 
+            value={flightDetailTab} 
+            onChange={(e, newValue) => setFlightDetailTab(newValue)}
+            sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}
+          >
+            <Tab label="Flight" value="flight" icon={<TakeoffIcon />} iconPosition="start" />
+            {userType !== 'family' && (
+              <Tab label="Crew" value="crew" icon={<GroupIcon />} iconPosition="start" />
+            )}
+            <Tab 
+              label="Weather" 
+              value="weather" 
+              icon={<Box>🌤️</Box>} 
+              iconPosition="start"
+              onClick={async () => {
+                setFlightDetailTab('weather');
+                // Auto-load weather for origin and destination
+                if (selectedFlight.origin && !weatherData[selectedFlight.origin]) {
+                  const originWeather = await fetchRealWeather(selectedFlight.origin);
+                  setWeatherData(prev => ({ ...prev, [selectedFlight.origin]: originWeather }));
+                }
+                if (selectedFlight.destination && !weatherData[selectedFlight.destination]) {
+                  const destWeather = await fetchRealWeather(selectedFlight.destination);
+                  setWeatherData(prev => ({ ...prev, [selectedFlight.destination]: destWeather }));
+                }
+              }}
+            />
+          </Tabs>
+          
+          <DialogContent dividers>
             {/* Flight Tab Content */}
             {flightDetailTab === 'flight' && (
             <>
@@ -5535,16 +5599,24 @@ function App() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {weatherAirport && (
-        <div className="modal-overlay" onClick={() => setWeatherAirport(null)}>
-          <div className="weather-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setWeatherAirport(null)}>✕</button>
-            
-            <h2>🌤️ Weather for {weatherAirport}</h2>
+        <Dialog
+          open={Boolean(weatherAirport)}
+          onClose={() => setWeatherAirport(null)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="h6">🌤️ Weather for {weatherAirport}</Typography>
+              <IconButton onClick={() => setWeatherAirport(null)} size="small">✕</IconButton>
+            </Stack>
+          </DialogTitle>
+          <DialogContent dividers>
             
             {weatherData[weatherAirport] ? (
               <>
@@ -5670,16 +5742,24 @@ function App() {
                 <li>Altimeter setting in inches of mercury (A)</li>
               </ul>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {trackedAircraft && (
-        <div className="modal-overlay" onClick={() => setTrackedAircraft(null)}>
-          <div className="tracking-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setTrackedAircraft(null)}>✕</button>
-            
-            <h2>📡 Aircraft Tracking: {trackedAircraft.tail}</h2>
+        <Dialog
+          open={Boolean(trackedAircraft)}
+          onClose={() => setTrackedAircraft(null)}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="h6">📡 Aircraft Tracking: {trackedAircraft.tail}</Typography>
+              <IconButton onClick={() => setTrackedAircraft(null)} size="small">✕</IconButton>
+            </Stack>
+          </DialogTitle>
+          <DialogContent dividers>
             
             <div className="tracking-header">
               <div className="tracking-badge">
@@ -5830,16 +5910,24 @@ function App() {
                 </>
               )}
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {selectedFlight && selectedFlight.showHotelDetails && selectedFlight.layover?.hotel && (
-        <div className="modal-overlay" onClick={() => setSelectedFlight(null)}>
-          <div className="hotel-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setSelectedFlight(null)}>✕</button>
-            
-            <h2>🏨 Hotel Information</h2>
+        <Dialog
+          open={Boolean(selectedFlight?.showHotelDetails)}
+          onClose={() => setSelectedFlight(null)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="h6">🏨 Hotel Information</Typography>
+              <IconButton onClick={() => setSelectedFlight(null)} size="small">✕</IconButton>
+            </Stack>
+          </DialogTitle>
+          <DialogContent dividers>
             
             <div className="hotel-detail-section">
               <h3>{selectedFlight.layover.hotel.name}</h3>
@@ -5909,8 +5997,8 @@ function App() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {showRegistrationPopup && (
@@ -5925,7 +6013,12 @@ function App() {
 
       {/* Update Available Modal */}
       {showUpdateModal && (
-        <div className="modal-overlay" style={{zIndex: 10001}}>
+        <Dialog
+          open={showUpdateModal}
+          maxWidth="xs"
+          fullWidth
+          disableEscapeKeyDown
+        >
           <Card sx={{ maxWidth: 400, margin: 'auto', mt: 10 }}>
             <CardContent>
               <Box sx={{ textAlign: 'center', mb: 3 }}>
@@ -5980,7 +6073,7 @@ function App() {
               </Button>
             </CardContent>
           </Card>
-        </div>
+        </Dialog>
       )}
 
       {/* Version Display at Bottom */}
