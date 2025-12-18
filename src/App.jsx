@@ -4337,15 +4337,11 @@ function App() {
       for (let j = 0; j < 7; j++) {
         if (i === 0 && j < firstDay) {
           week.push(
-            <Grid item xs={12/7} key={`empty-${j}`}>
-              <Box sx={{ minHeight: 80 }} />
-            </Grid>
+            <Box key={`empty-${j}`} sx={{ minHeight: 80, border: 1, borderColor: 'divider' }} />
           )
         } else if (day > daysInMonth) {
           week.push(
-            <Grid item xs={12/7} key={`empty-${j}`}>
-              <Box sx={{ minHeight: 80 }} />
-            </Grid>
+            <Box key={`empty-${j}`} sx={{ minHeight: 80, border: 1, borderColor: 'divider' }} />
           )
         } else {
           const date = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day)
@@ -4387,27 +4383,27 @@ function App() {
           }
           
           week.push(
-            <Grid item xs={12/7} key={day}>
-              <Box 
-                onClick={() => {
-                  setSelectedDate(dateKey)
-                  setActiveTab('daily')
-                }}
-                sx={{ 
-                  minHeight: 80,
-                  p: 1,
-                  border: 1,
-                  borderColor: borderColor,
-                  borderWidth: isToday ? 2 : 1,
-                  bgcolor: bgColor,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    bgcolor: hasFlights ? bgColor : 'action.hover',
-                    boxShadow: 1
-                  }
-                }}
-              >
+            <Box 
+              key={day}
+              onClick={() => {
+                setSelectedDate(dateKey)
+                setActiveTab('daily')
+              }}
+              sx={{ 
+                minHeight: 80,
+                p: 1,
+                border: 1,
+                borderColor: borderColor,
+                borderWidth: isToday ? 2 : 1,
+                bgcolor: bgColor,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  bgcolor: hasFlights ? bgColor : 'action.hover',
+                  boxShadow: 1
+                }
+              }}
+            >
                 <Typography 
                   variant="body2" 
                   sx={{ 
@@ -4434,15 +4430,15 @@ function App() {
                   </Typography>
                 )}
               </Box>
-            </Grid>
+            </Box>
           )
           day++
         }
       }
       calendar.push(
-        <Grid container spacing={0} key={i}>
+        <Box key={i} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0 }}>
           {week}
-        </Grid>
+        </Box>
       )
     }
     
@@ -4496,16 +4492,14 @@ function App() {
             <Box sx={{ width: 100 }} />
           )}
         </Stack>
-        <Grid container spacing={0} sx={{ mb: 2 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0, mb: 2 }}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <Grid item xs={12/7} key={day}>
-              <Box sx={{ textAlign: 'center', py: 1, fontWeight: 600, borderBottom: 1, borderColor: 'divider' }}>
-                <Typography variant="body2">{day}</Typography>
-              </Box>
-            </Grid>
+            <Box key={day} sx={{ textAlign: 'center', py: 1, fontWeight: 600, borderBottom: 1, borderColor: 'divider' }}>
+              <Typography variant="body2">{day}</Typography>
+            </Box>
           ))}
-        </Grid>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>{calendar}</Box>
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>{calendar}</Box>
       </Box>
     )
   }

@@ -534,12 +534,16 @@ async function scrapeCrewPortal() {
               if (flightMatch) {
                 const [, flightNum, aircraftType, tailNumber] = flightMatch;
                 
-                // Get origin/destination from next lines
+                // Get origin/destination dates and times from next lines
                 let origin = '', destination = '', originTime = '', destTime = '';
+                let originDate = date; // Default to pairing date
+                let destDate = date;
+                
                 if (j + 1 < lines.length) {
                   const routeMatch = lines[j + 1].match(/([A-Z]{3})\s+(\d{2}[A-Za-z]+)\s+(\d{2}:\d{2})\s+LT/);
                   if (routeMatch) {
                     origin = routeMatch[1];
+                    originDate = routeMatch[2]; // Capture the actual departure date
                     originTime = routeMatch[3];
                   }
                 }
@@ -547,6 +551,7 @@ async function scrapeCrewPortal() {
                   const destMatch = lines[j + 2].match(/([A-Z]{3})\s+(\d{2}[A-Za-z]+)\s+(\d{2}:\d{2})\s+LT/);
                   if (destMatch) {
                     destination = destMatch[1];
+                    destDate = destMatch[2]; // Capture the actual arrival date
                     destTime = destMatch[3];
                   }
                 }
@@ -559,7 +564,9 @@ async function scrapeCrewPortal() {
                   destination,
                   originTime,
                   destTime,
-                  date: date
+                  date: originDate, // Use the flight's departure date, not pairing start date
+                  originDate: originDate,
+                  destDate: destDate
                 });
               }
               j++;
@@ -610,17 +617,65 @@ async function scrapeCrewPortal() {
 }
 
 function transformScheduleData(scrapedData) {
-  const pairings = scrapedData.map((p, idx) => ({
-    pairingId: `PAIR${idx}`,
-    flights: p.flights.map((f, i) => ({
-      id: `F${idx}-${i}`,
-      info: f.info,
-      origin: f.origin,
-      dest: f.dest,
-      crew: f.crew || []
-    }))
-  }));
+  const pairings = scrapedData.map((p, idx) => {
+    // Parse pairing start date if available
+    let pairingStartDate = null;
+    if (p.date) {
+      pairingStartDate = parseDateString(p.date); // e.g., "16Dec" -> "2025-12-16"
+    }
+    
+    return {
+      pairingId: p.pairingNumber || `PAIR${idx}`,
+      flights: p.flights.map((f, i) => {
+        // Each flight should have its own date based on its departure
+        // Parse the flight date if available, otherwise use pairing start date
+        let flightDate = pairingStartDate; // Default to pairing start
+        
+        if (f.date) {
+          flightDate = parseDateString(f.date);
+        } else if (f.originDate) {
+          flightDate = parseDateString(f.originDate);
+        }
+        
+        return {
+          id: `F${idx}-${i}`,
+          flightNumber: f.flightNumber || f.info,
+          aircraft: f.aircraftType || f.aircraft || 'Unknown',
+          tail: f.tailNumber || f.tail,
+          origin: f.origin,
+          destination: f.dest || f.destination,
+          departure: f.originTime || f.departure,
+          arrival: f.destTime || f.arrival,
+          date: flightDate, // Use flight-specific date
+          crew: f.crew || []
+        };
+      })
+    };
+  });
   return { pairings };
+}
+
+// Helper function to parse date strings like "16Dec" or "17Dec2025"
+function parseDateString(dateStr) {
+  if (!dateStr) return null;
+  
+  // Handle formats like "16Dec", "17Dec", "06Dec2025"
+  const monthMap = {
+    'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+    'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+    'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+  };
+  
+  const match = dateStr.match(/(\d{1,2})([A-Za-z]{3})(\d{4})?/);
+  if (match) {
+    const day = match[1].padStart(2, '0');
+    const month = monthMap[match[2].toLowerCase()];
+    const year = match[3] || new Date().getFullYear().toString();
+    
+    return `${year}-${month}-${day}`;
+  }
+  
+  return null;
 }
 
 async function sendToBackend(scheduleData, notifications = []) {
