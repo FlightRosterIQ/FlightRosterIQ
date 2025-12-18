@@ -325,8 +325,8 @@ function App() {
           }
         }
         
-        // Scrape current and next month in background (skip previous month - should be cached)
-        await handleMultiMonthScraping(employeeId, password, airline, false)
+        // Scrape all 3 months (previous, current, next) on every login/refresh
+        await handleMultiMonthScraping(employeeId, password, airline, true)
       } catch (error) {
         console.error('Background scraping error:', error)
       } finally {
@@ -1991,15 +1991,9 @@ function App() {
     
     const monthsToScrape = []
     
-    // Only scrape previous month on first login
-    if (isFirstLogin) {
-      monthsToScrape.push({ month: previousMonth, year: previousYear, label: 'Previous Month' })
-    }
-    
-    // Always scrape current month
+    // Always scrape all 3 months (previous, current, next)
+    monthsToScrape.push({ month: previousMonth, year: previousYear, label: 'Previous Month' })
     monthsToScrape.push({ month: currentMonth, year: currentYear, label: 'Current Month' })
-    
-    // Always scrape next month (even if it's in next year)
     monthsToScrape.push({ month: nextMonth, year: nextYear, label: 'Next Month' })
     
     for (const { month, year, label } of monthsToScrape) {
@@ -3790,10 +3784,43 @@ function App() {
                   </Stack>
                 )}
                 {!pilotProfile && userType !== 'family' && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Username:</Typography>
-                    <Typography variant="body1" sx={{ mt: 0.5 }}>{username || 'Not logged in'}</Typography>
-                  </Box>
+                  <Stack spacing={2}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Name:</Typography>
+                      {isEditingName ? (
+                        <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            value={editedName}
+                            onChange={(e) => setEditedName(e.target.value)}
+                            placeholder="Enter your name"
+                            autoFocus
+                          />
+                          <Button variant="contained" color="success" onClick={handleSaveProfileName}>Save</Button>
+                          <Button variant="outlined" color="error" onClick={() => setIsEditingName(false)}>Cancel</Button>
+                        </Stack>
+                      ) : (
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                          <Typography variant="body1">{username || 'Not set'}</Typography>
+                          <Button 
+                            size="small"
+                            variant="contained"
+                            onClick={() => {
+                              setIsEditingName(true)
+                              setEditedName(username || '')
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        </Stack>
+                      )}
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Username:</Typography>
+                      <Typography variant="body1" sx={{ mt: 0.5 }}>{username || 'Not logged in'}</Typography>
+                    </Box>
+                  </Stack>
                 )}
                 {userType === 'family' && (
                   <Box>
@@ -4118,49 +4145,53 @@ function App() {
         )}
 
         {settingsTab === 'family' && (
-          <div className="settings-content">
-            <h3>👪 Family Access</h3>
-            <div className="family-access-info">
-              <p className="family-intro">
-                Share your flight schedule with family members! Generate a unique access code 
-                that allows your loved ones to view your schedule in real-time.
-              </p>
-              <div className="family-restrictions">
-                <strong>🔒 View-Only Access:</strong> Family members will only see your flight schedule. 
-                They won't be able to access crew member details, Friends tab, or any other personal features.
-              </div>
-            </div>
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>👪 Family Access</Typography>
+            <Card elevation={2} sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="body1" sx={{ mb: 1 }}>
+                  Share your flight schedule with family members! Generate a unique access code 
+                  that allows your loved ones to view your schedule in real-time.
+                </Typography>
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <strong>🔒 View-Only Access:</strong> Family members will only see your flight schedule. 
+                  They won't be able to access crew member details, Friends tab, or any other personal features.
+                </Alert>
+              </CardContent>
+            </Card>
 
-            <div className="family-code-section">
-              <div className="add-family-member">
-                <h4>➕ Add Family Member</h4>
-                <p>Enter the name of the family member you want to share your schedule with</p>
-                <div className="family-input-group">
-                  <label htmlFor="family-member-name" className="visually-hidden">Family member name</label>
-                  <input
-                    id="family-member-name"
-                    name="family-member-name"
-                    type="text"
+            <Card elevation={2}>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 1 }}>➕ Add Family Member</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Enter the name of the family member you want to share your schedule with
+                </Typography>
+                <Stack spacing={2}>
+                  <TextField
+                    fullWidth
+                    label="Family member name"
                     placeholder="e.g., Sarah (Wife), John (Son), Mom, etc."
-                    autoComplete="off"
                     value={newFamilyMemberName}
                     onChange={(e) => setNewFamilyMemberName(e.target.value)}
                     onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === 'Enter' && newFamilyMemberName.trim()) {
                         generateFamilyAccessCode()
                       }
                     }}
                   />
-                  <button 
-                    className="generate-family-code-btn" 
+                  <Button 
+                    variant="contained"
+                    color="primary"
+                    size="large"
+                    fullWidth
                     onClick={generateFamilyAccessCode}
                     disabled={!newFamilyMemberName.trim()}
                   >
                     🎉 Generate Code
-                  </button>
-                </div>
-              </div>
-            </div>
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
 
             {familyAccessCodes.length > 0 && (
               <div className="family-members-section">
@@ -4226,7 +4257,7 @@ function App() {
                 </div>
               </div>
             )}
-          </div>
+          </Box>
         )}
 
         {settingsTab === 'faqs' && (
@@ -5593,6 +5624,7 @@ function App() {
             sx={{
               width: '100%',
               overflowX: 'auto',
+              px: 1,
               '&::-webkit-scrollbar': {
                 height: '4px'
               },
