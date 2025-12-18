@@ -2322,22 +2322,12 @@ function App() {
         }
       } else {
         console.error('❌ AUTOMATIC SCRAPING: Authentication failed')
-        setScheduleChanges(prev => [{
-          type: 'general',
-          message: `❌ Automatic scraping failed: ${result.message || result.error || 'Authentication error'}`,
-          date: new Date().toISOString(),
-          read: false
-        }, ...prev])
+        // Don't show automatic scraping errors in notifications
       }
       
     } catch (error) {
       console.error('❌ AUTOMATIC SCRAPING ERROR:', error)
-      setScheduleChanges(prev => [{
-        type: 'general',
-        message: `❌ Automatic scraping error: Unable to connect to crew portal. ${error.message}`,
-        date: new Date().toISOString(),
-        read: false
-      }, ...prev])
+      // Don't show automatic scraping errors in notifications
     } finally {
       setLoading(false)
       setScrapingInProgress(false)
@@ -3742,237 +3732,248 @@ function App() {
         </Tabs>
 
         {settingsTab === 'pilotInfo' && (
-          <div className="settings-content">
-            <h3>👤 Pilot Information</h3>
-            <div className="pilot-info-section">
-              <div className="pilot-info-card">
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>👤 Pilot Information</Typography>
+            <Card elevation={2}>
+              <CardContent>
                 {pilotProfile && (
-                  <>
-                    <div className="pilot-info-row">
-                      <span className="pilot-info-label">Name:</span>
+                  <Stack spacing={2}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Name:</Typography>
                       {isEditingName ? (
-                        <div style={{display: 'flex', gap: '8px', alignItems: 'center', flex: 1}}>
-                          <input
-                            id="pilot-name"
-                            name="pilot-name"
-                            type="text"
+                        <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
                             value={editedName}
                             onChange={(e) => setEditedName(e.target.value)}
                             placeholder="Enter your name"
-                            autoComplete="name"
-                            style={{flex: 1, padding: '6px 10px', borderRadius: '4px', border: '1px solid #ddd'}}
                             autoFocus
-                            aria-label="Edit your name"
                           />
-                          <button onClick={handleSaveProfileName} style={{padding: '6px 12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>Save</button>
-                          <button onClick={() => setIsEditingName(false)} style={{padding: '6px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}>Cancel</button>
-                        </div>
+                          <Button variant="contained" color="success" onClick={handleSaveProfileName}>Save</Button>
+                          <Button variant="outlined" color="error" onClick={() => setIsEditingName(false)}>Cancel</Button>
+                        </Stack>
                       ) : (
-                        <div style={{display: 'flex', alignItems: 'center', gap: '10px', flex: 1}}>
-                          <span className="pilot-info-value">{pilotProfile.name || 'Not set'}</span>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                          <Typography variant="body1">{pilotProfile.name || 'Not set'}</Typography>
                           {userType !== 'family' && (
-                            <button 
+                            <Button 
+                              size="small"
+                              variant="contained"
                               onClick={() => {
                                 setIsEditingName(true)
                                 setEditedName(pilotProfile.name || '')
                               }}
-                              style={{padding: '4px 10px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px'}}
                             >
                               Edit
-                            </button>
+                            </Button>
                           )}
-                        </div>
+                        </Stack>
                       )}
-                    </div>
-                    <div className="pilot-info-row">
-                      <span className="pilot-info-label">Employee ID:</span>
-                      <span className="pilot-info-value">{pilotProfile.employeeId}</span>
-                    </div>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Employee ID:</Typography>
+                      <Typography variant="body1" sx={{ mt: 0.5 }}>{pilotProfile.employeeId}</Typography>
+                    </Box>
                     {pilotProfile.rank && (
-                      <div className="pilot-info-row">
-                        <span className="pilot-info-label">Rank:</span>
-                        <span className="pilot-info-value">{pilotProfile.rank}</span>
-                      </div>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Rank:</Typography>
+                        <Typography variant="body1" sx={{ mt: 0.5 }}>{pilotProfile.rank}</Typography>
+                      </Box>
                     )}
                     {pilotProfile.base && (
-                      <div className="pilot-info-row">
-                        <span className="pilot-info-label">Base:</span>
-                        <span className="pilot-info-value">{pilotProfile.base}</span>
-                      </div>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Base:</Typography>
+                        <Typography variant="body1" sx={{ mt: 0.5 }}>{pilotProfile.base}</Typography>
+                      </Box>
                     )}
-                  </>
+                  </Stack>
                 )}
                 {!pilotProfile && userType !== 'family' && (
-                  <div className="pilot-info-row">
-                    <span className="pilot-info-label">Username:</span>
-                    <span className="pilot-info-value">{username || 'Not logged in'}</span>
-                  </div>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Username:</Typography>
+                    <Typography variant="body1" sx={{ mt: 0.5 }}>{username || 'Not logged in'}</Typography>
+                  </Box>
                 )}
                 {userType === 'family' && (
-                  <div className="pilot-info-row">
-                    <span className="pilot-info-label">Your Name:</span>
-                    <span className="pilot-info-value">{familyMemberName || 'Family Member'}</span>
-                  </div>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Your Name:</Typography>
+                    <Typography variant="body1" sx={{ mt: 0.5 }}>{familyMemberName || 'Family Member'}</Typography>
+                  </Box>
                 )}
                 {userType === 'family' && (
-                  <div className="pilot-info-row">
-                    <span className="pilot-info-label">Pilot Name:</span>
-                    <span className="pilot-info-value">{username || 'Unknown'}</span>
-                  </div>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Pilot Name:</Typography>
+                    <Typography variant="body1" sx={{ mt: 0.5 }}>{username || 'Unknown'}</Typography>
+                  </Box>
                 )}
                 {userType !== 'family' && !pilotProfile?.rank && (
-                  <div className="pilot-info-row">
-                    <span className="pilot-info-label">Rank:</span>
-                    <select 
-                      className="pilot-rank-select"
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Rank:</Typography>
+                    <Select
+                      size="small"
+                      fullWidth
+                      sx={{ mt: 0.5 }} 
                       value={pilotRank}
                       onChange={(e) => {
                         setPilotRank(e.target.value)
                         localforage.setItem('pilotRank', e.target.value)
                       }}
                     >
-                      <option value="Captain">Captain</option>
-                      <option value="First Officer">First Officer</option>
-                    </select>
-                  </div>
+                      <MenuItem value="Captain">Captain</MenuItem>
+                      <MenuItem value="First Officer">First Officer</MenuItem>
+                    </Select>
+                  </Box>
                 )}
                 {userType !== 'family' && (
-                  <div className="pilot-info-row">
-                    <span className="pilot-info-label">Home Airport:</span>
-                    <select 
-                      className="pilot-rank-select"
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Home Airport:</Typography>
+                    <Select
+                      size="small"
+                      fullWidth
+                      sx={{ mt: 0.5 }}
                       value={homeAirport}
                       onChange={(e) => {
                         setHomeAirport(e.target.value)
                         localforage.setItem('homeAirport', e.target.value)
                       }}
                     >
-                      <option value="">Select Home Airport</option>
-                      <option value="ANC">ANC</option>
-                      <option value="ATL">ATL</option>
-                      <option value="CVG">CVG</option>
-                      <option value="BOS">BOS</option>
-                      <option value="BWI">BWI</option>
-                      <option value="CLT">CLT</option>
-                      <option value="DCA">DCA</option>
-                      <option value="DEN">DEN</option>
-                      <option value="DFW">DFW</option>
-                      <option value="DTW">DTW</option>
-                      <option value="EWR">EWR</option>
-                      <option value="HNL">HNL</option>
-                      <option value="HOU">HOU</option>
-                      <option value="IAD">IAD</option>
-                      <option value="IAH">IAH</option>
-                      <option value="JFK">JFK</option>
-                      <option value="LAS">LAS</option>
-                      <option value="LAX">LAX</option>
-                      <option value="LGA">LGA</option>
-                      <option value="MCO">MCO</option>
-                      <option value="MDW">MDW</option>
-                      <option value="MEM">MEM</option>
-                      <option value="MIA">MIA</option>
-                      <option value="MSP">MSP</option>
-                      <option value="ORD">ORD</option>
-                      <option value="PHL">PHL</option>
-                      <option value="PHX">PHX</option>
-                      <option value="SAN">SAN</option>
-                      <option value="SEA">SEA</option>
-                      <option value="SFO">SFO</option>
-                      <option value="SJU">SJU</option>
-                      <option value="SLC">SLC</option>
-                      <option value="STL">STL</option>
-                      <option value="TPA">TPA</option>
-                    </select>
-                  </div>
+                      <MenuItem value="">Select Home Airport</MenuItem>
+                      <MenuItem value="ANC">ANC</MenuItem>
+                      <MenuItem value="ATL">ATL</MenuItem>
+                      <MenuItem value="CVG">CVG</MenuItem>
+                      <MenuItem value="BOS">BOS</MenuItem>
+                      <MenuItem value="BWI">BWI</MenuItem>
+                      <MenuItem value="CLT">CLT</MenuItem>
+                      <MenuItem value="DCA">DCA</MenuItem>
+                      <MenuItem value="DEN">DEN</MenuItem>
+                      <MenuItem value="DFW">DFW</MenuItem>
+                      <MenuItem value="DTW">DTW</MenuItem>
+                      <MenuItem value="EWR">EWR</MenuItem>
+                      <MenuItem value="HNL">HNL</MenuItem>
+                      <MenuItem value="HOU">HOU</MenuItem>
+                      <MenuItem value="IAD">IAD</MenuItem>
+                      <MenuItem value="IAH">IAH</MenuItem>
+                      <MenuItem value="JFK">JFK</MenuItem>
+                      <MenuItem value="LAS">LAS</MenuItem>
+                      <MenuItem value="LAX">LAX</MenuItem>
+                      <MenuItem value="LGA">LGA</MenuItem>
+                      <MenuItem value="MCO">MCO</MenuItem>
+                      <MenuItem value="MDW">MDW</MenuItem>
+                      <MenuItem value="MEM">MEM</MenuItem>
+                      <MenuItem value="MIA">MIA</MenuItem>
+                      <MenuItem value="MSP">MSP</MenuItem>
+                      <MenuItem value="ORD">ORD</MenuItem>
+                      <MenuItem value="PHL">PHL</MenuItem>
+                      <MenuItem value="PHX">PHX</MenuItem>
+                      <MenuItem value="SAN">SAN</MenuItem>
+                      <MenuItem value="SEA">SEA</MenuItem>
+                      <MenuItem value="SFO">SFO</MenuItem>
+                      <MenuItem value="SJU">SJU</MenuItem>
+                      <MenuItem value="SLC">SLC</MenuItem>
+                      <MenuItem value="STL">STL</MenuItem>
+                      <MenuItem value="TPA">TPA</MenuItem>
+                    </Select>
+                  </Box>
                 )}
                 {userType !== 'family' && (
-                  <div className="pilot-info-row">
-                    <span className="pilot-info-label">Domicile:</span>
-                    <select 
-                      className="pilot-rank-select"
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Domicile:</Typography>
+                    <Select
+                      size="small"
+                      fullWidth
+                      sx={{ mt: 0.5 }}
                       value={domicile}
                       onChange={(e) => {
                         setDomicile(e.target.value)
                         localforage.setItem('domicile', e.target.value)
                       }}
                     >
-                      <option value="">Select Domicile</option>
-                      <option value="ANC">ANC</option>
-                      <option value="ATL">ATL</option>
-                      <option value="CVG">CVG</option>
-                      <option value="BOS">BOS</option>
-                      <option value="BWI">BWI</option>
-                      <option value="CLT">CLT</option>
-                      <option value="DCA">DCA</option>
-                      <option value="DEN">DEN</option>
-                      <option value="DFW">DFW</option>
-                      <option value="DTW">DTW</option>
-                      <option value="EWR">EWR</option>
-                      <option value="HNL">HNL</option>
-                      <option value="HOU">HOU</option>
-                      <option value="IAD">IAD</option>
-                      <option value="IAH">IAH</option>
-                      <option value="JFK">JFK</option>
-                      <option value="LAS">LAS</option>
-                      <option value="LAX">LAX</option>
-                      <option value="LGA">LGA</option>
-                      <option value="MCO">MCO</option>
-                      <option value="MDW">MDW</option>
-                      <option value="MEM">MEM</option>
-                      <option value="MIA">MIA</option>
-                      <option value="MSP">MSP</option>
-                      <option value="ORD">ORD</option>
-                      <option value="PHL">PHL</option>
-                      <option value="PHX">PHX</option>
-                      <option value="SAN">SAN</option>
-                      <option value="SEA">SEA</option>
-                      <option value="SFO">SFO</option>
-                      <option value="SJU">SJU</option>
-                      <option value="SLC">SLC</option>
-                      <option value="STL">STL</option>
-                      <option value="TPA">TPA</option>
-                    </select>
-                  </div>
+                      <MenuItem value="">Select Domicile</MenuItem>
+                      <MenuItem value="ANC">ANC</MenuItem>
+                      <MenuItem value="ATL">ATL</MenuItem>
+                      <MenuItem value="CVG">CVG</MenuItem>
+                      <MenuItem value="BOS">BOS</MenuItem>
+                      <MenuItem value="BWI">BWI</MenuItem>
+                      <MenuItem value="CLT">CLT</MenuItem>
+                      <MenuItem value="DCA">DCA</MenuItem>
+                      <MenuItem value="DEN">DEN</MenuItem>
+                      <MenuItem value="DFW">DFW</MenuItem>
+                      <MenuItem value="DTW">DTW</MenuItem>
+                      <MenuItem value="EWR">EWR</MenuItem>
+                      <MenuItem value="HNL">HNL</MenuItem>
+                      <MenuItem value="HOU">HOU</MenuItem>
+                      <MenuItem value="IAD">IAD</MenuItem>
+                      <MenuItem value="IAH">IAH</MenuItem>
+                      <MenuItem value="JFK">JFK</MenuItem>
+                      <MenuItem value="LAS">LAS</MenuItem>
+                      <MenuItem value="LAX">LAX</MenuItem>
+                      <MenuItem value="LGA">LGA</MenuItem>
+                      <MenuItem value="MCO">MCO</MenuItem>
+                      <MenuItem value="MDW">MDW</MenuItem>
+                      <MenuItem value="MEM">MEM</MenuItem>
+                      <MenuItem value="MIA">MIA</MenuItem>
+                      <MenuItem value="MSP">MSP</MenuItem>
+                      <MenuItem value="ORD">ORD</MenuItem>
+                      <MenuItem value="PHL">PHL</MenuItem>
+                      <MenuItem value="PHX">PHX</MenuItem>
+                      <MenuItem value="SAN">SAN</MenuItem>
+                      <MenuItem value="SEA">SEA</MenuItem>
+                      <MenuItem value="SFO">SFO</MenuItem>
+                      <MenuItem value="SJU">SJU</MenuItem>
+                      <MenuItem value="SLC">SLC</MenuItem>
+                      <MenuItem value="STL">STL</MenuItem>
+                      <MenuItem value="TPA">TPA</MenuItem>
+                    </Select>
+                  </Box>
                 )}
-                <div className="pilot-info-row">
-                  <span className="pilot-info-label">Company:</span>
-                  <span className="pilot-info-value">
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Company:</Typography>
+                  <Typography variant="body1" sx={{ mt: 0.5 }}>
                     {(() => {
                       const airlineToDisplay = userType === 'family' ? pilotAirline : airline
                       return airlineToDisplay === 'abx' ? 'ABX AIR (GB)' : airlineToDisplay === 'ati' ? 'AIR TRANSPORT INTERNATIONAL (8C)' : airlineToDisplay ? airlineToDisplay.toUpperCase() : 'Unknown'
                     })()}
-                  </span>
-                </div>
-              </div>
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
               
               {userType !== 'family' && (
-                <div className="user-registration-section">
-                  <h4>👥 Friend Discovery</h4>
-                <p>Allow other pilots to find and friend request you in the app</p>
+                <Card elevation={2} sx={{ mt: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 1 }}>👥 Friend Discovery</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Allow other pilots to find and friend request you in the app
+                    </Typography>
                 {!isRegisteredUser ? (
-                  <button 
-                    className="register-user-btn"
+                  <Button 
+                    variant="contained" 
+                    color="success" 
+                    fullWidth
                     onClick={handleRegisterUser}
                   >
                     ✅ Click to Register as User
-                  </button>
+                  </Button>
                 ) : (
-                  <div>
-                    <div className="registered-status">
+                  <Box>
+                    <Alert severity="success" sx={{ mb: 2 }}>
                       ✔️ Registered - Other pilots can find you
-                    </div>
-                    <button 
-                      className="unregister-btn"
+                    </Alert>
+                    <Button 
+                      variant="outlined"
+                      color="error"
+                      fullWidth
                       onClick={handleUnregisterUser}
                     >
                       ↶ Undo Registration
-                    </button>
-                  </div>
+                    </Button>
+                  </Box>
                 )}
-                </div>
+                  </CardContent>
+                </Card>
               )}
-            </div>
-          </div>
+          </Box>
         )}
 
         {settingsTab === 'features' && (
@@ -4615,7 +4616,7 @@ function App() {
             <Card 
               key={idx} 
               sx={{ mb: 2, cursor: 'pointer', '&:hover': { boxShadow: 4 } }} 
-              onClick={() => setSelectedFlight(flight)}
+              onClick={() => setSelectedFlight({...flight, originalDate: flight.date})}
               elevation={2}
             >
               <CardContent>
@@ -5589,22 +5590,36 @@ function App() {
             value={activeTab}
             onChange={(event, newValue) => setActiveTab(newValue)}
             showLabels
+            sx={{
+              width: '100%',
+              overflowX: 'auto',
+              '&::-webkit-scrollbar': {
+                height: '4px'
+              },
+              '&::-webkit-scrollbar-thumb': {
+                backgroundColor: 'rgba(0,0,0,0.2)',
+                borderRadius: '4px'
+              }
+            }}
           >
             <BottomNavigationAction
               label="Month"
               value="monthly"
               icon={<CalendarIcon />}
+              sx={{ minWidth: { xs: 80, sm: 'auto' } }}
             />
             <BottomNavigationAction
               label="Daily"
               value="daily"
               icon={<TodayIcon />}
+              sx={{ minWidth: { xs: 80, sm: 'auto' } }}
             />
             {userType === 'pilot' && (
               <BottomNavigationAction
                 label="Friends"
                 value="friends"
                 icon={<GroupIcon />}
+                sx={{ minWidth: { xs: 80, sm: 'auto' } }}
               />
             )}
             <BottomNavigationAction
@@ -5615,16 +5630,19 @@ function App() {
                   <NotificationsIcon />
                 </Badge>
               }
+              sx={{ minWidth: { xs: 80, sm: 'auto' } }}
             />
             <BottomNavigationAction
               label="Stats"
               value="stats"
               icon={<StatsIcon />}
+              sx={{ minWidth: { xs: 80, sm: 'auto' } }}
             />
             <BottomNavigationAction
               label="Settings"
               value="settings"
               icon={<SettingsIcon />}
+              sx={{ minWidth: { xs: 80, sm: 'auto' } }}
             />
           </BottomNavigation>
         </Paper>
