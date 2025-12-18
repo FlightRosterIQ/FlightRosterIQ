@@ -4404,35 +4404,34 @@ function App() {
                 }
               }}
             >
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  fontWeight: isToday ? 700 : 600,
+                  color: dayColor,
+                  mb: 0.5
+                }}
+              >
+                {day}
+              </Typography>
+              {hasFlights && (
                 <Typography 
-                  variant="body2" 
+                  variant="caption" 
                   sx={{ 
-                    fontWeight: isToday ? 700 : 600,
+                    display: 'block',
+                    fontSize: '0.7rem',
                     color: dayColor,
-                    mb: 0.5
+                    fontWeight: 500
                   }}
                 >
-                  {day}
+                  {(isTraining || isReserve) ? dutyType : 
+                   hasArrivalFlights && !hasDepartureFlights ? `${daySchedule.length} arrival${daySchedule.length > 1 ? 's' : ''}` :
+                   `${daySchedule.length} flight${daySchedule.length > 1 ? 's' : ''}`}
                 </Typography>
-                {hasFlights && (
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      display: 'block',
-                      fontSize: '0.7rem',
-                      color: dayColor,
-                      fontWeight: 500
-                    }}
-                  >
-                    {(isTraining || isReserve) ? dutyType : 
-                     hasArrivalFlights && !hasDepartureFlights ? `${daySchedule.length} arrival${daySchedule.length > 1 ? 's' : ''}` :
-                     `${daySchedule.length} flight${daySchedule.length > 1 ? 's' : ''}`}
-                  </Typography>
-                )}
-              </Box>
+              )}
             </Box>
-          )
-          day++
+          );
+          day++;
         }
       }
       calendar.push(
