@@ -73,7 +73,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.7';
+const APP_VERSION = '1.0.2';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -282,22 +282,46 @@ function App() {
   const [editedName, setEditedName] = useState('')
   const [pilotAirline, setPilotAirline] = useState('')
 
-  // Check for app version updates
+  // Check for app version updates - both local and server
   useEffect(() => {
     const checkVersion = async () => {
-      const storedVersion = await localforage.getItem('appVersion')
-      
-      if (storedVersion && storedVersion !== APP_VERSION) {
-        // New version detected
-        setOldVersion(storedVersion)
-        setShowUpdateModal(true)
-      } else if (!storedVersion) {
-        // First time loading, store current version
-        await localforage.setItem('appVersion', APP_VERSION)
+      try {
+        const storedVersion = await localforage.getItem('appVersion')
+        
+        // Check local version mismatch first (after app update)
+        if (storedVersion && storedVersion !== APP_VERSION) {
+          setOldVersion(storedVersion)
+          setShowUpdateModal(true)
+          return
+        }
+        
+        // Store current version if first time
+        if (!storedVersion) {
+          await localforage.setItem('appVersion', APP_VERSION)
+        }
+        
+        // Check server for new deployed version
+        const response = await fetch('/version.json?t=' + Date.now())
+        if (response.ok) {
+          const data = await response.json()
+          if (data.version && data.version !== APP_VERSION) {
+            console.log(`🔄 New version available: ${data.version} (current: ${APP_VERSION})`)
+            setOldVersion(APP_VERSION)
+            setShowUpdateModal(true)
+          }
+        }
+      } catch (error) {
+        console.log('Version check skipped:', error.message)
       }
     }
     
+    // Check on mount
     checkVersion()
+    
+    // Check every 5 minutes for updates
+    const interval = setInterval(checkVersion, 5 * 60 * 1000)
+    
+    return () => clearInterval(interval)
   }, [])
 
   // Trigger background scraping when coming back online
@@ -6686,8 +6710,28 @@ function App() {
                 </Box>
               </Box>
 
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  ✨ What's New in v{APP_VERSION}:
+                </Typography>
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    • Enhanced scraper with complete data
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    • Hotel & layover information
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    • Accurate flight dates & times
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    • Complete crew member details
+                  </Typography>
+                </Stack>
+              </Box>
+
               <Alert severity="info" sx={{ mb: 3, fontSize: '0.875rem' }}>
-                The app will reload automatically after updating. Your data will be preserved.
+                📱 The app will reload automatically after updating. Your data will be preserved.
               </Alert>
 
               <Button

@@ -1,0 +1,12 @@
+{
+  "version": "1.0.2",
+  "buildDate": "2025-12-21",
+  "features": [
+    "Enhanced crew scraper with complete data extraction",
+    "Accurate flight dates and times",
+    "Hotel and layover information",
+    "Complete crew member details",
+    "Auto-update notifications"
+  ],
+  "changelog": "Added enhanced scraper with hotels, crew details, and accurate dates. Auto-update checking every 5 minutes."
+}
