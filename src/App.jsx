@@ -3267,9 +3267,9 @@ function App() {
       const [hours, minutes] = departureTime.split(':').map(Number)
       const today = new Date()
       today.setHours(hours, minutes, 0, 0)
-      // Subtract 1.5 hours for MIA, 1 hour for others
-      const hoursToSubtract = origin === 'MIA' ? 1.5 : 1
-      today.setHours(today.getHours() - hoursToSubtract)
+      // Subtract 90 minutes for MIA, 60 minutes for others
+      const minutesToSubtract = origin === 'MIA' ? 90 : 60
+      today.setMinutes(today.getMinutes() - minutesToSubtract)
       const reportHours = today.getHours().toString().padStart(2, '0')
       const reportMinutes = today.getMinutes().toString().padStart(2, '0')
       const ltTime = `${reportHours}:${reportMinutes}`
