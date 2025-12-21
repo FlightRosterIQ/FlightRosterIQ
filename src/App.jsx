@@ -973,10 +973,25 @@ function App() {
         
         // Run scraping with pilot's credentials
         setTimeout(() => {
-          handleMultiMonthScraping(memberInfo.pilotEmployeeId, memberInfo.password, memberInfo.airline, isFirstLogin).catch(err => {
-            console.error('Auto-scraping error for family:', err)
-            setScrapingInProgress(false)
-          })
+          handleMultiMonthScraping(memberInfo.pilotEmployeeId, memberInfo.password, memberInfo.airline, isFirstLogin)
+            .then(() => {
+              // After scraping, load the schedule from cache
+              const loadFamilySchedule = async () => {
+                const currentMonth = new Date().getMonth() + 1
+                const currentYear = new Date().getFullYear()
+                const cacheKey = `schedule_${currentYear}_${String(currentMonth).padStart(2, '0')}`
+                const cachedSchedule = await localforage.getItem(cacheKey)
+                if (cachedSchedule) {
+                  setSchedule(cachedSchedule)
+                  console.log('✅ Family schedule loaded from cache')
+                }
+              }
+              loadFamilySchedule()
+            })
+            .catch(err => {
+              console.error('Auto-scraping error for family:', err)
+              setScrapingInProgress(false)
+            })
         }, 100)
       }
     } catch (err) {
@@ -1972,15 +1987,13 @@ function App() {
     const currentMonth = now.getMonth() + 1
     const currentYear = now.getFullYear()
     
-    // Calculate previous month
-    const prevDate = new Date(now)
-    prevDate.setMonth(prevDate.getMonth() - 1)
+    // Calculate previous month (properly handle year transition)
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const previousMonth = prevDate.getMonth() + 1
     const previousYear = prevDate.getFullYear()
     
-    // Calculate next month
-    const nextDate = new Date(now)
-    nextDate.setMonth(nextDate.getMonth() + 1)
+    // Calculate next month (properly handle year transition)
+    const nextDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
     const nextMonth = nextDate.getMonth() + 1
     const nextYear = nextDate.getFullYear()
     
@@ -3247,15 +3260,16 @@ function App() {
     }
   }
 
-  const calculateReportTime = (departureTime) => {
-    // Calculate report time 1 hour before departure
+  const calculateReportTime = (departureTime, origin) => {
+    // Calculate report time: 1.5 hours for MIA, 1 hour for others
     if (!departureTime) return { lt: '', utc: '' }
     try {
       const [hours, minutes] = departureTime.split(':').map(Number)
       const today = new Date()
       today.setHours(hours, minutes, 0, 0)
-      // Subtract 1 hour
-      today.setHours(today.getHours() - 1)
+      // Subtract 1.5 hours for MIA, 1 hour for others
+      const hoursToSubtract = origin === 'MIA' ? 1.5 : 1
+      today.setHours(today.getHours() - hoursToSubtract)
       const reportHours = today.getHours().toString().padStart(2, '0')
       const reportMinutes = today.getMinutes().toString().padStart(2, '0')
       const ltTime = `${reportHours}:${reportMinutes}`
@@ -4720,10 +4734,10 @@ function App() {
                     </Typography>
                     <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {calculateReportTime(flight.departure).lt} LT
+                        {calculateReportTime(flight.departure, flight.origin).lt} LT
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {calculateReportTime(flight.departure).utc} UTC
+                        {calculateReportTime(flight.departure, flight.origin).utc} UTC
                       </Typography>
                     </Stack>
                   </Box>
@@ -5830,21 +5844,12 @@ function App() {
                         textDecoration: (selectedFlight.tail || selectedFlight.tailNumber) ? 'underline' : 'none'
                       }
                     }}
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.stopPropagation()
                       const tailNum = selectedFlight.tail || selectedFlight.tailNumber
                       if (tailNum) {
-                        setTrackedAircraft({
-                          tail: tailNum,
-                          aircraft: selectedFlight.aircraft,
-                          flightNumber: selectedFlight.flightNumber,
-                          origin: selectedFlight.origin,
-                          destination: selectedFlight.destination
-                        })
-                        setSelectedFlight(null)
-                        setActiveTab('tracking')
-                        const trackingData = await fetchFlightAwareData(tailNum, null, selectedFlight.date, selectedFlight.origin, selectedFlight.destination)
-                        setFlightTrackingData(trackingData)
+                        // Open FlightAware directly in new tab
+                        window.open(`https://www.flightaware.com/live/flight/${tailNum}`, '_blank')
                       }
                     }}
                   >
