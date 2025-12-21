@@ -237,6 +237,15 @@ function App() {
   const [scraperData, setScraperData] = useState(null)
   const [scraperLoading, setScraperLoading] = useState(false)
   const [scraperError, setScraperError] = useState(null)
+  const [scrapingStatus, setScrapingStatus] = useState({
+    isActive: false,
+    currentMonth: null,
+    progress: 0,
+    totalMonths: 0,
+    lastSuccess: null,
+    lastError: null,
+    retryCount: 0
+  })
   const [showHomeInfo, setShowHomeInfo] = useState(false)
   const [familyAccessCodes, setFamilyAccessCodes] = useState([])
   const [newFamilyMemberName, setNewFamilyMemberName] = useState('')
@@ -2009,14 +2018,39 @@ function App() {
     monthsToScrape.push({ month: currentMonth, year: currentYear, label: 'Current Month' })
     monthsToScrape.push({ month: nextMonth, year: nextYear, label: 'Next Month' })
     
+    // Update scraping status
+    setScrapingStatus(prev => ({
+      ...prev,
+      isActive: true,
+      totalMonths: monthsToScrape.length,
+      progress: 0,
+      currentMonth: null
+    }))
+    
     for (const { month, year, label } of monthsToScrape) {
       try {
         console.log(`📅 Scraping ${label}: ${year}-${String(month).padStart(2, '0')}...`)
         setLoadingMessage(`Loading ${label} (${year}-${String(month).padStart(2, '0')})...`)
         
+        // Update progress
+        const currentIndex = monthsToScrape.findIndex(m => m.label === label)
+        setScrapingStatus(prev => ({
+          ...prev,
+          currentMonth: `${year}-${String(month).padStart(2, '0')}`,
+          progress: Math.round(((currentIndex + 1) / monthsToScrape.length) * 100)
+        }))
+        
         await handleAutomaticScraping(employeeId, password, airline, month, year, isFirstLogin && label === 'Current Month')
         
         console.log(`✅ Successfully scraped ${label}`)
+        
+        // Update last success
+        setScrapingStatus(prev => ({
+          ...prev,
+          lastSuccess: new Date().toISOString(),
+          lastError: null,
+          retryCount: 0
+        }))
         
         // Small delay between scrapes to avoid overwhelming the server
         if (label !== 'Next Month') {
@@ -2024,17 +2058,35 @@ function App() {
         }
       } catch (error) {
         console.error(`❌ Failed to scrape ${label}:`, error)
+        
+        // Update error status
+        setScrapingStatus(prev => ({
+          ...prev,
+          lastError: `${label}: ${error.message}`,
+          retryCount: prev.retryCount + 1
+        }))
+        
         // Continue with next month even if one fails
       }
     }
+    
+    // Mark scraping as complete
+    setScrapingStatus(prev => ({
+      ...prev,
+      isActive: false,
+      progress: 100
+    }))
     
     setScrapingInProgress(false)
     setLoadingMessage('')
     console.log('✅ MULTI-MONTH SCRAPING: All months processed')
   }
 
-  const handleAutomaticScraping = async (employeeId, password, airline, month = null, year = null, firstLogin = false) => {
-    console.log('🚀 AUTOMATIC SCRAPING: Starting real crew portal authentication...')
+  const handleAutomaticScraping = async (employeeId, password, airline, month = null, year = null, firstLogin = false, retryCount = 0) => {
+    const maxRetries = 3
+    const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 10000) // Exponential backoff: 1s, 2s, 4s, max 10s
+    
+    console.log(`🚀 AUTOMATIC SCRAPING: Starting real crew portal authentication... (Attempt ${retryCount + 1}/${maxRetries + 1})`)
     if (month && year) {
       console.log(`📅 Scraping for specific month: ${year}-${String(month).padStart(2, '0')}`)
     }
@@ -2054,6 +2106,22 @@ function App() {
       if (month && year) {
         requestBody.month = month;
         requestBody.year = year;
+        
+        // Check if we already have fresh data (scraped within last 5 minutes)
+        const cacheKey = `schedule_${year}_${String(month).padStart(2, '0')}`
+        const lastScraped = await localforage.getItem(`${cacheKey}_timestamp`)
+        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000)
+        
+        if (lastScraped && lastScraped > fiveMinutesAgo && !firstLogin) {
+          console.log(`⚡ Using cached data for ${year}-${String(month).padStart(2, '0')} (scraped ${Math.round((Date.now() - lastScraped) / 1000)}s ago)`)
+          const cachedSchedule = await localforage.getItem(cacheKey)
+          if (cachedSchedule) {
+            setSchedule(cachedSchedule)
+            setLoading(false)
+            setScrapingInProgress(false)
+            return
+          }
+        }
       }
       
       const response = await apiCall('/api/scrape', {
@@ -2289,6 +2357,9 @@ function App() {
           const cacheKey = month && year ? `schedule_${year}_${String(month).padStart(2, '0')}` : 'schedule'
           await localforage.setItem(cacheKey, realScheduleData)
           
+          // Store timestamp for cache validation
+          await localforage.setItem(`${cacheKey}_timestamp`, Date.now())
+          
           // Also update current schedule if viewing current month
           if (!month || !year || (month === new Date().getMonth() + 1 && year === new Date().getFullYear())) {
             await localforage.setItem('schedule', realScheduleData)
@@ -2334,6 +2405,22 @@ function App() {
       
     } catch (error) {
       console.error('❌ AUTOMATIC SCRAPING ERROR:', error)
+      
+      // Retry logic with exponential backoff
+      if (retryCount < maxRetries) {
+        console.log(`⏳ Retrying in ${retryDelay}ms... (Attempt ${retryCount + 2}/${maxRetries + 1})`)
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+        return handleAutomaticScraping(employeeId, password, airline, month, year, firstLogin, retryCount + 1)
+      }
+      
+      // All retries exhausted
+      console.error(`❌ All ${maxRetries + 1} scraping attempts failed`)
+      setScheduleChanges(prev => [{
+        type: 'error',
+        message: `⚠️ Schedule update failed after ${maxRetries + 1} attempts. Please try manual refresh.`,
+        date: new Date().toISOString(),
+        read: false
+      }, ...prev])
       // Don't show automatic scraping errors in notifications
     } finally {
       setLoading(false)
@@ -4018,144 +4105,243 @@ function App() {
         )}
 
         {settingsTab === 'features' && (
-          <div className="settings-content">
-            <h3>🌟 App Features</h3>
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>🌟 App Features</Typography>
+            
+            {/* Scraping Status Dashboard */}
+            <Card elevation={2} sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2 }}>📊 Schedule Sync Status</Typography>
+                
+                {scrapingStatus.isActive ? (
+                  <Box>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      🔄 Syncing schedule data from crew portal...
+                    </Alert>
+                    <Box sx={{ mb: 2 }}>
+                      <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+                        <Typography variant="body2">
+                          Current: {scrapingStatus.currentMonth || 'Starting...'}
+                        </Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {scrapingStatus.progress}%
+                        </Typography>
+                      </Stack>
+                      <Box sx={{ width: '100%', bgcolor: 'grey.200', borderRadius: 1, height: 8 }}>
+                        <Box 
+                          sx={{ 
+                            width: `${scrapingStatus.progress}%`, 
+                            bgcolor: 'primary.main', 
+                            height: '100%',
+                            borderRadius: 1,
+                            transition: 'width 0.3s ease'
+                          }} 
+                        />
+                      </Box>
+                    </Box>
+                  </Box>
+                ) : (
+                  <Box>
+                    {scrapingStatus.lastSuccess ? (
+                      <Alert severity="success" sx={{ mb: 2 }}>
+                        ✅ Schedule synced successfully
+                        <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                          Last update: {new Date(scrapingStatus.lastSuccess).toLocaleString()}
+                        </Typography>
+                      </Alert>
+                    ) : (
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        ℹ️ Schedule will sync automatically on next login
+                      </Alert>
+                    )}
+                    
+                    {scrapingStatus.lastError && (
+                      <Alert severity="warning" sx={{ mb: 2 }}>
+                        ⚠️ {scrapingStatus.lastError}
+                        <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                          Retry attempts: {scrapingStatus.retryCount}
+                        </Typography>
+                      </Alert>
+                    )}
+                  </Box>
+                )}
+                
+                <Stack spacing={1} sx={{ mt: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Status:</Typography>
+                    <Chip 
+                      label={scrapingStatus.isActive ? 'Syncing' : 'Ready'} 
+                      color={scrapingStatus.isActive ? 'primary' : 'success'} 
+                      size="small" 
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Auto-retry:</Typography>
+                    <Typography variant="body2" fontWeight="bold">Enabled (up to 3 attempts)</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" color="text.secondary">Cache Duration:</Typography>
+                    <Typography variant="body2" fontWeight="bold">5 minutes</Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
             
             {!window.matchMedia('(display-mode: standalone)').matches && (
-              <div className="install-app-banner">
-                <div className="install-banner-content">
-                  <span className="install-icon">📱</span>
-                  <div>
-                    <strong>Install FlightRosterIQ</strong>
-                    <p>Add to your home screen for quick access and offline use</p>
-                  </div>
-                </div>
-                <button className="install-app-btn" onClick={handleInstallApp}>
-                  ⬇️ Install App
-                </button>
-              </div>
+              <Card elevation={2} sx={{ mb: 3 }}>
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Box sx={{ fontSize: 40 }}>📱</Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="h6">Install FlightRosterIQ</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Add to your home screen for quick access and offline use
+                      </Typography>
+                    </Box>
+                    <Button variant="contained" onClick={handleInstallApp}>
+                      ⬇️ Install
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
             )}
             
-            <div className="features-list">
-              <div className="feature-item">
-                <span className="feature-icon">📅</span>
-                <div>
-                  <strong>Monthly & Daily Schedule Views</strong>
-                  <p>View your flight schedule by month or day with detailed flight information</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">✈️</span>
-                <div>
-                  <strong>Flight Details</strong>
-                  <p>Click any flight to see crew members, aircraft info, gate details, and more</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">🌤️</span>
-                <div>
-                  <strong>Weather Information</strong>
-                  <p>Click airport codes to view ATIS, METAR, and TAF weather data</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">📡</span>
-                <div>
-                  <strong>Aircraft Tracking</strong>
-                  <p>Click tail numbers to see live aircraft position and flight status</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">👥</span>
-                <div>
-                  <strong>Crew Contact</strong>
-                  <p>Call or text crew members directly from the app (when available)</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">📱</span>
-                <div>
-                  <strong>Offline Support</strong>
-                  <p>Access your schedule even without internet connection</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">💬</span>
-                <div>
-                  <strong>Friends & Chat</strong>
-                  <p>Connect with coworkers, send messages, and see who's nearby at your base</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">🔍</span>
-                <div>
-                  <strong>Find Crew Members</strong>
-                  <p>Search for crew members by name or employee number and send friend requests</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">🔔</span>
-                <div>
-                  <strong>Notifications</strong>
-                  <p>Get alerts for friend requests, schedule changes, and aircraft swaps</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">👪</span>
-                <div>
-                  <strong>Family Access Codes</strong>
-                  <p>Generate unique codes to share your schedule with family members (view-only)</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">📍</span>
-                <div>
-                  <strong>Nearby Crewmates</strong>
-                  <p>See which friends are at your current location or base</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">📆</span>
-                <div>
-                  <strong>Calendar Navigation</strong>
-                  <p>Click any date on the monthly calendar to view that day's schedule</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">🗑️</span>
-                <div>
-                  <strong>Chat Management</strong>
-                  <p>Edit mode to select and delete individual or multiple chat conversations</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">📞</span>
-                <div>
-                  <strong>Direct Communication</strong>
-                  <p>Click crew phone numbers for instant call or text options</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">✈️</span>
-                <div>
-                  <strong>Detailed Aircraft Info</strong>
-                  <p>View specific aircraft types (B767-300, B767-200) and tail number details</p>
-                </div>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">🔐</span>
-                <div>
-                  <strong>Secure Access</strong>
-                  <p>Personal login system with cached credentials for quick access</p>
-                </div>
-              </div>
-            </div>
+            <Typography variant="h6" sx={{ mb: 2, mt: 3 }}>✨ Key Features</Typography>
+            <Stack spacing={2}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>📅</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Monthly & Daily Schedule Views</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        View your flight schedule by month or day with detailed flight information
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>✈️</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Flight Details</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Click any flight to see crew members, aircraft info, gate details, and more
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>🌤️</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Weather Information</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Click airport codes to view ATIS, METAR, and TAF weather data
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>📡</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Live Flight Tracking</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Track aircraft positions in real-time with FlightAware integration
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>👥</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Crew Contact</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Call or text crew members directly from the app (when available)
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>📱</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Offline Support</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Access your schedule even without internet connection
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>💬</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Friends & Chat</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Connect with coworkers, send messages, and see who's nearby at your base
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>🔔</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Notifications</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Get alerts for friend requests, schedule changes, and aircraft swaps
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>👪</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Family Access Codes</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Generate unique codes to share your schedule with family members (view-only)
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Stack>
             
-            <div className="disclaimer-note">
-              <p><strong>⚠️ Important Notice:</strong></p>
-              <p>This is a third-party app and, as with all third-party apps, this is not intended to replace your company app. Please verify all duties on the official company app.</p>
-            </div>
-          </div>
+            <Alert severity="warning" sx={{ mt: 3 }}>
+              <Typography variant="body2" fontWeight="bold">⚠️ Important Notice:</Typography>
+              <Typography variant="body2">
+                This is a third-party app and, as with all third-party apps, this is not intended to replace your company app. Please verify all duties on the official company app.
+              </Typography>
+            </Alert>
+          </Box>
         )}
 
         {settingsTab === 'family' && (
