@@ -73,7 +73,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -918,6 +918,49 @@ function App() {
         const accessCode = credentials.username.trim()
         if (accessCode.length < 6) {
           setError('Family access code must be at least 6 characters')
+          setLoading(false)
+          return
+        }
+        
+        // Validate the family access code with the server
+        console.log('🔐 Validating family access code...')
+        setLoadingMessage('Validating family access code...')
+        
+        try {
+          const authResponse = await apiCall('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({
+              username: accessCode,
+              accountType: 'family'
+            })
+          })
+          
+          const authResult = await authResponse.json()
+          
+          if (!authResult.success) {
+            console.error('❌ Invalid family access code')
+            setError('Invalid family access code. Please check the code and try again.')
+            setLoading(false)
+            return
+          }
+          
+          // Store the validated family member info
+          if (authResult.pilotName && authResult.memberName) {
+            const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+            codeMapping[accessCode] = {
+              name: authResult.memberName,
+              pilotName: authResult.pilotName,
+              pilot: authResult.pilotName,
+              airline: authResult.airline || 'abx'
+            }
+            await localforage.setItem('familyCodeMapping', codeMapping)
+          }
+          
+          console.log('✅ Family access code validated successfully')
+          
+        } catch (authError) {
+          console.error('Family code validation error:', authError)
+          setError('Unable to validate family access code. Please check your internet connection and try again.')
           setLoading(false)
           return
         }
@@ -2148,13 +2191,18 @@ function App() {
         }
       }
       
+      console.log('📡 Sending scrape request to /api/scrape...')
       const response = await apiCall('/api/scrape', {
         method: 'POST',
         body: JSON.stringify(requestBody)
       })
       
+      console.log(`📥 Scrape response status: ${response.status}`)
+      
       if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`)
+        const errorText = await response.text()
+        console.error(`❌ Server error ${response.status}:`, errorText)
+        throw new Error(`Server error ${response.status}: ${errorText || 'Connection failed'}`)
       }
       
       const result = await response.json()
@@ -2438,14 +2486,17 @@ function App() {
       }
       
       // All retries exhausted
-      console.error(`❌ All ${maxRetries + 1} scraping attempts failed`)
+      console.error(`❌ All ${maxRetries + 1} scraping attempts failed:`, error)
       setScheduleChanges(prev => [{
         type: 'error',
-        message: `⚠️ Schedule update failed after ${maxRetries + 1} attempts. Please try manual refresh.`,
+        message: `⚠️ Schedule update failed: ${error.message || 'Connection error'}. Please check your credentials and try again.`,
         date: new Date().toISOString(),
         read: false
       }, ...prev])
-      // Don't show automatic scraping errors in notifications
+      
+      // Show user-friendly error
+      setError(`Unable to load schedule: ${error.message || 'Please check your internet connection and credentials.'}`)
+      setTimeout(() => setError(null), 5000)
     } finally {
       setLoading(false)
       setScrapingInProgress(false)
@@ -2808,19 +2859,14 @@ function App() {
     const newDate = new Date(currentMonth)
     newDate.setMonth(newDate.getMonth() - 1)
     
-    // Calculate the earliest allowed month (previous month from today)
+    // Calculate the earliest allowed month (1 month before today)
     const today = new Date()
     const earliestDate = new Date(today)
     earliestDate.setMonth(earliestDate.getMonth() - 1)
     earliestDate.setDate(1) // First day of previous month
     
-    // Prevent going before the earliest scraped month
-    if (newDate < earliestDate) {
-      console.log('⚠️ Cannot navigate before previous month - no cached data')
-      setError('Schedule data only available for previous, current, and next month.')
-      setTimeout(() => setError(null), 3000)
-      return
-    }
+    // Allow navigating to previous month (don't block if data not cached yet)
+    console.log(`📅 Navigating to ${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`)
     
     // Try to load cached data for this month
     const month = newDate.getMonth() + 1
@@ -6716,6 +6762,9 @@ function App() {
                 </Typography>
                 <Stack spacing={0.5}>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    🔒 Security: Family code validation fix
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     • Enhanced scraper with complete data
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -6723,9 +6772,6 @@ function App() {
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     • Accurate flight dates & times
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    • Complete crew member details
                   </Typography>
                 </Stack>
               </Box>
