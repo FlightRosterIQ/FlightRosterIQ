@@ -170,7 +170,7 @@ function App() {
       },
     },
     shape: {
-      borderRadius: 12,
+      borderRadius: 20,
     },
     components: {
       MuiButton: {
@@ -4431,20 +4431,6 @@ function App() {
               <Card variant="outlined">
                 <CardContent>
                   <Stack direction="row" spacing={2} alignItems="flex-start">
-                    <Box sx={{ fontSize: 24 }}>📡</Box>
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">Live Flight Tracking</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Track aircraft positions in real-time with FlightAware integration
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-              
-              <Card variant="outlined">
-                <CardContent>
-                  <Stack direction="row" spacing={2} alignItems="flex-start">
                     <Box sx={{ fontSize: 24 }}>👥</Box>
                     <Box>
                       <Typography variant="subtitle1" fontWeight="bold">Crew Contact</Typography>
@@ -4516,7 +4502,7 @@ function App() {
             <Alert severity="warning" sx={{ mt: 3 }}>
               <Typography variant="body2" fontWeight="bold">⚠️ Important Notice:</Typography>
               <Typography variant="body2">
-                This is a third-party app and, as with all third-party apps, this is not intended to replace your company app. Please verify all duties on the official company app.
+                This is a third-party app and, as with all third-party apps, this is not intended to replace your company app. Please verify all duties on the official company app. Please verify report times on all flights as some cities are different.
               </Typography>
             </Alert>
           </Box>
