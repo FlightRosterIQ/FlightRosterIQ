@@ -793,8 +793,8 @@ function App() {
   // Login Screen - replicate exact structure from App_OLD.jsx
   if (!token) {
     return (
-      <div className={`min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-purple-800 p-4 ${theme === 'dark' ? 'dark' : ''}`}>
-        <Card className="w-full max-w-md shadow-2xl">
+      <div className={`min-h-screen flex items-center justify-center bg-background p-4 ${theme === 'dark' ? 'dark' : ''}`}>
+        <Card className="w-full max-w-md shadow-lg border">
           <CardHeader className="space-y-1 text-center pb-4">
             <div className="mx-auto w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4">
               <Plane className="w-8 h-8 text-primary-foreground" />
