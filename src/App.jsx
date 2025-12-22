@@ -5859,13 +5859,6 @@ function App() {
                 </IconButton>
               )}
               
-              <Chip 
-                label={isOnline ? 'Online' : 'Offline'}
-                size="small"
-                color={isOnline ? 'success' : 'error'}
-                icon={isOnline ? <Box>🟢</Box> : <Box>🔴</Box>}
-              />
-              
               <IconButton
                 onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
                 size="small"
