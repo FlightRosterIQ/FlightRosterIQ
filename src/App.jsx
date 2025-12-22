@@ -73,7 +73,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '1.0.1';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -6800,16 +6800,16 @@ function App() {
                 </Typography>
                 <Stack spacing={0.5}>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    🔒 Security: Family code validation fix
+                    🎭 Bubble UI styling with rounded corners
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    • Enhanced scraper with complete data
+                    • Tail numbers non-clickable in daily view
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    • Hotel & layover information
+                    • Updated disclaimer with report time warning
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    • Accurate flight dates & times
+                    • Scheduled vs Actual times clarity
                   </Typography>
                 </Stack>
               </Box>
