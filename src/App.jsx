@@ -5135,22 +5135,6 @@ function App() {
                         size="small"
                         color="primary"
                         variant="outlined"
-                        onClick={async (e) => {
-                          e.stopPropagation()
-                          const tailNum = flight.tail || flight.tailNumber
-                          setTrackedAircraft({
-                            tail: tailNum,
-                            aircraft: flight.aircraft,
-                            flightNumber: flight.flightNumber,
-                            origin: flight.origin,
-                            destination: flight.destination
-                          })
-                          setActiveTab('tracking')
-                          const trackingData = await fetchFlightAwareData(tailNum, null, flight.date, flight.origin, flight.destination)
-                          setFlightTrackingData(trackingData)
-                        }}
-                        sx={{ cursor: 'pointer' }}
-                        title="Click to track aircraft location"
                       />
                     )}
                   </Stack>
