@@ -46,18 +46,19 @@ html {
 }
 
 :root {
-  --primary-color: #1e3a8a;
-  --primary-light: #3b82f6;
-  --primary-dark: #1e40af;
-  --secondary-color: #0891b2;
-  --background: #f1f5f9;
-  --card-background: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --border-color: #e2e8f0;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --primary-color: #4F6CFF;
+  --primary-light: #6B7FFF;
+  --primary-dark: #3B52CC;
+  --background-color: #F5F5F5;
+  --card-background: #FFFFFF;
+  --text-primary: #1A1A2E;
+  --text-secondary: #737594;
+  --border-color: #E5E7EB;
+  --success-color: #10B981;
+  --warning-color: #F59E0B;
+  --danger-color: #EF4444;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 body {
@@ -66,7 +67,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--background);
+  background: var(--background-color);
   color: var(--text-primary);
   background-attachment: fixed;
   overscroll-behavior-y: contain;
