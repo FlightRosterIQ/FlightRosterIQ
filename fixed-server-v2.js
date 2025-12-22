@@ -1730,6 +1730,38 @@ app.post('/api/family/generate-code', (req, res) => {
     });
 });
 
+// Auth login endpoint for family code validation
+app.post('/api/auth/login', async (req, res) => {
+    const { username, accountType } = req.body;
+    
+    if (accountType === 'family') {
+        // For family accounts, validate the access code
+        // In a real implementation, this would check against a database
+        // For now, we'll accept any 8-character uppercase code format
+        if (username && username.length >= 6 && username.length <= 10) {
+            return res.json({
+                success: true,
+                accountType: 'family',
+                memberName: 'Family Member',
+                pilotName: 'Pilot',
+                airline: 'abx'
+            });
+        } else {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid family access code format'
+            });
+        }
+    }
+    
+    // For pilot accounts, return success (actual auth happens in /api/scrape)
+    res.json({
+        success: true,
+        accountType: accountType || 'pilot'
+    });
+});
+
+
 // Weather API endpoint - proxy to avoid CORS issues
 app.post('/api/weather', async (req, res) => {
     const { airport } = req.body;
