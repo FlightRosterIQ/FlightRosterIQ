@@ -1,6 +1,6 @@
 // Service Worker for FlightRosterIQ PWA Push Notifications
 
-const CACHE_NAME = 'flightrosteriq-v6';
+const CACHE_NAME = 'flightrosteriq-v7';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -42,6 +42,20 @@ self.addEventListener('activate', (event) => {
 
 // Fetch handler for offline support
 self.addEventListener('fetch', (event) => {
+  // Ignore requests from browser extensions (AdGuard, etc.)
+  const url = new URL(event.request.url);
+  if (url.hostname === 'local.adguard.org' || 
+      url.protocol === 'chrome-extension:' || 
+      url.protocol === 'moz-extension:' ||
+      url.hostname.includes('extension')) {
+    return; // Don't handle extension requests
+  }
+  
+  // Only handle requests from our domain
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

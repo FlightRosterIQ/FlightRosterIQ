@@ -4,6 +4,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/roster-updates",
+      "destination": "/api/roster-updates"
+    },
+    {
       "source": "/api/:path*",
       "destination": "http://157.245.126.24:8080/api/:path*"
     }

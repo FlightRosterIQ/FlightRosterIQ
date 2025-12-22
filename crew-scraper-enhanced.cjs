@@ -46,6 +46,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Parse date string like "06Dec" into full ISO date
+ * Handles year rollover: if we're in December and see January dates, use next year
  */
 function parseCrewDate(dateStr, year = new Date().getFullYear()) {
   const months = {
@@ -62,7 +63,17 @@ function parseCrewDate(dateStr, year = new Date().getFullYear()) {
   
   if (month === undefined) return null;
   
-  const date = new Date(year, month, day);
+  // Handle year rollover: if current month is December (11) and we see Jan-Feb, use next year
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  let actualYear = year;
+  
+  if (currentMonth === 11 && month <= 1) {
+    // We're in December, seeing January or February dates - use next year
+    actualYear = year + 1;
+  }
+  
+  const date = new Date(actualYear, month, day);
   return date.toISOString();
 }
 
@@ -163,6 +174,7 @@ function parsePortalContent(content) {
   let currentYear = new Date().getFullYear();
   
   console.log('🔍 Parsing portal content...');
+  console.log(`📅 Current year: ${currentYear}, parsing dates for ${currentYear}/${currentYear + 1}`);
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];

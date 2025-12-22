@@ -73,7 +73,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.5';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -2265,7 +2265,14 @@ function App() {
                     'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
                   };
                   const monthNum = monthMap[monthAbbr] || '01';
-                  const year = pairing.startDate.split('-')[0]; // Get year from pairing start date
+                  let year = pairing.startDate.split('-')[0]; // Get year from pairing start date
+                  
+                  // Handle year rollover: if pairing starts in Dec and leg is in Jan/Feb, use next year
+                  const pairingStartMonth = pairing.startDate.split('-')[1];
+                  if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
+                    year = parseInt(year) + 1;
+                  }
+                  
                   legDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
                 }
                 // Priority 2: Fall back to date field if localTime not available
@@ -2278,7 +2285,14 @@ function App() {
                     'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
                   };
                   const monthNum = monthMap[monthAbbr] || '01';
-                  const year = pairing.startDate.split('-')[0]; // Get year from pairing start date
+                  let year = pairing.startDate.split('-')[0]; // Get year from pairing start date
+                  
+                  // Handle year rollover: if pairing starts in Dec and leg is in Jan/Feb, use next year
+                  const pairingStartMonth = pairing.startDate.split('-')[1];
+                  if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
+                    year = parseInt(year) + 1;
+                  }
+                  
                   legDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
                 }
                 
@@ -2329,7 +2343,14 @@ function App() {
                     'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
                   };
                   const monthNum = monthMap[monthAbbr] || '01';
-                  const year = pairing.startDate.split('-')[0];
+                  let year = pairing.startDate.split('-')[0];
+                  
+                  // Handle year rollover: if pairing starts in Dec and hotel is in Jan/Feb, use next year
+                  const pairingStartMonth = pairing.startDate.split('-')[1];
+                  if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
+                    year = parseInt(year) + 1;
+                  }
+                  
                   hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
                 } else if (lastLeg.arrival?.date) {
                   // Fallback to date field if localTime not available
@@ -2341,7 +2362,14 @@ function App() {
                     'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
                   };
                   const monthNum = monthMap[monthAbbr] || '01';
-                  const year = pairing.startDate.split('-')[0];
+                  let year = pairing.startDate.split('-')[0];
+                  
+                  // Handle year rollover: if pairing starts in Dec and hotel is in Jan/Feb, use next year
+                  const pairingStartMonth = pairing.startDate.split('-')[1];
+                  if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
+                    year = parseInt(year) + 1;
+                  }
+                  
                   hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
                 }
                 
@@ -3417,15 +3445,33 @@ function App() {
     }
   }
 
-  const calculateReportTime = (departureTime, origin) => {
-    // Calculate report time: 1.5 hours for MIA, 1 hour for others
+  const calculateReportTime = (departureTime, origin, destination) => {
+    // Calculate report time: 2.0 hours for MIA and international flights, 1 hour for domestic
     if (!departureTime) return { lt: '', utc: '' }
     try {
       const [hours, minutes] = departureTime.split(':').map(Number)
       const today = new Date()
       today.setHours(hours, minutes, 0, 0)
-      // Subtract 90 minutes for MIA, 60 minutes for others
-      const minutesToSubtract = origin === 'MIA' ? 90 : 60
+      
+      // International airport codes (common destinations from US cargo carriers)
+      const internationalAirports = [
+        // Canada
+        'YYZ', 'YVR', 'YUL', 'YYC', 'YOW', 'YHZ', 'YWG', 'YEG',
+        // Mexico
+        'MEX', 'GDL', 'MTY', 'CUN', 'TIJ', 'BJX', 'QRO', 'SLP',
+        // Caribbean
+        'SJU', 'STT', 'STX', 'NAS', 'GCM', 'MBJ', 'KIN', 'PLS',
+        // Central America
+        'GUA', 'SAL', 'PTY', 'MGA', 'SJO', 'LIR',
+        // South America
+        'BOG', 'UIO', 'LIM', 'GYE', 'SCL', 'GIG', 'GRU', 'EZE', 'CCS'
+      ]
+      
+      const isInternational = internationalAirports.includes(origin) || 
+                             internationalAirports.includes(destination)
+      
+      // Subtract 120 minutes for MIA/international, 60 minutes for domestic
+      const minutesToSubtract = (origin === 'MIA' || isInternational) ? 120 : 60
       today.setMinutes(today.getMinutes() - minutesToSubtract)
       const reportHours = today.getHours().toString().padStart(2, '0')
       const reportMinutes = today.getMinutes().toString().padStart(2, '0')
@@ -4917,7 +4963,7 @@ function App() {
             <Card 
               key={idx} 
               sx={{ mb: 2, cursor: 'pointer', '&:hover': { boxShadow: 4 } }} 
-              onClick={() => setSelectedFlight({...flight, originalDate: flight.date})}
+              onClick={() => setSelectedFlight({...flight, originalDate: selectedDate})}
               elevation={2}
             >
               <CardContent>
@@ -4990,10 +5036,10 @@ function App() {
                     </Typography>
                     <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {calculateReportTime(flight.departure, flight.origin).lt} LT
+                        {calculateReportTime(flight.departure, flight.origin, flight.destination).lt} LT
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {calculateReportTime(flight.departure, flight.origin).utc} UTC
+                        {calculateReportTime(flight.departure, flight.origin, flight.destination).utc} UTC
                       </Typography>
                     </Stack>
                   </Box>
@@ -5118,7 +5164,7 @@ function App() {
                     }}
                     onClick={(e) => {
                       e.stopPropagation()
-                      setSelectedFlight({...flight, showHotelDetails: true})
+                      setSelectedFlight({...flight, showHotelDetails: true, originalDate: selectedDate})
                     }}
                   >
                     <Stack direction="row" spacing={1} alignItems="center">
@@ -5147,127 +5193,134 @@ function App() {
               </CardContent>
           </Card>
           ))}
+            
+            {/* Hotel Information - shown right after flights */}
+            {schedule?.hotelsByDate && schedule.hotelsByDate[selectedDate] && schedule.hotelsByDate[selectedDate].length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2 }}>🏨 Hotel Information</Typography>
+                <Stack spacing={2}>
+                  {schedule.hotelsByDate[selectedDate].map((hotel, hIdx) => {
+                  // Calculate check-in/check-out times based on surrounding flights
+                  const lastFlight = flights[flights.length - 1]
+                  
+                  // Find next scheduled flight (search up to 7 days ahead)
+                  let firstNextFlight = null
+                  for (let daysAhead = 1; daysAhead <= 7; daysAhead++) {
+                    const checkDate = new Date(new Date(selectedDate).getTime() + (daysAhead * 86400000))
+                    const checkDateStr = checkDate.toISOString().split('T')[0]
+                    const nextFlights = getScheduleForDate(checkDateStr)
+                    if (nextFlights && nextFlights.length > 0) {
+                      firstNextFlight = nextFlights[0]
+                      break
+                    }
+                  }
+                  
+                  const checkInTime = lastFlight ? (() => {
+                    const arrivalTime = new Date(`${selectedDate}T${lastFlight.arrival}`)
+                    arrivalTime.setHours(arrivalTime.getHours() + 1)
+                    const date = arrivalTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    const time = arrivalTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                    return `${date} at ${time}`
+                  })() : new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at 3:00 PM'
+                  
+                  const checkOutTime = firstNextFlight ? (() => {
+                    // Checkout is 1.5 hours before next flight departure
+                    const departureTime = new Date(`${firstNextFlight.date}T${firstNextFlight.departure}`)
+                    departureTime.setHours(departureTime.getHours() - 1)
+                    departureTime.setMinutes(departureTime.getMinutes() - 30)
+                    const date = departureTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    const time = departureTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                    return `${date} at ${time}`
+                  })() : 'Next day at 10:00 AM'
+                  
+                  return (
+                    <Card key={hIdx} elevation={2}>
+                      <CardContent 
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          const query = encodeURIComponent(`${hotel.name} ${hotel.address || hotel.location || ''}`);
+                          window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                        }}
+                        title="Click to view on Google Maps"
+                      >
+                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                          <Typography variant="h5">🏨</Typography>
+                          <Box>
+                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                              {hotel.name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              📍 {hotel.location}
+                            </Typography>
+                          </Box>
+                        </Stack>
+
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="caption" color="text.secondary">Check-in:</Typography>
+                            <Typography variant="body2">{checkInTime}</Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="caption" color="text.secondary">Check-out:</Typography>
+                            <Typography variant="body2">{checkOutTime}</Typography>
+                          </Grid>
+                          {hotel.address && (
+                            <Grid item xs={12}>
+                              <Typography variant="caption" color="text.secondary">Address:</Typography>
+                              <Typography 
+                                component="a"
+                                href={`https://maps.google.com/?q=${encodeURIComponent(hotel.address)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                variant="body2"
+                                sx={{ 
+                                  color: 'primary.main',
+                                  textDecoration: 'none',
+                                  '&:hover': { textDecoration: 'underline' }
+                                }}
+                              >
+                                {hotel.address}
+                              </Typography>
+                            </Grid>
+                          )}
+                          {hotel.phone && (
+                            <Grid item xs={12}>
+                              <Typography variant="caption" color="text.secondary">Phone:</Typography>
+                              <Typography 
+                                component="a"
+                                href={`tel:${hotel.phone}`}
+                                variant="body2"
+                                sx={{ 
+                                  color: 'primary.main',
+                                  textDecoration: 'none',
+                                  '&:hover': { textDecoration: 'underline' }
+                                }}
+                              >
+                                📞 {hotel.phone}
+                              </Typography>
+                            </Grid>
+                          )}
+                        </Grid>
+
+                        <Typography 
+                          variant="caption" 
+                          color="text.secondary" 
+                          sx={{ mt: 2, display: 'block', fontStyle: 'italic' }}
+                        >
+                          Click to open in Google Maps
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                </Stack>
+              </Box>
+            )}
+            
             </>
           )}
         </Box>
         
-        {/* Hotel Information at end of daily schedule */}
-        {schedule?.hotelsByDate && schedule.hotelsByDate[selectedDate] && schedule.hotelsByDate[selectedDate].length > 0 && (
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>🏨 Hotel Information</Typography>
-            <Stack spacing={2}>
-              {schedule.hotelsByDate[selectedDate].map((hotel, hIdx) => {
-              // Calculate check-in/check-out times based on surrounding flights
-              const selectedFlights = getScheduleForDate(selectedDate)
-              const lastFlight = selectedFlights[selectedFlights.length - 1]
-              
-              // Find next scheduled flight (search up to 7 days ahead)
-              let firstNextFlight = null
-              for (let daysAhead = 1; daysAhead <= 7; daysAhead++) {
-                const checkDate = new Date(new Date(selectedDate).getTime() + (daysAhead * 86400000))
-                const checkDateStr = checkDate.toISOString().split('T')[0]
-                const flights = getScheduleForDate(checkDateStr)
-                if (flights && flights.length > 0) {
-                  firstNextFlight = flights[0]
-                  break
-                }
-              }
-              
-              const checkInTime = lastFlight ? (() => {
-                const arrivalTime = new Date(`${selectedDate}T${lastFlight.arrival}`)
-                arrivalTime.setHours(arrivalTime.getHours() + 1)
-                const date = arrivalTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                const time = arrivalTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-                return `${date} at ${time}`
-              })() : new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at 3:00 PM'
-              
-              const checkOutTime = firstNextFlight ? (() => {
-                // Checkout is 1.5 hours before next flight departure
-                const departureTime = new Date(`${firstNextFlight.date}T${firstNextFlight.departure}`)
-                departureTime.setHours(departureTime.getHours() - 1)
-                departureTime.setMinutes(departureTime.getMinutes() - 30)
-                const date = departureTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                const time = departureTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-                return `${date} at ${time}`
-              })() : 'Next day at 10:00 AM'
-              
-              return (
-                <Card key={hIdx} elevation={2}>
-                  <CardContent 
-                    sx={{ cursor: 'pointer' }}
-                    onClick={() => {
-                      const query = encodeURIComponent(`${hotel.name} ${hotel.address || hotel.location || ''}`);
-                      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
-                    }}
-                    title="Click to view on Google Maps"
-                  >
-                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-                      <Typography variant="h5">🏨</Typography>
-                      <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {hotel.name}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          📍 {hotel.location}
-                        </Typography>
-                      </Box>
-                    </Stack>
-
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="caption" color="text.secondary">Check-in:</Typography>
-                        <Typography variant="body2">{checkInTime}</Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="caption" color="text.secondary">Check-out:</Typography>
-                        <Typography variant="body2">{checkOutTime}</Typography>
-                      </Grid>
-                      {hotel.address && (
-                        <Grid item xs={12}>
-                          <Typography variant="caption" color="text.secondary">Address:</Typography>
-                          <Typography 
-                            component="a"
-                            href={`https://maps.google.com/?q=${encodeURIComponent(hotel.address)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            variant="body2"
-                            sx={{ 
-                              color: 'primary.main',
-                              textDecoration: 'none',
-                              display: 'block',
-                              '&:hover': { textDecoration: 'underline' }
-                            }}
-                          >
-                            📍 {hotel.address}
-                          </Typography>
-                        </Grid>
-                      )}
-                      {hotel.phone && (
-                        <Grid item xs={12}>
-                          <Typography variant="caption" color="text.secondary">Phone:</Typography>
-                          <Typography 
-                            component="a"
-                            href={`tel:${hotel.phone}`}
-                            variant="body2"
-                            sx={{ 
-                              color: 'primary.main',
-                              textDecoration: 'none',
-                              display: 'block',
-                              '&:hover': { textDecoration: 'underline' }
-                            }}
-                          >
-                            📞 {hotel.phone}
-                          </Typography>
-                        </Grid>
-                      )}
-                    </Grid>
-                  </CardContent>
-                </Card>
-              )
-            })}
-            </Stack>
-          </Box>
-        )}
       </Box>
     )
   }
@@ -6020,7 +6073,12 @@ function App() {
                   <Typography variant="caption" color="text.secondary">Departure</Typography>
                   <Box>
                     <Typography variant="body2">
-                      {new Date(selectedFlight.originalDate || selectedFlight.date).toLocaleDateString()} - {selectedFlight.departure} LT
+                      {(() => {
+                        // Use originalDate (the clicked date) if available, otherwise fall back to flight.date
+                        const dateToDisplay = selectedFlight.originalDate || selectedFlight.date;
+                        const parsedDate = new Date(dateToDisplay + 'T00:00:00'); // Add time to avoid timezone issues
+                        return parsedDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                      })()} - {selectedFlight.departure} LT
                     </Typography>
                     <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.departure)} UTC</Typography>
                     {selectedFlight.actualDeparture && (
@@ -6037,7 +6095,9 @@ function App() {
                   <Typography variant="caption" color="text.secondary">Arrival</Typography>
                   <Box>
                     {(() => {
-                      const departureDate = new Date(selectedFlight.originalDate || selectedFlight.date)
+                      // Use originalDate (the clicked date) if available, otherwise fall back to flight.date
+                      const dateToDisplay = selectedFlight.originalDate || selectedFlight.date;
+                      const departureDate = new Date(dateToDisplay + 'T00:00:00'); // Add time to avoid timezone issues
                       const deptMatch = selectedFlight.departure.match(/(\d{2}):?(\d{2})/)
                       const arrMatch = selectedFlight.arrival.match(/(\d{2}):?(\d{2})/)
                       
@@ -6051,7 +6111,7 @@ function App() {
                           return (
                             <>
                               <Typography variant="body2" sx={{ color: 'warning.main', fontWeight: 600 }}>
-                                {arrivalDate.toLocaleDateString()} - {selectedFlight.arrival} LT (Next Day)
+                                {arrivalDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} - {selectedFlight.arrival} LT (Next Day)
                               </Typography>
                               <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.arrival)} UTC</Typography>
                             </>
@@ -6062,7 +6122,7 @@ function App() {
                       return (
                         <>
                           <Typography variant="body2">
-                            {departureDate.toLocaleDateString()} - {selectedFlight.arrival} LT
+                            {departureDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} - {selectedFlight.arrival} LT
                           </Typography>
                           <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.arrival)} UTC</Typography>
                         </>
