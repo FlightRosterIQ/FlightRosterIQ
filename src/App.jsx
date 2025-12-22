@@ -4514,20 +4514,6 @@ function App() {
               <Card variant="outlined">
                 <CardContent>
                   <Stack direction="row" spacing={2} alignItems="flex-start">
-                    <Box sx={{ fontSize: 24 }}>🟢</Box>
-                    <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">Server Status Monitoring</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Real-time server connection indicator - green when online, red when offline
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-              
-              <Card variant="outlined">
-                <CardContent>
-                  <Stack direction="row" spacing={2} alignItems="flex-start">
                     <Box sx={{ fontSize: 24 }}>📱</Box>
                     <Box>
                       <Typography variant="subtitle1" fontWeight="bold">Offline Support</Typography>
