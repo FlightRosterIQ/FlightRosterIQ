@@ -5,7 +5,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 10000;
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -20,8 +20,10 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Serve static files from dist
-app.use(express.static('../dist'));
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'FlightRoster API is running' });
+});
 
 // In-memory storage (replace with database in production)
 const users = new Map();
