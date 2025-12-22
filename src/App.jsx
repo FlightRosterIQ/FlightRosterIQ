@@ -5762,6 +5762,33 @@ function App() {
                 </CardContent>
               </Card>
             </Zoom>
+            
+            {/* Install PWA Button */}
+            <Box sx={{ mt: 3, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                onClick={handleInstallApp}
+                sx={{
+                  py: 1.5,
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  color: '#667eea',
+                  fontWeight: 600,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  '&:hover': {
+                    background: 'rgba(255, 255, 255, 1)',
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.2)',
+                  }
+                }}
+                startIcon={<Box sx={{ fontSize: '1.5rem' }}>⬇️</Box>}
+              >
+                Install App
+              </Button>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255,255,255,0.9)' }}>
+                Install FlightRosterIQ for offline access & notifications
+              </Typography>
+            </Box>
           </Container>
         </Box>
       </ThemeProvider>
