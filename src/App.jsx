@@ -5372,14 +5372,6 @@ function App() {
             padding: 2
           }}
         >
-          {/* Pull to Refresh Indicator */}
-          {isPulling && (
-            <div className="pull-refresh-indicator" style={{ transform: `translateX(-50%) translateY(${Math.min(pullRefreshDistance - 60, 0)}px)` }}>
-              <span className="pull-refresh-icon">↻</span>
-              <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
-            </div>
-          )}
-          
           <Container maxWidth="sm">
             <Zoom in={true} timeout={500}>
               <Card 
@@ -5699,20 +5691,6 @@ function App() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Pull-to-refresh indicator */}
-      {isPulling && (
-        <div 
-          className="pull-refresh-indicator"
-          style={{
-            transform: `translateY(${pullRefreshDistance}px)`,
-            opacity: pullRefreshDistance / 100
-          }}
-        >
-          <div className="pull-refresh-spinner"></div>
-          <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
-        </div>
-      )}
-      
       {loading && (
         <div className="loading-banner-top">
           <div className="loading-banner-content">
@@ -5826,15 +5804,6 @@ function App() {
           </button>
         </div>
       )}
-      
-      {/* Pull to Refresh Indicator */}
-      {isPulling && token && (
-        <div className="pull-refresh-indicator" style={{ transform: `translateX(-50%) translateY(${Math.min(pullRefreshDistance - 60, 0)}px)` }}>
-          <span className="pull-refresh-icon">↻</span>
-          <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
-        </div>
-      )
-      }
       
       <AppBar position="sticky" elevation={1} sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
         <Toolbar>
