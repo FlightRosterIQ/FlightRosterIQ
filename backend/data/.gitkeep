@@ -1,0 +1,8 @@
+# Backend Data Directory
+
+This directory stores persistent data for the FlightRosterIQ backend.
+
+## Files:
+- `family-codes.json` - Family access codes (auto-generated)
+
+**Note**: This directory is created automatically by the server.

@@ -2,10 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const DATA_DIR = path.join(__dirname, 'data');
+const FAMILY_CODES_FILE = path.join(DATA_DIR, 'family-codes.json');
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Middleware
@@ -31,6 +35,35 @@ const PORTALS = {
   abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
   ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
 };
+
+// Data persistence functions
+const saveFamilyCodes = () => {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const data = Object.fromEntries(familyCodes);
+    fs.writeFileSync(FAMILY_CODES_FILE, JSON.stringify(data, null, 2));
+    console.log('✅ Family codes saved to disk');
+  } catch (error) {
+    console.error('❌ Failed to save family codes:', error);
+  }
+};
+
+const loadFamilyCodes = () => {
+  try {
+    if (fs.existsSync(FAMILY_CODES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(FAMILY_CODES_FILE, 'utf8'));
+      Object.entries(data).forEach(([key, value]) => familyCodes.set(key, value));
+      console.log(`✅ Loaded ${familyCodes.size} family code entries from disk`);
+    }
+  } catch (error) {
+    console.error('❌ Failed to load family codes:', error);
+  }
+};
+
+// Load family codes on startup
+loadFamilyCodes();
 
 // JWT Middleware
 const authenticateToken = (req, res, next) => {
@@ -323,6 +356,7 @@ app.post('/api/family/generate-code', authenticateToken, (req, res) => {
   });
   
   familyCodes.set(req.user.employeeId, userCodes);
+  saveFamilyCodes();
   
   res.json({ success: true, code, memberName });
 });
@@ -338,6 +372,7 @@ app.delete('/api/family/revoke-code/:code', authenticateToken, (req, res) => {
   const updatedCodes = userCodes.filter(c => c.code !== code);
   
   familyCodes.set(req.user.employeeId, updatedCodes);
+  saveFamilyCodes();
   
   res.json({ success: true, message: 'Code revoked' });
 });
