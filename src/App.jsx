@@ -73,7 +73,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '2.0.0';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -106,7 +106,6 @@ localforage.config({
 })
 
 function App() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [token, setToken] = useState(null)
   const [username, setUsername] = useState('')
   const [schedule, setSchedule] = useState(null)
@@ -181,6 +180,7 @@ function App() {
             fontWeight: 600,
             padding: '12px 24px',
             fontSize: '1rem',
+            borderRadius: '24px',
           },
         },
       },
@@ -258,10 +258,7 @@ function App() {
   const [isRegisteredUser, setIsRegisteredUser] = useState(false)
   
   // Mobile enhancement states
-  const [pullRefreshDistance, setPullRefreshDistance] = useState(0)
-  const [isPulling, setIsPulling] = useState(false)
   const [touchStartX, setTouchStartX] = useState(0)
-  const [touchStartY, setTouchStartY] = useState(0)
   const [showRegistrationPopup, setShowRegistrationPopup] = useState(false)
   const [nickname, setNickname] = useState('')
   const [trialStartDate, setTrialStartDate] = useState(null)
@@ -327,7 +324,7 @@ function App() {
   // Trigger background scraping when coming back online
   useEffect(() => {
     const handleBackgroundScrape = async () => {
-      if (!isOnline || !token) return
+      if (!token) return
       
       // Check if user has credentials stored
       const storedUsername = await localforage.getItem('username')
@@ -373,14 +370,9 @@ function App() {
     }, 2000)
     
     return () => clearTimeout(timeoutId)
-  }, [isOnline, token])
+  }, [token])
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
     loadCachedData()
     initializePushNotifications()
     
@@ -471,8 +463,6 @@ function App() {
     window.addEventListener('wheel', handleWheel, { passive: false })
 
     return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('wheel', handleWheel)
     }
@@ -598,7 +588,7 @@ function App() {
 
   // Poll for roster updates every 5 minutes when logged in
   useEffect(() => {
-    if (!token || !isOnline) return
+    if (!token) return
 
     // Initial check
     checkRosterUpdates()
@@ -611,7 +601,7 @@ function App() {
     }, 5 * 60 * 1000) // 5 minutes
 
     return () => clearInterval(interval)
-  }, [token, isOnline, settings.autoRefresh])
+  }, [token, settings.autoRefresh])
 
   const fetchSubscriptionStatus = async (employeeId) => {
     try {
@@ -718,64 +708,35 @@ function App() {
     }
   }
 
-  // Pull-to-refresh handler
+  // Touch handler for month navigation (swipe left/right)
   const handleTouchStart = (e) => {
-    if (window.scrollY === 0 && activeTab === 'monthly') {
-      setTouchStartY(e.touches[0].clientY)
+    if (activeTab === 'monthly') {
       setTouchStartX(e.touches[0].clientX)
     }
   }
 
   const handleTouchMove = (e) => {
-    if (!touchStartY) return
+    if (!touchStartX || activeTab !== 'monthly') return
     
-    const touchY = e.touches[0].clientY
     const touchX = e.touches[0].clientX
-    const deltaY = touchY - touchStartY
-    const deltaX = Math.abs(touchX - touchStartX)
-    
-    // Pull to refresh (vertical swipe down)
-    if (deltaY > 0 && deltaY > deltaX && window.scrollY === 0) {
-      setIsPulling(true)
-      setPullRefreshDistance(Math.min(deltaY, 150))
-      e.preventDefault()
-    }
+    const deltaX = touchX - touchStartX
     
     // Swipe for month navigation (horizontal swipe)
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-      if (deltaX > 0 && deltaX > 100) {
+    if (Math.abs(deltaX) > 100) {
+      if (deltaX > 0) {
         // Swipe right - go to previous month
         goToPreviousMonth()
         setTouchStartX(0)
-        setTouchStartY(0)
-      } else if (deltaX < 0 && Math.abs(deltaX) > 100) {
+      } else {
         // Swipe left - go to next month
         goToNextMonth()
         setTouchStartX(0)
-        setTouchStartY(0)
       }
     }
   }
 
-  const handleTouchEnd = async () => {
-    if (isPulling && pullRefreshDistance > 80) {
-      // Trigger refresh
-      setIsPulling(false)
-      setPullRefreshDistance(0)
-      
-      // Haptic feedback
-      if (navigator.vibrate) {
-        navigator.vibrate(50)
-      }
-      
-      // Refresh schedule
-      await handleManualScrape()
-    } else {
-      setIsPulling(false)
-      setPullRefreshDistance(0)
-    }
+  const handleTouchEnd = () => {
     setTouchStartX(0)
-    setTouchStartY(0)
   }
 
   const handleLogin = async (e, accountType) => {
@@ -2543,11 +2504,7 @@ function App() {
       return
     }
     
-    // Get current month being viewed
-    const viewingMonth = currentMonth.getMonth() + 1 // JavaScript months are 0-indexed
-    const viewingYear = currentMonth.getFullYear()
-    
-    console.log(`🔄 MANUAL REFRESH: Scraping for ${viewingYear}-${String(viewingMonth).padStart(2, '0')}...`)
+    console.log(`🔄 MANUAL REFRESH: Starting 3-month scrape (previous, current, next)...`)
     
     // Don't clear the schedule - keep it visible during refresh
     setLoadingMessage('Refreshing schedule data from crew portal...')
@@ -2556,6 +2513,154 @@ function App() {
     
     // Keep a copy of current schedule to restore if refresh fails
     const currentSchedule = schedule
+    
+    try {
+      let storedUsername, storedPassword, storedAirline
+      
+      if (userType === 'family') {
+        // For family accounts, use pilot's credentials from code mapping
+        const accessCode = await localforage.getItem('familyAccessCode')
+        const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+        const memberInfo = codeMapping[accessCode]
+        
+        if (!memberInfo) {
+          setError('Family access code not found. Please log in again.')
+          setScrapingInProgress(false)
+          return
+        }
+        
+        storedUsername = memberInfo.pilotEmployeeId
+        storedPassword = memberInfo.password
+        storedAirline = memberInfo.airline
+      } else {
+        // For pilot accounts, use stored credentials
+        storedUsername = await localforage.getItem('username')
+        storedPassword = await localforage.getItem('tempPassword')
+        storedAirline = await localforage.getItem('airline')
+      }
+      
+      if (!storedUsername || !storedPassword) {
+        setScheduleChanges(prev => [{
+          type: 'general',
+          message: '🔄 Please log out and log back in to enable schedule refresh.',
+          date: new Date().toISOString(),
+          read: false
+        }, ...prev])
+        setScrapingInProgress(false)
+        return
+      }
+      
+      // Calculate 3 months to scrape (previous, current, next)
+      const now = new Date()
+      const currentMonthNum = now.getMonth() + 1 // JavaScript months are 0-indexed
+      const currentYearNum = now.getFullYear()
+      
+      let previousMonth = currentMonthNum - 1
+      let previousYear = currentYearNum
+      if (previousMonth === 0) {
+        previousMonth = 12
+        previousYear -= 1
+      }
+      
+      let nextMonth = currentMonthNum + 1
+      let nextYear = currentYearNum
+      if (nextMonth === 13) {
+        nextMonth = 1
+        nextYear += 1
+      }
+      
+      const monthsToScrape = [
+        { month: previousMonth, year: previousYear, label: 'Previous Month' },
+        { month: currentMonthNum, year: currentYearNum, label: 'Current Month' },
+        { month: nextMonth, year: nextYear, label: 'Next Month' }
+      ]
+      
+      // Update scraping status
+      setScrapingStatus(prev => ({
+        ...prev,
+        isActive: true,
+        totalMonths: monthsToScrape.length,
+        progress: 0,
+        currentMonth: null
+      }))
+      
+      for (const { month, year, label } of monthsToScrape) {
+        try {
+          console.log(`📅 Scraping ${label}: ${year}-${String(month).padStart(2, '0')}...`)
+          setLoadingMessage(`Refreshing ${label} (${year}-${String(month).padStart(2, '0')})...`)
+          
+          // Update progress
+          const currentIndex = monthsToScrape.findIndex(m => m.label === label)
+          setScrapingStatus(prev => ({
+            ...prev,
+            currentMonth: `${year}-${String(month).padStart(2, '0')}`,
+            progress: Math.round(((currentIndex + 1) / monthsToScrape.length) * 100)
+          }))
+          
+          await handleAutomaticScraping(storedUsername, storedPassword, storedAirline, month, year)
+          
+          console.log(`✅ Successfully refreshed ${label}`)
+          
+          // Update last success
+          setScrapingStatus(prev => ({
+            ...prev,
+            lastSuccess: new Date().toISOString(),
+            lastError: null,
+            retryCount: 0
+          }))
+          
+        } catch (monthError) {
+          console.error(`❌ Failed to scrape ${label}:`, monthError)
+          setScrapingStatus(prev => ({
+            ...prev,
+            lastError: `Failed to scrape ${label}: ${monthError.message}`,
+            retryCount: (prev.retryCount || 0) + 1
+          }))
+          // Continue with other months even if one fails
+        }
+      }
+      
+      // After all scraping completes, reload the schedule for the currently viewed month
+      const viewingMonth = currentMonth.getMonth() + 1
+      const viewingYear = currentMonth.getFullYear()
+      console.log(`✅ Refresh complete. Reloading schedule for ${viewingYear}-${String(viewingMonth).padStart(2, '0')}`)
+      const monthCacheKey = `schedule_${viewingYear}_${String(viewingMonth).padStart(2, '0')}`
+      const monthSchedule = await localforage.getItem(monthCacheKey)
+      if (monthSchedule) {
+        setSchedule(monthSchedule)
+        console.log(`✅ Loaded schedule for ${viewingYear}-${String(viewingMonth).padStart(2, '0')} from cache`)
+        setError(null)
+      } else {
+        console.log(`⚠️ No schedule data available for ${viewingYear}-${String(viewingMonth).padStart(2, '0')} after refresh`)
+        // Keep the current schedule visible and show error message
+        if (currentSchedule) {
+          setSchedule(currentSchedule)
+        }
+        setError(`No schedule data found for ${viewingYear}-${String(viewingMonth).padStart(2, '0')}. The crew portal may not have data for this month yet.`)
+      }
+      
+    } catch (error) {
+      console.error('Refresh error:', error)
+      // Restore the previous schedule on error
+      if (currentSchedule) {
+        setSchedule(currentSchedule)
+      }
+      setScheduleChanges(prev => [{
+        type: 'general',
+        message: '❌ Refresh failed: Unable to connect to crew portal. Please try again.',
+        date: new Date().toISOString(),
+        read: false
+      }, ...prev])
+      setError('Refresh failed. Please try again.')
+    } finally {
+      setScrapingInProgress(false)
+      setLoadingMessage('')
+      setScrapingStatus(prev => ({
+        ...prev,
+        isActive: false
+      }))
+    }
+  }
     
     try {
       let storedUsername, storedPassword, storedAirline
@@ -2629,6 +2734,10 @@ function App() {
     } finally {
       setScrapingInProgress(false)
       setLoadingMessage('')
+      setScrapingStatus(prev => ({
+        ...prev,
+        isActive: false
+      }))
     }
   }
 
@@ -3562,7 +3671,7 @@ function App() {
               variant="outlined" 
               fullWidth
               onClick={checkRosterUpdates}
-              disabled={loading || !isOnline}
+              disabled={loading}
               startIcon={<span>🔄</span>}
             >
               Check for Roster Updates
@@ -5360,13 +5469,6 @@ function App() {
                   position: 'relative'
                 }}
               >
-                {/* Offline Banner */}
-                {!isOnline && (
-                  <Alert severity="warning" sx={{ borderRadius: 0 }}>
-                    You are offline. Cached data will be used.
-                  </Alert>
-                )}
-
                 <CardContent sx={{ p: 4 }}>
                   {/* Logo Section */}
                   <Box sx={{ textAlign: 'center', mb: 4 }}>
@@ -5386,6 +5488,9 @@ function App() {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       Smart Crew Scheduling Platform
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                      v{APP_VERSION}
                     </Typography>
                   </Box>
 
@@ -5807,23 +5912,8 @@ function App() {
           <span className="pull-refresh-icon">↻</span>
           <span>{pullRefreshDistance > 80 ? 'Release to refresh' : 'Pull to refresh'}</span>
         </div>
-      )}
-      
-      {/* Offline Mode Banner */}
-      {!isOnline && token && schedule && (
-        <Alert 
-          severity="warning" 
-          sx={{ 
-            borderRadius: 0,
-            mb: 0
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <span>✈️</span>
-            <span>Offline Mode - Showing cached schedule</span>
-          </Box>
-        </Alert>
-      )}
+      )
+      }
       
       <AppBar position="sticky" elevation={1} sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
         <Toolbar>
@@ -5947,7 +6037,10 @@ function App() {
             sx={{
               width: '100%',
               overflowX: 'auto',
-              px: 1,
+              overflowY: 'hidden',
+              pl: 2,
+              pr: 1,
+              scrollSnapType: 'x mandatory',
               '&::-webkit-scrollbar': {
                 height: '4px'
               },

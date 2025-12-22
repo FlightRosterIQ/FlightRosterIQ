@@ -1,13 +1,14 @@
 {
-  "version": "1.0.5",
+  "version": "2.0.0",
   "buildDate": "2025-12-22",
   "features": [
-    "Fixed roster updates endpoint",
-    "MIA airport 2.0 hour report time",
-    "International flights 2.0 hour report time (auto-detects 40+ airports)",
-    "January 2026 schedule support with year rollover",
-    "Fixed flight departure dates in modal",
-    "Hotels display immediately after last flight of the day"
+    "🎨 New bubbly, friendly UI design with rounded buttons",
+    "📱 Improved mobile tab positioning and navigation",
+    "🔄 Enhanced 3-month auto-scraping (previous, current, next)",
+    "📊 Real-time scraping status with progress indicator",
+    "⚡ Streamlined interface - removed pull-to-refresh",
+    "🐛 Fixed VPS Puppeteer for reliable auto-scraping",
+    "✨ Cleaner UI without online/offline indicators"
   ],
-  "changelog": "Fixed: Roster updates endpoint now working properly. Hotels now appear right after the last flight of each day for better visibility."
+  "changelog": "Version 2.0.0 - Major UI/UX Overhaul: Redesigned with bubbly elements, pill-shaped buttons, improved mobile experience, 3-month auto-scraper, real-time progress tracking, and fixed VPS Puppeteer issues."
 }

@@ -132,9 +132,20 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-extensions',
+                '--disable-background-networking',
+                '--disable-sync',
+                '--disable-translate',
+                '--metrics-recording-only',
+                '--mute-audio',
+                '--no-first-run',
+                '--safebrowsing-disable-auto-update',
+                '--disable-web-security'
             ],
-            executablePath: '/usr/bin/chromium-browser'
+            executablePath: '/usr/bin/chromium-browser',
+            timeout: 60000
         });
         
         const page = await browser.newPage();
