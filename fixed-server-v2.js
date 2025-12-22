@@ -322,6 +322,8 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
             if (!foundMonth) {
                 console.log(`⚠️ Could not navigate to target month after ${attempts} attempts`);
                 console.log(`💡 The crew portal may not have data available for ${targetMonthName} ${targetYear} yet`);
+                // Continue anyway - the portal might have the data even if we couldn't navigate to it
+                console.log(`🔄 Continuing with scraping - data may still be available...`);
             }
         }
         

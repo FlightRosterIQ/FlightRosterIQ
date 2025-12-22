@@ -2286,59 +2286,91 @@ function App() {
                 });
               });
               
-              // Store hotels by the date of the last leg's arrival (hotel date)
-              // Hotels should show on the day you arrive for the layover (LOCAL TIME)
+              // Distribute hotels across their actual layover days
+              // Each hotel should appear on the day AFTER its preceding flight
               if (pairing.hotels && pairing.hotels.length > 0 && pairing.legs.length > 0) {
-                // Get the last leg's arrival date as the hotel date
-                const lastLeg = pairing.legs[pairing.legs.length - 1];
-                let hotelDate = pairing.startDate; // fallback
-                
-                // Use the arrival local time to determine the hotel date
-                if (lastLeg.arrival?.localTime) {
-                  // Extract date from local time format like "19Dec 07:35 LT"
-                  const arrDateStr = lastLeg.arrival.localTime;
-                  const dayNum = arrDateStr.match(/\d+/)?.[0];
-                  const monthAbbr = arrDateStr.match(/[A-Z][a-z]{2}/)?.[0];
-                  const monthMap = {
-                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
-                    'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-                  };
-                  const monthNum = monthMap[monthAbbr] || '01';
-                  let year = pairing.startDate.split('-')[0];
+                pairing.hotels.forEach((hotel, hotelIdx) => {
+                  // Hotels typically occur after flights in the sequence
+                  // Hotel index corresponds to the leg that precedes it
+                  // Hotel 0 is after leg 0, Hotel 1 is after leg 1, etc.
                   
-                  // Handle year rollover: if pairing starts in Dec and hotel is in Jan/Feb, use next year
-                  const pairingStartMonth = pairing.startDate.split('-')[1];
-                  if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
-                    year = parseInt(year) + 1;
+                  let hotelDate = pairing.startDate; // fallback
+                  
+                  if (hotelIdx < pairing.legs.length) {
+                    // Get the leg that precedes this hotel
+                    const precedingLeg = pairing.legs[hotelIdx];
+                    
+                    // Use the arrival local time to determine the hotel date
+                    if (precedingLeg.arrival?.localTime) {
+                      // Extract date from local time format like "19Dec 07:35 LT"
+                      const arrDateStr = precedingLeg.arrival.localTime;
+                      const dayNum = arrDateStr.match(/\d+/)?.[0];
+                      const monthAbbr = arrDateStr.match(/[A-Z][a-z]{2}/)?.[0];
+                      const monthMap = {
+                        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                        'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                      };
+                      const monthNum = monthMap[monthAbbr] || '01';
+                      let year = pairing.startDate.split('-')[0];
+                      
+                      // Handle year rollover: if pairing starts in Dec and hotel is in Jan/Feb, use next year
+                      const pairingStartMonth = pairing.startDate.split('-')[1];
+                      if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
+                        year = parseInt(year) + 1;
+                      }
+                      
+                      hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
+                    } else if (precedingLeg.arrival?.date) {
+                      // Fallback to date field if localTime not available
+                      const arrDateStr = precedingLeg.arrival.date;
+                      const dayNum = arrDateStr.match(/\d+/)?.[0];
+                      const monthAbbr = arrDateStr.match(/[A-Z][a-z]{2}/)?.[0];
+                      const monthMap = {
+                        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                        'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                      };
+                      const monthNum = monthMap[monthAbbr] || '01';
+                      let year = pairing.startDate.split('-')[0];
+                      
+                      // Handle year rollover: if pairing starts in Dec and hotel is in Jan/Feb, use next year
+                      const pairingStartMonth = pairing.startDate.split('-')[1];
+                      if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
+                        year = parseInt(year) + 1;
+                      }
+                      
+                      hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
+                    }
+                  } else {
+                    // If hotel index exceeds leg count, use the last leg's arrival date
+                    const lastLeg = pairing.legs[pairing.legs.length - 1];
+                    if (lastLeg.arrival?.localTime) {
+                      const arrDateStr = lastLeg.arrival.localTime;
+                      const dayNum = arrDateStr.match(/\d+/)?.[0];
+                      const monthAbbr = arrDateStr.match(/[A-Z][a-z]{2}/)?.[0];
+                      const monthMap = {
+                        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                        'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                      };
+                      const monthNum = monthMap[monthAbbr] || '01';
+                      let year = pairing.startDate.split('-')[0];
+                      
+                      const pairingStartMonth = pairing.startDate.split('-')[1];
+                      if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
+                        year = parseInt(year) + 1;
+                      }
+                      
+                      hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
+                    }
                   }
                   
-                  hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
-                } else if (lastLeg.arrival?.date) {
-                  // Fallback to date field if localTime not available
-                  const arrDateStr = lastLeg.arrival.date;
-                  const dayNum = arrDateStr.match(/\d+/)?.[0];
-                  const monthAbbr = arrDateStr.match(/[A-Z][a-z]{2}/)?.[0];
-                  const monthMap = {
-                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
-                    'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-                  };
-                  const monthNum = monthMap[monthAbbr] || '01';
-                  let year = pairing.startDate.split('-')[0];
-                  
-                  // Handle year rollover: if pairing starts in Dec and hotel is in Jan/Feb, use next year
-                  const pairingStartMonth = pairing.startDate.split('-')[1];
-                  if (pairingStartMonth === '12' && (monthNum === '01' || monthNum === '02')) {
-                    year = parseInt(year) + 1;
+                  // Add this single hotel to its specific date
+                  if (!hotelsByDate[hotelDate]) {
+                    hotelsByDate[hotelDate] = [];
                   }
+                  hotelsByDate[hotelDate].push(hotel);
                   
-                  hotelDate = `${year}-${monthNum}-${dayNum.padStart(2, '0')}`;
-                }
-                
-                // Add hotels to this date (might be multiple hotels on same date)
-                if (!hotelsByDate[hotelDate]) {
-                  hotelsByDate[hotelDate] = [];
-                }
-                hotelsByDate[hotelDate].push(...pairing.hotels);
+                  console.log(`  🏨 Hotel ${hotelIdx + 1} assigned to ${hotelDate}: ${hotel.name || hotel.city}`);
+                });
               }
             }
           });
