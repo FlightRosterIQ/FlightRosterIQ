@@ -73,7 +73,7 @@ import {
 import './App.css'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.3-dev';
+const APP_VERSION = '1.1.0-dev';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -134,44 +134,56 @@ function App() {
   const [theme, setTheme] = useState('light')
   const [showThemeDropdown, setShowThemeDropdown] = useState(false)
   
-  // Material-UI Theme Configuration (Dynamic based on theme state)
+  // Material-UI Theme Configuration - Apple SwiftUI / Liquid Glass Design
   const muiTheme = useMemo(() => createTheme({
     palette: {
       mode: theme,
       primary: {
-        main: theme === 'dark' ? '#3b82f6' : '#1e3a8a',
-        light: '#60a5fa',
-        dark: '#1e40af',
+        main: theme === 'dark' ? '#0A84FF' : '#007AFF',
+        light: theme === 'dark' ? '#409CFF' : '#5AC8FA',
+        dark: theme === 'dark' ? '#0066CC' : '#0051D5',
       },
       secondary: {
-        main: theme === 'dark' ? '#06b6d4' : '#0891b2',
-        light: '#22d3ee',
-        dark: '#0e7490',
+        main: theme === 'dark' ? '#5E5CE6' : '#5856D6',
+        light: theme === 'dark' ? '#7D7AFF' : '#AF52DE',
+        dark: theme === 'dark' ? '#4644C6' : '#3634A3',
       },
       background: {
-        default: theme === 'dark' ? '#0f172a' : '#f1f5f9',
-        paper: theme === 'dark' ? '#1e293b' : '#ffffff',
+        default: theme === 'dark' ? '#000000' : '#F2F2F7',
+        paper: theme === 'dark' ? 'rgba(28, 28, 30, 0.75)' : 'rgba(255, 255, 255, 0.75)',
       },
       text: {
-        primary: theme === 'dark' ? '#f1f5f9' : '#0f172a',
-        secondary: theme === 'dark' ? '#94a3b8' : '#64748b',
+        primary: theme === 'dark' ? '#FFFFFF' : '#000000',
+        secondary: theme === 'dark' ? 'rgba(235, 235, 245, 0.6)' : 'rgba(60, 60, 67, 0.6)',
       },
+      divider: theme === 'dark' ? 'rgba(84, 84, 88, 0.65)' : 'rgba(60, 60, 67, 0.36)',
     },
     typography: {
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif',
       h4: {
         fontWeight: 700,
         fontSize: '2rem',
+        letterSpacing: '-0.02em',
       },
       h5: {
-        fontWeight: 700,
+        fontWeight: 600,
+        letterSpacing: '-0.01em',
       },
       h6: {
         fontWeight: 600,
+        letterSpacing: '-0.01em',
+      },
+      body1: {
+        fontSize: '1rem',
+        letterSpacing: '-0.01em',
+      },
+      body2: {
+        fontSize: '0.875rem',
+        letterSpacing: '-0.006em',
       },
     },
     shape: {
-      borderRadius: 20,
+      borderRadius: 12,
     },
     components: {
       MuiButton: {
@@ -179,18 +191,46 @@ function App() {
           root: {
             textTransform: 'none',
             fontWeight: 600,
-            padding: '12px 24px',
+            padding: '10px 20px',
             fontSize: '1rem',
-            borderRadius: '24px',
+            borderRadius: '12px',
+            letterSpacing: '-0.01em',
+            backdropFilter: 'blur(20px)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': {
+              transform: 'scale(1.02)',
+            },
+            '&:active': {
+              transform: 'scale(0.98)',
+            },
+          },
+          contained: {
+            boxShadow: theme === 'dark'
+              ? '0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3)'
+              : '0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08)',
           },
         },
       },
       MuiCard: {
         styleOverrides: {
           root: {
-            boxShadow: theme === 'dark' 
-              ? '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)'
-              : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            backgroundColor: theme === 'dark' 
+              ? 'rgba(28, 28, 30, 0.75)' 
+              : 'rgba(255, 255, 255, 0.75)',
+            border: theme === 'dark'
+              ? '1px solid rgba(255, 255, 255, 0.1)'
+              : '1px solid rgba(0, 0, 0, 0.05)',
+            boxShadow: theme === 'dark'
+              ? '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+              : '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': {
+              transform: 'translateY(-2px)',
+              boxShadow: theme === 'dark'
+                ? '0 12px 48px 0 rgba(0, 0, 0, 0.5)'
+                : '0 12px 48px 0 rgba(31, 38, 135, 0.2)',
+            },
           },
         },
       },
@@ -198,14 +238,26 @@ function App() {
         styleOverrides: {
           root: {
             fontWeight: 500,
-            borderRadius: '16px',
+            borderRadius: '8px',
+            backdropFilter: 'blur(10px)',
+            letterSpacing: '-0.006em',
           },
         },
       },
       MuiIconButton: {
         styleOverrides: {
           root: {
-            borderRadius: '12px',
+            borderRadius: '10px',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': {
+              transform: 'scale(1.05)',
+              backgroundColor: theme === 'dark' 
+                ? 'rgba(255, 255, 255, 0.1)' 
+                : 'rgba(0, 0, 0, 0.05)',
+            },
+            '&:active': {
+              transform: 'scale(0.95)',
+            },
           },
         },
       },

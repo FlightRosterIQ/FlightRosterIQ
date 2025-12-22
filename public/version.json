@@ -1,15 +1,15 @@
 {
-  "version": "1.0.2",
+  "version": "1.1.0-dev",
   "buildDate": "2025-12-22",
   "features": [
-    "🎨 New bubbly, friendly UI design with rounded buttons",
-    "📱 Improved mobile tab positioning and navigation",
-    "🔄 Enhanced 3-month auto-scraping (previous, current, next)",
-    "📊 Real-time scraping status with progress indicator",
-    "⚡ Streamlined interface - removed pull-to-refresh",
-    "🐛 Fixed VPS Puppeteer for reliable auto-scraping",
-    "🌐 Server status indicator with real-time health checks",
-    "📅 Optimized monthly calendar - only shows weeks with days"
+    "🍎 Apple SwiftUI-inspired design system",
+    "💎 Liquid Glass glassmorphism effects",
+    "✨ iOS system colors and SF Pro typography",
+    "🎭 Smooth spring animations and transitions",
+    "🌊 Translucent cards with backdrop blur",
+    "🎯 Apple HIG-compliant interactions",
+    "📱 Native iOS feel with depth and clarity",
+    "🌈 Beautiful gradient backgrounds"
   ],
-  "changelog": "Version 1.0.2 - Bug Fixes: Fixed server status indicator to not cache offline state, optimized monthly calendar to only show weeks containing days from the month."
+  "changelog": "Version 1.1.0-dev - Apple Design System: Complete UI transformation with SwiftUI-inspired design, Liquid Glass glassmorphism, iOS system colors, SF Pro typography, spring animations, and Apple Human Interface Guidelines compliance."
 }

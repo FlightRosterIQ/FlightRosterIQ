@@ -4,7 +4,14 @@
   padding: 0;
 }
 
-/* Updated: December 14, 2025 - AirRoster Design Match - v5 with Device Detection */
+/* Apple SwiftUI / Liquid Glass Design System - December 22, 2025 */
+
+/* SF Pro-style Typography */
+@supports (font-variation-settings: normal) {
+  * {
+    font-feature-settings: "ss01" 1, "ss02" 1;
+  }
+}
 
 /* Mobile-First Touch Optimizations */
 @media (hover: none) and (pointer: coarse) {
@@ -45,31 +52,64 @@ html {
   border-width: 0;
 }
 
+/* Apple Design System Colors */
 :root {
-  --primary-color: #1e3a8a;
-  --primary-light: #3b82f6;
-  --primary-dark: #1e40af;
-  --secondary-color: #0891b2;
-  --background: #f1f5f9;
-  --card-background: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --border-color: #e2e8f0;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  /* iOS System Colors - Light */
+  --primary-color: #007AFF;
+  --primary-light: #5AC8FA;
+  --primary-dark: #0051D5;
+  --secondary-color: #5856D6;
+  --background: #F2F2F7;
+  --card-background: rgba(255, 255, 255, 0.75);
+  --text-primary: #000000;
+  --text-secondary: rgba(60, 60, 67, 0.6);
+  --border-color: rgba(60, 60, 67, 0.36);
+  --separator: rgba(60, 60, 67, 0.29);
+  
+  /* Glassmorphism */
+  --glass-background: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  
+  /* Apple Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] {
+  /* iOS System Colors - Dark */
+  --primary-color: #0A84FF;
+  --primary-light: #409CFF;
+  --primary-dark: #0066CC;
+  --secondary-color: #5E5CE6;
+  --background: #000000;
+  --card-background: rgba(28, 28, 30, 0.75);
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(235, 235, 245, 0.6);
+  --border-color: rgba(84, 84, 88, 0.65);
+  --separator: rgba(84, 84, 88, 0.65);
+  
+  /* Dark Glass */
+  --glass-background: rgba(28, 28, 30, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  
+  /* Dark Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.7);
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--background);
   color: var(--text-primary);
   background-attachment: fixed;
   overscroll-behavior-y: contain;
+  letter-spacing: -0.01em;
 }
 
 /* Device-Specific Optimizations */
