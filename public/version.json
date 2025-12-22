@@ -2,14 +2,14 @@
   "version": "1.1.0-dev",
   "buildDate": "2025-12-22",
   "features": [
-    "🍎 Apple SwiftUI-inspired design system",
-    "💎 Liquid Glass glassmorphism effects",
-    "✨ iOS system colors and SF Pro typography",
-    "🎭 Smooth spring animations and transitions",
-    "🌊 Translucent cards with backdrop blur",
-    "🎯 Apple HIG-compliant interactions",
-    "📱 Native iOS feel with depth and clarity",
-    "🌈 Beautiful gradient backgrounds"
+    "� Clean, modern card-based design",
+    "📱 Mobile-first responsive layout",
+    "🌟 Subtle shadows and borders",
+    "⚡ Fast and lightweight UI",
+    "🌍 Clear visual hierarchy",
+    "🖌️ Improved readability",
+    "🎯 Consistent spacing and sizing",
+    "💡 Better dark mode support"
   ],
-  "changelog": "Version 1.1.0-dev - Apple Design System: Complete UI transformation with SwiftUI-inspired design, Liquid Glass glassmorphism, iOS system colors, SF Pro typography, spring animations, and Apple Human Interface Guidelines compliance."
+  "changelog": "Version 1.1.0-dev - Clean Modern Design: Simplified UI with clean cards, subtle borders, better spacing, and improved readability throughout the app."
 }

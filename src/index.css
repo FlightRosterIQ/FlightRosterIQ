@@ -1,10 +1,9 @@
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
   
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,23 +12,19 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Apple-style gradient backgrounds */
+/* Clean background colors */
 body {
   margin: 0;
   display: flex;
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #f8fafc;
   overflow-x: hidden;
 }
 
 body[data-theme="dark"] {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-}
-
-body[data-theme="light"] {
-  background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+  background: #0f172a;
 }
 
 /* Smooth scrolling */
@@ -40,35 +35,6 @@ body[data-theme="light"] {
 #root {
   width: 100%;
   min-height: 100vh;
-}
-
-/* Glassmorphism utilities */
-.glass {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Apple-style animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Smooth spring animations */
-.spring-bounce {
-  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
 /* iOS-style safe areas */
