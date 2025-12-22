@@ -3,10 +3,38 @@ const puppeteer = require('puppeteer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
+
+// Family codes storage file
+const FAMILY_CODES_FILE = path.join(__dirname, 'family-codes.json');
+
+// Load family codes from file
+function loadFamilyCodes() {
+    try {
+        if (fsSync.existsSync(FAMILY_CODES_FILE)) {
+            const data = fsSync.readFileSync(FAMILY_CODES_FILE, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (error) {
+        console.error('Error loading family codes:', error);
+    }
+    return {};
+}
+
+// Save family codes to file
+function saveFamilyCodes(codes) {
+    try {
+        fsSync.writeFileSync(FAMILY_CODES_FILE, JSON.stringify(codes, null, 2), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error saving family codes:', error);
+        return false;
+    }
+}
 
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -1710,9 +1738,9 @@ app.post('/api/notifications/dismiss', async (req, res) => {
 
 // Family access code generation
 app.post('/api/family/generate-code', (req, res) => {
-    const { pilotUsername, memberName, airline } = req.body;
+    const { pilotUsername, memberName, airline, pilotPassword } = req.body;
     
-    if (!pilotUsername || !memberName) {
+    if (!pilotUsername || !memberName || !pilotPassword) {
         return res.status(400).json({
             success: false,
             error: 'Missing required fields'
@@ -1722,12 +1750,35 @@ app.post('/api/family/generate-code', (req, res) => {
     // Generate a unique 8-character access code
     const code = Math.random().toString(36).substring(2, 10).toUpperCase();
     
-    res.json({
-        success: true,
+    // Load existing codes
+    const familyCodes = loadFamilyCodes();
+    
+    // Store the code with pilot credentials
+    familyCodes[code] = {
         code: code,
-        pilotUsername: pilotUsername,
-        memberName: memberName
-    });
+        pilotEmployeeId: pilotUsername,
+        password: pilotPassword,
+        airline: airline || 'abx',
+        memberName: memberName,
+        pilotName: pilotUsername,
+        createdAt: new Date().toISOString()
+    };
+    
+    // Save to file
+    if (saveFamilyCodes(familyCodes)) {
+        console.log(`✅ Generated family code: ${code} for ${memberName} (Pilot: ${pilotUsername})`);
+        res.json({
+            success: true,
+            code: code,
+            pilotUsername: pilotUsername,
+            memberName: memberName
+        });
+    } else {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to save family code'
+        });
+    }
 });
 
 // Auth login endpoint for family code validation
@@ -1736,20 +1787,25 @@ app.post('/api/auth/login', async (req, res) => {
     
     if (accountType === 'family') {
         // For family accounts, validate the access code
-        // In a real implementation, this would check against a database
-        // For now, we'll accept any 8-character uppercase code format
-        if (username && username.length >= 6 && username.length <= 10) {
+        const familyCodes = loadFamilyCodes();
+        const codeData = familyCodes[username];
+        
+        if (codeData) {
+            console.log(`✅ Valid family code: ${username} for ${codeData.memberName}`);
             return res.json({
                 success: true,
                 accountType: 'family',
-                memberName: 'Family Member',
-                pilotName: 'Pilot',
-                airline: 'abx'
+                memberName: codeData.memberName,
+                pilotName: codeData.pilotName || codeData.pilotEmployeeId,
+                airline: codeData.airline,
+                pilotEmployeeId: codeData.pilotEmployeeId,
+                password: codeData.password
             });
         } else {
+            console.error(`❌ Invalid family access code: ${username}`);
             return res.status(401).json({
                 success: false,
-                error: 'Invalid family access code format'
+                error: 'Invalid family access code'
             });
         }
     }
@@ -1759,6 +1815,85 @@ app.post('/api/auth/login', async (req, res) => {
         success: true,
         accountType: accountType || 'pilot'
     });
+});
+
+// Get family codes for a pilot
+app.post('/api/family/get-codes', (req, res) => {
+    const { pilotEmployeeId } = req.body;
+    
+    if (!pilotEmployeeId) {
+        return res.status(400).json({
+            success: false,
+            error: 'Pilot employee ID required'
+        });
+    }
+    
+    try {
+        const familyCodes = JSON.parse(fs.readFileSync(familyCodesPath, 'utf8'));
+        
+        // Find all codes belonging to this pilot
+        const pilotCodes = [];
+        for (const [code, data] of Object.entries(familyCodes)) {
+            if (data.pilotEmployeeId === pilotEmployeeId) {
+                pilotCodes.push({
+                    id: code,
+                    code: code,
+                    memberName: data.memberName,
+                    createdAt: data.createdAt || new Date().toISOString()
+                });
+            }
+        }
+        
+        res.json({
+            success: true,
+            codes: pilotCodes
+        });
+    } catch (error) {
+        console.error('Error getting family codes:', error);
+        res.json({
+            success: true,
+            codes: []
+        });
+    }
+});
+
+// Revoke family access code
+app.delete('/api/family/revoke-code/:code', (req, res) => {
+    const { code } = req.params;
+    
+    if (!code) {
+        return res.status(400).json({
+            success: false,
+            error: 'Access code required'
+        });
+    }
+    
+    try {
+        const familyCodes = JSON.parse(fs.readFileSync(familyCodesPath, 'utf8'));
+        
+        if (familyCodes[code]) {
+            delete familyCodes[code];
+            fs.writeFileSync(familyCodesPath, JSON.stringify(familyCodes, null, 2));
+            
+            console.log(`🔐 Revoked family access code: ${code}`);
+            
+            res.json({
+                success: true,
+                message: 'Family access code revoked successfully'
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                error: 'Access code not found'
+            });
+        }
+    } catch (error) {
+        console.error('Error revoking family code:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to revoke access code'
+        });
+    }
 });
 
 

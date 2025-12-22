@@ -1,5 +1,5 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "buildDate": "2025-12-22",
   "features": [
     "🎨 New bubbly, friendly UI design with rounded buttons",
@@ -8,7 +8,8 @@
     "📊 Real-time scraping status with progress indicator",
     "⚡ Streamlined interface - removed pull-to-refresh",
     "🐛 Fixed VPS Puppeteer for reliable auto-scraping",
-    "✨ Cleaner UI without online/offline indicators"
+    "🌐 Server status indicator with real-time health checks",
+    "📅 Optimized monthly calendar - only shows weeks with days"
   ],
-  "changelog": "Version 2.0.0 - Major UI/UX Overhaul: Redesigned with bubbly elements, pill-shaped buttons, improved mobile experience, 3-month auto-scraper, real-time progress tracking, and fixed VPS Puppeteer issues."
+  "changelog": "Version 1.0.2 - Bug Fixes: Fixed server status indicator to not cache offline state, optimized monthly calendar to only show weeks containing days from the month."
 }

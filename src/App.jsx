@@ -339,6 +339,7 @@ function App() {
           headers: {
             'Content-Type': 'application/json'
           },
+          cache: 'no-store',
           signal: AbortSignal.timeout(5000)
         })
         
@@ -727,6 +728,28 @@ function App() {
       if (cachedProfile) setPilotProfile(cachedProfile)
       if (cachedLocation) setUserLocation(cachedLocation)
       
+      // Load family codes from server for pilot accounts
+      if (cachedToken && cachedUserType === 'pilot' && cachedUsername) {
+        try {
+          console.log('📋 Loading family codes from server...')
+          const response = await apiCall('/api/family/get-codes', {
+            method: 'POST',
+            body: JSON.stringify({ pilotEmployeeId: cachedUsername })
+          })
+          
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success && result.codes) {
+              setFamilyAccessCodes(result.codes)
+              await localforage.setItem('familyAccessCodes', result.codes)
+              console.log(`✅ Loaded ${result.codes.length} family codes from server`)
+            }
+          }
+        } catch (error) {
+          console.log('⚠️ Could not load family codes from server:', error.message)
+        }
+      }
+      
       // Request geolocation permission
       if (!cachedLocation) {
         requestGeolocation()
@@ -945,16 +968,20 @@ function App() {
             return
           }
           
-          // Store the validated family member info
+          // Store the validated family member info from server
           if (authResult.pilotName && authResult.memberName) {
             const codeMapping = await localforage.getItem('familyCodeMapping') || {}
             codeMapping[accessCode] = {
               name: authResult.memberName,
               pilotName: authResult.pilotName,
               pilot: authResult.pilotName,
-              airline: authResult.airline || 'abx'
+              airline: authResult.airline || 'abx',
+              pilotEmployeeId: authResult.pilotEmployeeId,
+              password: authResult.password
             }
             await localforage.setItem('familyCodeMapping', codeMapping)
+            
+            console.log(`✅ Family code validated - Pilot: ${authResult.pilotName}, Member: ${authResult.memberName}`)
           }
           
           console.log('✅ Family access code validated successfully')
@@ -1791,12 +1818,20 @@ function App() {
     }
 
     try {
+      const storedPassword = await localforage.getItem('tempPassword')
+      
+      if (!storedPassword) {
+        alert('Unable to generate code. Please log out and log back in.')
+        return
+      }
+
       const response = await apiCall('/api/family/generate-code', {
         method: 'POST',
         body: JSON.stringify({
           pilotUsername: username,
           memberName: newFamilyMemberName.trim(),
-          airline: airline
+          airline: airline,
+          pilotPassword: storedPassword
         })
       })
 
@@ -1816,22 +1851,12 @@ function App() {
         const updatedCodes = [...familyAccessCodes, newAccess]
         setFamilyAccessCodes(updatedCodes)
         
-        // Store the code mapping globally so family members can look it up
-        const codeMapping = await localforage.getItem('familyCodeMapping') || {}
-        codeMapping[data.code] = {
-          name: newFamilyMemberName.trim(),
-          pilot: username,
-          pilotEmployeeId: pilotProfile?.employeeId || username,
-          pilotName: pilotProfile?.name || username,
-          airline: airline,
-          password: await localforage.getItem('tempPassword') // Store encrypted in production
-        }
-        await localforage.setItem('familyCodeMapping', codeMapping)
-        
         setNewFamilyMemberName('')
         
         // Save to local storage
         await localforage.setItem('familyAccessCodes', updatedCodes)
+        
+        console.log(`✅ Family code generated and stored on server: ${data.code}`)
       } else {
         alert('Failed to generate access code. Please try again.')
       }
@@ -4798,6 +4823,11 @@ function App() {
     let day = 1
     
     for (let i = 0; i < 6; i++) {
+      // Stop adding weeks once we've rendered all days
+      if (day > daysInMonth) {
+        break
+      }
+      
       const week = []
       for (let j = 0; j < 7; j++) {
         if (i === 0 && j < firstDay) {
