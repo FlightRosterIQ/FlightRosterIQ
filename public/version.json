@@ -1,15 +1,15 @@
 {
-  "version": "1.0.2",
-  "buildDate": "2025-12-22",
+  "version": "1.1.0-dev",
+  "buildDate": "2025-12-22T16:30:00Z",
   "features": [
-    "🎨 New bubbly, friendly UI design with rounded buttons",
-    "📱 Improved mobile tab positioning and navigation",
-    "🔄 Enhanced 3-month auto-scraping (previous, current, next)",
-    "📊 Real-time scraping status with progress indicator",
-    "⚡ Streamlined interface - removed pull-to-refresh",
-    "🐛 Fixed VPS Puppeteer for reliable auto-scraping",
-    "🌐 Server status indicator with real-time health checks",
-    "📅 Optimized monthly calendar - only shows weeks with days"
+    "🎨 Clean, modern card-based design",
+    "🌙 Enhanced dark theme with deep purple (#1A1A2E)",
+    "💜 Brighter indigo accent (#6B7FFF)",
+    "📱 Mobile-first responsive layout",
+    "✨ Subtle shadows and smooth transitions",
+    "⚡ Fast and lightweight UI",
+    "🎯 Professional visual hierarchy",
+    "🔄 System theme preference support"
   ],
-  "changelog": "Version 1.0.2 - Bug Fixes: Fixed server status indicator to not cache offline state, optimized monthly calendar to only show weeks containing days from the month."
+  "changelog": "Version 1.1.0-dev - Professional Design: Card-based UI with clean white/purple cards, enhanced dark theme with #1A1A2E background and #6B7FFF accent, subtle borders and shadows for depth."
 }

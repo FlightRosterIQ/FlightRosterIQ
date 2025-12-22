@@ -4,8 +4,9 @@
   "description": "Progressive web app for airline crew scheduling with offline access, weather data, and crew coordination",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#007bff",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
   "orientation": "portrait-primary",
   "scope": "/",
   "icons": [
