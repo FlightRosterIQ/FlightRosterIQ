@@ -968,6 +968,8 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
         // Scrape remarks/notifications from the News tab
         console.log('📬 Extracting remarks and notifications from News tab...');
         
+        const allNewsItems = [];
+        
         // Try to click on News/Messages tab if it exists
         try {
             const newsTabClicked = await page.evaluate(() => {
@@ -988,6 +990,164 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
             if (newsTabClicked) {
                 console.log('✅ Clicked News tab, waiting for content...');
                 await sleep(3000);
+                
+                // Find all sub-tabs within the News section
+                const subTabs = await page.evaluate(() => {
+                    const tabButtons = Array.from(document.querySelectorAll('[role="tab"], button[class*="tab"], .tab-button, [class*="Tab"]'));
+                    return tabButtons.map((btn, idx) => ({
+                        index: idx,
+                        text: btn.textContent.trim(),
+                        selector: `[role="tab"]:nth-of-type(${idx + 1})`
+                    })).filter(tab => tab.text.length > 0 && tab.text.length < 50);
+                });
+                
+                console.log(`📑 Found ${subTabs.length} sub-tabs in News section`);
+                
+                // Click each sub-tab and scrape content
+                for (const tab of subTabs) {
+                    try {
+                        console.log(`📂 Clicking sub-tab: "${tab.text}"...`);
+                        
+                        await page.evaluate((tabText) => {
+                            const tabs = Array.from(document.querySelectorAll('[role="tab"], button[class*="tab"]'));
+                            const targetTab = tabs.find(t => t.textContent.trim() === tabText);
+                            if (targetTab) {
+                                targetTab.click();
+                                return true;
+                            }
+                            return false;
+                        }, tab.text);
+                        
+                        await sleep(2000);
+                        
+                        // Find all individual notification items in this tab
+                        const notificationItems = await page.evaluate(() => {
+                            const items = [];
+                            const selectors = [
+                                '[data-test-id^="news-item"]',
+                                '[data-test-id*="notification-item"]',
+                                '[class*="news-item"]',
+                                '[class*="notification-item"]',
+                                '[class*="message-item"]',
+                                'li[class*="item"]',
+                                'div[class*="card"]',
+                                '[role="listitem"]'
+                            ];
+                            
+                            for (const selector of selectors) {
+                                const elements = document.querySelectorAll(selector);
+                                if (elements.length > 0) {
+                                    elements.forEach((elem, idx) => {
+                                        items.push({
+                                            index: idx,
+                                            selector: selector,
+                                            preview: elem.textContent.trim().substring(0, 100)
+                                        });
+                                    });
+                                    break;
+                                }
+                            }
+                            
+                            return items;
+                        });
+                        
+                        console.log(`📋 Found ${notificationItems.length} notification items in "${tab.text}"`);
+                        
+                        // Click into each notification and extract full content
+                        for (const item of notificationItems.slice(0, 20)) { // Limit to 20 items per tab
+                            try {
+                                console.log(`📰 Opening notification ${item.index + 1}...`);
+                                
+                                // Click the notification item
+                                const clicked = await page.evaluate((selector, idx) => {
+                                    const items = document.querySelectorAll(selector);
+                                    if (items[idx]) {
+                                        items[idx].click();
+                                        return true;
+                                    }
+                                    return false;
+                                }, item.selector, item.index);
+                                
+                                if (!clicked) {
+                                    console.log(`⚠️ Could not click notification ${item.index + 1}`);
+                                    continue;
+                                }
+                                
+                                await sleep(1500);
+                                
+                                // Extract full content from opened notification
+                                const fullContent = await page.evaluate((tabName) => {
+                                    // Look for modal, dialog, or expanded content area
+                                    const contentSelectors = [
+                                        '[role="dialog"]',
+                                        '[class*="modal"]',
+                                        '[class*="dialog"]',
+                                        '[class*="detail"]',
+                                        '[class*="expanded"]',
+                                        '[data-test-id*="detail"]',
+                                        '[data-test-id*="content"]'
+                                    ];
+                                    
+                                    let contentArea = null;
+                                    for (const sel of contentSelectors) {
+                                        const elem = document.querySelector(sel);
+                                        if (elem && elem.offsetHeight > 0) {
+                                            contentArea = elem;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!contentArea) {
+                                        contentArea = document.body;
+                                    }
+                                    
+                                    // Extract structured content
+                                    const title = contentArea.querySelector('h1, h2, h3, [class*="title"], [data-test-id*="title"]')?.textContent.trim() || '';
+                                    const date = contentArea.querySelector('[class*="date"], time, [data-test-id*="date"]')?.textContent.trim() || '';
+                                    const body = contentArea.querySelector('[class*="body"], [class*="content"], p, [data-test-id*="body"]')?.textContent.trim() || '';
+                                    
+                                    // Get all text if structured extraction fails
+                                    const fullText = !title && !body ? contentArea.textContent.trim() : '';
+                                    
+                                    return {
+                                        title: title || 'Notification',
+                                        date: date || new Date().toISOString(),
+                                        body: body || fullText,
+                                        message: [title, body || fullText].filter(Boolean).join(' - '),
+                                        category: tabName,
+                                        type: 'news',
+                                        read: false
+                                    };
+                                }, tab.text);
+                                
+                                if (fullContent.message && fullContent.message.length > 10) {
+                                    allNewsItems.push(fullContent);
+                                    console.log(`✅ Extracted: "${fullContent.title.substring(0, 50)}..."`);
+                                }
+                                
+                                // Close the notification (look for close button)
+                                await page.evaluate(() => {
+                                    const closeButtons = document.querySelectorAll('[aria-label*="close"], [class*="close"], button[class*="Close"]');
+                                    if (closeButtons.length > 0) {
+                                        closeButtons[0].click();
+                                    }
+                                    // Also try pressing Escape
+                                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+                                });
+                                
+                                await sleep(500);
+                                
+                            } catch (itemError) {
+                                console.log(`⚠️ Error extracting notification ${item.index + 1}:`, itemError.message);
+                            }
+                        }
+                        
+                        console.log(`✅ Extracted ${notificationItems.length} items from "${tab.text}"`);
+                        
+                    } catch (tabError) {
+                        console.log(`⚠️ Error scraping sub-tab "${tab.text}":`, tabError.message);
+                    }
+                }
             } else {
                 console.log('⚠️ News tab not found, checking current page...');
             }
@@ -995,6 +1155,7 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
             console.log('⚠️ Could not click News tab:', e.message);
         }
         
+        // Merge all news items from sub-tabs with fallback scraping
         const remarks = await page.evaluate(() => {
             const remarksList = [];
             
@@ -1093,8 +1254,24 @@ const authenticateUser = async (employeeId, password, airline = 'ABX', targetMon
             return remarksList;
         });
         
-        scheduleData.remarks = remarks;
-        console.log(`📬 Found ${remarks.length} news/notifications from crew portal`);
+        // Combine sub-tab items with fallback scraped items
+        const combinedRemarks = [...allNewsItems, ...remarks];
+        
+        // Remove duplicates based on message content
+        const uniqueRemarks = [];
+        const seen = new Set();
+        
+        for (const remark of combinedRemarks) {
+            const key = remark.message.substring(0, 100); // Use first 100 chars as key
+            if (!seen.has(key)) {
+                seen.add(key);
+                uniqueRemarks.push(remark);
+            }
+        }
+        
+        scheduleData.remarks = uniqueRemarks;
+        console.log(`📬 Found ${uniqueRemarks.length} total news/notifications from crew portal (${allNewsItems.length} from sub-tabs, ${remarks.length} from fallback)`);
+
         
         // Extract pilot profile information (only on first login)
         let pilotProfile = null;

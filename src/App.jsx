@@ -112,6 +112,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState('')
   const [scrapingInProgress, setScrapingInProgress] = useState(false)
+  const [serverStatus, setServerStatus] = useState('checking')
   const [error, setError] = useState(null)
   const [credentials, setCredentials] = useState({ username: '', password: '' })
   const [weatherData, setWeatherData] = useState({})
@@ -197,6 +198,14 @@ function App() {
         styleOverrides: {
           root: {
             fontWeight: 500,
+            borderRadius: '16px',
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            borderRadius: '12px',
           },
         },
       },
@@ -318,6 +327,37 @@ function App() {
     // Check every 5 minutes for updates
     const interval = setInterval(checkVersion, 5 * 60 * 1000)
     
+    return () => clearInterval(interval)
+  }, [])
+
+  // Server health check
+  useEffect(() => {
+    const checkServerHealth = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/health`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(5000)
+        })
+        
+        if (response.ok) {
+          setServerStatus('online')
+        } else {
+          setServerStatus('offline')
+        }
+      } catch (error) {
+        setServerStatus('offline')
+      }
+    }
+
+    // Check immediately
+    checkServerHealth()
+
+    // Check every 30 seconds
+    const interval = setInterval(checkServerHealth, 30000)
+
     return () => clearInterval(interval)
   }, [])
 
@@ -2582,7 +2622,8 @@ function App() {
         return
       }
       
-      // Calculate 3 months to scrape (previous, current, next)
+      // Calculate months to scrape - manual refresh only scrapes current and next month
+      // (unless previous month is not cached)
       const now = new Date()
       const currentMonthNum = now.getMonth() + 1 // JavaScript months are 0-indexed
       const currentYearNum = now.getFullYear()
@@ -2601,11 +2642,25 @@ function App() {
         nextYear += 1
       }
       
-      const monthsToScrape = [
-        { month: previousMonth, year: previousYear, label: 'Previous Month' },
+      // Check if previous month is cached
+      const previousMonthCacheKey = `schedule_${previousYear}_${String(previousMonth).padStart(2, '0')}`
+      const previousMonthCached = await localforage.getItem(previousMonthCacheKey)
+      
+      const monthsToScrape = []
+      
+      // Only scrape previous month if it's not cached
+      if (!previousMonthCached) {
+        console.log(`📅 Previous month (${previousYear}-${String(previousMonth).padStart(2, '0')}) not cached - adding to scrape list`)
+        monthsToScrape.push({ month: previousMonth, year: previousYear, label: 'Previous Month' })
+      } else {
+        console.log(`✅ Previous month (${previousYear}-${String(previousMonth).padStart(2, '0')}) is cached - skipping`)
+      }
+      
+      // Always scrape current and next month
+      monthsToScrape.push(
         { month: currentMonthNum, year: currentYearNum, label: 'Current Month' },
         { month: nextMonth, year: nextYear, label: 'Next Month' }
-      ]
+      )
       
       // Update scraping status
       setScrapingStatus(prev => ({
@@ -4445,6 +4500,34 @@ function App() {
               <Card variant="outlined">
                 <CardContent>
                   <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>🟢</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Server Status Monitoring</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Real-time server connection indicator - green when online, red when offline
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>🟢</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Server Status Monitoring</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Real-time server connection indicator - green when online, red when offline
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
                     <Box sx={{ fontSize: 24 }}>📱</Box>
                     <Box>
                       <Typography variant="subtitle1" fontWeight="bold">Offline Support</Typography>
@@ -5814,6 +5897,21 @@ function App() {
             <Typography variant="h6" component="h1" sx={{ fontWeight: 700, color: 'primary.main' }}>
               FlightRosterIQ
             </Typography>
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                backgroundColor: serverStatus === 'online' ? '#22c55e' : serverStatus === 'offline' ? '#ef4444' : '#fbbf24',
+                boxShadow: serverStatus === 'online' ? '0 0 8px #22c55e' : serverStatus === 'offline' ? '0 0 8px #ef4444' : '0 0 8px #fbbf24',
+                animation: serverStatus === 'checking' ? 'pulse 2s infinite' : 'none',
+                '@keyframes pulse': {
+                  '0%, 100%': { opacity: 1 },
+                  '50%': { opacity: 0.5 }
+                }
+              }}
+              title={serverStatus === 'online' ? 'Server Online' : serverStatus === 'offline' ? 'Server Offline' : 'Checking Server...'}
+            />
           </Stack>
           
           {token && (
