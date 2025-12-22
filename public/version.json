@@ -1,15 +1,15 @@
 {
   "version": "1.1.0-dev",
-  "buildDate": "2025-12-22",
+  "buildDate": "2025-12-22T16:30:00Z",
   "features": [
-    "� Clean, modern card-based design",
+    "🎨 Clean, modern card-based design",
+    "🌙 Enhanced dark theme with deep purple (#1A1A2E)",
+    "💜 Brighter indigo accent (#6B7FFF)",
     "📱 Mobile-first responsive layout",
-    "🌟 Subtle shadows and borders",
+    "✨ Subtle shadows and smooth transitions",
     "⚡ Fast and lightweight UI",
-    "🌍 Clear visual hierarchy",
-    "🖌️ Improved readability",
-    "🎯 Consistent spacing and sizing",
-    "💡 Better dark mode support"
+    "🎯 Professional visual hierarchy",
+    "🔄 System theme preference support"
   ],
-  "changelog": "Version 1.1.0-dev - Clean Modern Design: Simplified UI with clean cards, subtle borders, better spacing, and improved readability throughout the app."
+  "changelog": "Version 1.1.0-dev - Professional Design: Card-based UI with clean white/purple cards, enhanced dark theme with #1A1A2E background and #6B7FFF accent, subtle borders and shadows for depth."
 }
