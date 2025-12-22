@@ -134,35 +134,46 @@ function App() {
   const [theme, setTheme] = useState('light')
   const [showThemeDropdown, setShowThemeDropdown] = useState(false)
   
-  // Material-UI Theme Configuration - Clean Modern Design
+  // Material-UI Theme Configuration - Professional Card Design
   const muiTheme = useMemo(() => createTheme({
     palette: {
       mode: theme,
       primary: {
-        main: theme === 'dark' ? '#3b82f6' : '#2563eb',
-        light: '#60a5fa',
-        dark: '#1e40af',
+        main: theme === 'dark' ? '#6B7FFF' : '#4C5FD5',
+        light: theme === 'dark' ? '#8B9AFF' : '#6B7FE8',
+        dark: theme === 'dark' ? '#5565E8' : '#3D4CAA',
+        contrastText: '#ffffff',
       },
       secondary: {
-        main: theme === 'dark' ? '#8b5cf6' : '#7c3aed',
-        light: '#a78bfa',
-        dark: '#6d28d9',
+        main: theme === 'dark' ? '#9494A8' : '#717182',
+        light: theme === 'dark' ? '#A8A8B8' : '#8B8B9A',
+        dark: theme === 'dark' ? '#7A7A8A' : '#5A5A68',
       },
       background: {
-        default: theme === 'dark' ? '#0f172a' : '#f8fafc',
-        paper: theme === 'dark' ? '#1e293b' : '#ffffff',
+        default: theme === 'dark' ? '#1A1A2E' : '#E8E8EC',
+        paper: theme === 'dark' ? '#252538' : '#ffffff',
       },
       text: {
-        primary: theme === 'dark' ? '#f1f5f9' : '#0f172a',
-        secondary: theme === 'dark' ? '#94a3b8' : '#64748b',
+        primary: theme === 'dark' ? '#E8E8EC' : '#1F1F2E',
+        secondary: theme === 'dark' ? '#9494A8' : '#717182',
       },
-      divider: theme === 'dark' ? '#334155' : '#e2e8f0',
+      divider: theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+      success: {
+        main: '#22C55E',
+        light: '#4ADE80',
+        dark: '#16A34A',
+      },
+      error: {
+        main: theme === 'dark' ? '#FF5555' : '#EF4444',
+        light: '#F87171',
+        dark: '#DC2626',
+      },
     },
     typography: {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
       h4: {
-        fontWeight: 700,
-        fontSize: '1.875rem',
+        fontWeight: 600,
+        fontSize: '1.75rem',
       },
       h5: {
         fontWeight: 600,
@@ -173,10 +184,12 @@ function App() {
         fontSize: '1.25rem',
       },
       body1: {
-        fontSize: '1rem',
+        fontSize: '0.9375rem',
+        fontWeight: 400,
       },
       body2: {
         fontSize: '0.875rem',
+        fontWeight: 400,
       },
     },
     shape: {
@@ -187,13 +200,15 @@ function App() {
         styleOverrides: {
           root: {
             textTransform: 'none',
-            fontWeight: 600,
+            fontWeight: 500,
             padding: '10px 20px',
             fontSize: '0.875rem',
-            borderRadius: '8px',
+            borderRadius: '10px',
             boxShadow: 'none',
+            transition: 'all 0.2s ease',
             '&:hover': {
-              boxShadow: 'none',
+              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+              transform: 'translateY(-1px)',
             },
           },
         },
@@ -201,11 +216,17 @@ function App() {
       MuiCard: {
         styleOverrides: {
           root: {
-            backgroundColor: theme === 'dark' ? '#1e293b' : '#ffffff',
-            border: `1px solid ${theme === 'dark' ? '#334155' : '#e2e8f0'}`,
+            backgroundColor: theme === 'dark' ? '#252538' : '#ffffff',
+            border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.08)',
             boxShadow: theme === 'dark'
-              ? 'none'
-              : '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+              ? '0 2px 4px 0 rgba(0, 0, 0, 0.3)'
+              : '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              boxShadow: theme === 'dark'
+                ? '0 4px 8px 0 rgba(0, 0, 0, 0.4)'
+                : '0 4px 8px 0 rgba(0, 0, 0, 0.08)',
+            },
           },
         },
       },
@@ -213,18 +234,20 @@ function App() {
         styleOverrides: {
           root: {
             fontWeight: 500,
-            borderRadius: '6px',
+            fontSize: '0.8125rem',
+            borderRadius: '8px',
           },
         },
       },
       MuiIconButton: {
         styleOverrides: {
           root: {
-            borderRadius: '8px',
+            borderRadius: '10px',
+            transition: 'all 0.2s ease',
             '&:hover': {
               backgroundColor: theme === 'dark' 
-                ? 'rgba(148, 163, 184, 0.1)' 
-                : 'rgba(100, 116, 139, 0.1)',
+                ? 'rgba(255, 255, 255, 0.05)' 
+                : 'rgba(0, 0, 0, 0.04)',
             },
           },
         },

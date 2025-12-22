@@ -45,43 +45,45 @@ html {
   border-width: 0;
 }
 
-/* Clean Design System Colors */
+/* Professional Card Design System Colors */
 :root {
   /* Light Mode */
-  --primary-color: #2563eb;
-  --primary-light: #60a5fa;
-  --primary-dark: #1e40af;
-  --secondary-color: #7c3aed;
-  --background: #f8fafc;
+  --primary-color: #4C5FD5;
+  --primary-light: #6B7FE8;
+  --primary-dark: #3D4CAA;
+  --secondary-color: #717182;
+  --background: #E8E8EC;
   --card-background: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --border-color: #e2e8f0;
-  --separator: #e2e8f0;
+  --text-primary: #1F1F2E;
+  --text-secondary: #717182;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --separator: rgba(0, 0, 0, 0.08);
+  --muted-bg: #ececf0;
   
   /* Shadows */
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 8px 0 rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 20px 0 rgba(0, 0, 0, 0.1);
 }
 
 [data-theme="dark"] {
-  /* Dark Mode */
-  --primary-color: #3b82f6;
-  --primary-light: #60a5fa;
-  --primary-dark: #1e40af;
-  --secondary-color: #8b5cf6;
-  --background: #0f172a;
-  --card-background: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --border-color: #334155;
-  --separator: #334155;
+  /* Dark Mode - Deep Purple-Blue Theme */
+  --primary-color: #6B7FFF;
+  --primary-light: #8B9AFF;
+  --primary-dark: #5565E8;
+  --secondary-color: #9494A8;
+  --background: #1A1A2E;
+  --card-background: #252538;
+  --text-primary: #E8E8EC;
+  --text-secondary: #9494A8;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --separator: rgba(255, 255, 255, 0.1);
+  --muted-bg: #2A2A3E;
   
   /* Dark Shadows */
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-lg: none;
+  --shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px 0 rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 20px 0 rgba(0, 0, 0, 0.5);
 }
 
 body {

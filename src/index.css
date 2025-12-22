@@ -12,19 +12,19 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Clean background colors */
+/* Professional background colors */
 body {
   margin: 0;
   display: flex;
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
-  background: #f8fafc;
+  background: #E8E8EC;
   overflow-x: hidden;
 }
 
 body[data-theme="dark"] {
-  background: #0f172a;
+  background: #1A1A2E;
 }
 
 /* Smooth scrolling */
