@@ -48,6 +48,13 @@ import {
   IconButton
 } from './components/ui'
 
+import { FlightCard } from './components/FlightCard'
+import { CrewCard } from './components/CrewCard'
+import { MonthlyView } from './components/MonthlyView'
+import { DailyView } from './components/DailyView'
+import { FriendsView } from './components/FriendsView'
+import { SettingsView } from './components/SettingsView'
+
 import { cn } from './lib/utils'
 import { API_BASE_URL } from './config'
 
@@ -376,163 +383,40 @@ function App() {
 
         {/* Monthly View */}
         {activeTab === 'monthly' && !loading && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <h2 className="text-xl font-semibold">Monthly Schedule</h2>
-                <p className="text-muted-foreground">{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
-              </CardHeader>
-              <CardContent>
-                {schedule?.flights?.length > 0 ? (
-                  <div className="space-y-3">
-                    {schedule.flights.slice(0, 10).map((flight, idx) => (
-                      <Card key={idx} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedFlight(flight)}>
-                        <CardContent className="py-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                                <Plane className="w-6 h-6 text-primary" />
-                              </div>
-                              <div>
-                                <div className="font-semibold text-lg">{flight.origin} → {flight.destination}</div>
-                                <div className="text-sm text-muted-foreground">Flight {flight.flightNumber}</div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-medium">{new Date(flight.departure).toLocaleDateString()}</div>
-                              <div className="text-sm text-muted-foreground">{new Date(flight.departure).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <Plane className="w-16 h-16 text-muted mx-auto mb-4" />
-                    <p className="text-muted-foreground">No flights scheduled</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          <MonthlyView 
+            schedule={schedule}
+            currentMonth={currentMonth}
+            onFlightClick={(flight) => setSelectedFlight(flight)}
+          />
         )}
 
         {/* Daily View */}
         {activeTab === 'daily' && !loading && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <h2 className="text-xl font-semibold">Daily Schedule</h2>
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="mt-2"
-                />
-              </CardHeader>
-              <CardContent>
-                {dailyFlights.length > 0 ? (
-                  <div className="space-y-4">
-                    {dailyFlights.map((flight, idx) => (
-                      <Card key={idx} className="hover:shadow-md transition-shadow">
-                        <CardContent>
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="text-lg font-semibold">{flight.origin} → {flight.destination}</div>
-                              <div className="text-sm text-muted-foreground mt-1">Flight {flight.flightNumber}</div>
-                              <div className="flex items-center gap-2 mt-2 text-sm">
-                                <Clock className="w-4 h-4 text-muted-foreground" />
-                                <span>{new Date(flight.departure).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                              </div>
-                            </div>
-                            <Badge variant="primary">{flight.aircraftType || 'B767'}</Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">No flights on this date</p>
-                  </div>
-                )}
-
-                {hotels.length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      <Hotel className="w-5 h-5 text-primary" />
-                      Layover Hotels
-                    </h3>
-                    {hotels.map((hotel, idx) => (
-                      <Card key={idx}>
-                        <CardContent>
-                          <div className="font-medium">{hotel.name}</div>
-                          <div className="text-sm text-muted-foreground">{hotel.location}</div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          <DailyView 
+            selectedDate={selectedDate}
+            dailyFlights={dailyFlights}
+            hotels={hotels}
+            onDateChange={(date) => setSelectedDate(date)}
+            onFlightClick={(flight) => setSelectedFlight(flight)}
+          />
         )}
 
         {/* Friends View */}
         {activeTab === 'friends' && !loading && (
-          <Card>
-            <CardHeader>
-              <h2 className="text-xl font-semibold">Friends & Crew</h2>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12">
-                <Users className="w-16 h-16 text-muted mx-auto mb-4" />
-                <p className="text-muted-foreground">No friends added yet</p>
-                <Button className="mt-4">Add Friends</Button>
-              </div>
-            </CardContent>
-          </Card>
+          <FriendsView 
+            friends={[]}
+            onAddFriend={() => console.log('Add friend functionality coming soon')}
+          />
         )}
 
         {/* Settings View */}
         {activeTab === 'settings' && !loading && (
-          <Card>
-            <CardHeader>
-              <h2 className="text-xl font-semibold">Settings</h2>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <h3 className="font-semibold mb-3">Pilot Information</h3>
-                <div className="space-y-3">
-                  <Input label="Full Name" defaultValue={username} />
-                  <Input label="Employee ID" placeholder="Enter ID" />
-                  <Select label="Base">
-                    <option>CVG - Cincinnati</option>
-                    <option>ILN - Wilmington</option>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="font-semibold mb-3">Notifications</h3>
-                <div className="flex items-center justify-between">
-                  <span>Schedule Changes</span>
-                  <input type="checkbox" className="w-4 h-4" defaultChecked />
-                </div>
-              </div>
-
-              <div>
-                <h3 className="font-semibold mb-3">Preferences</h3>
-                <Select label="Timezone">
-                  <option>UTC</option>
-                  <option>Local</option>
-                </Select>
-              </div>
-
-              <Button variant="danger" className="w-full">Delete Account</Button>
-            </CardContent>
-          </Card>
+          <SettingsView 
+            username={username}
+            settings={{}}
+            onSettingsChange={(settings) => console.log('Settings changed:', settings)}
+            onDeleteAccount={() => console.log('Delete account functionality coming soon')}
+          />
         )}
       </main>
 
@@ -544,40 +428,44 @@ function App() {
           </DialogHeader>
           <DialogContent>
             <div className="space-y-4">
-              <div>
-                <div className="text-2xl font-bold">
+              {/* Flight Header */}
+              <div className="bg-card rounded-xl shadow-sm p-5 border border-border">
+                <div className="text-2xl font-bold text-foreground">
                   {selectedFlight.origin} → {selectedFlight.destination}
                 </div>
-                <div className="text-muted-foreground">Flight {selectedFlight.flightNumber}</div>
+                <div className="text-muted-foreground mt-1">Flight {selectedFlight.flightNumber}</div>
+                {selectedFlight.aircraftType && (
+                  <Badge variant="primary" className="mt-3">{selectedFlight.aircraftType}</Badge>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-muted-foreground">Departure</div>
-                  <div className="font-semibold">
+              {/* Times */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-card rounded-xl shadow-sm p-4 border border-border">
+                  <div className="text-sm text-muted-foreground mb-1">Departure</div>
+                  <div className="font-semibold text-foreground">
                     {new Date(selectedFlight.departure).toLocaleString()}
                   </div>
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Arrival</div>
-                  <div className="font-semibold">
+                <div className="bg-card rounded-xl shadow-sm p-4 border border-border">
+                  <div className="text-sm text-muted-foreground mb-1">Arrival</div>
+                  <div className="font-semibold text-foreground">
                     {new Date(selectedFlight.arrival).toLocaleString()}
                   </div>
                 </div>
               </div>
 
+              {/* Crew */}
               {selectedFlight.crew && selectedFlight.crew.length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-2">Crew</h3>
-                  <div className="space-y-2">
+                  <h3 className="font-semibold mb-3 text-foreground">Crew Members</h3>
+                  <div className="space-y-3">
                     {selectedFlight.crew.map((member, idx) => (
-                      <div key={idx} className="flex items-center gap-3">
-                        <Avatar size="sm">{member.name?.[0]}</Avatar>
-                        <div>
-                          <div className="font-medium">{member.name}</div>
-                          <div className="text-sm text-muted-foreground">{member.role}</div>
-                        </div>
-                      </div>
+                      <CrewCard 
+                        key={idx} 
+                        member={member}
+                        onContact={(type, member) => console.log(`Contact ${member.name} via ${type}`)}
+                      />
                     ))}
                   </div>
                 </div>
