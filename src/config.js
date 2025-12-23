@@ -14,8 +14,8 @@ const config = {
   },
   production: {
     // DigitalOcean server IP for FlightRosterIQ crew scraper
-    API_BASE_URL: 'http://157.245.126.24:8080',
-    WS_URL: 'ws://157.245.126.24:8080'
+    API_BASE_URL: 'https://157.245.126.24:8080',
+    WS_URL: 'wss://157.245.126.24:8080'
   }
 };
 

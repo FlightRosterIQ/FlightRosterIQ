@@ -108,7 +108,7 @@ function App() {
   const [messageInput, setMessageInput] = useState('')
   
   // Force production backend URL - ALWAYS use VPS directly
-  const API_URL = 'http://157.245.126.24:8080'
+  const API_URL = 'https://157.245.126.24:8080'
   
   // CRITICAL: Log API URL configuration on mount
   useEffect(() => {
