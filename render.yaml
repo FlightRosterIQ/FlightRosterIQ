@@ -2,9 +2,8 @@ services:
   - type: web
     name: flightroster-backend
     runtime: node
-    rootDir: backend
-    buildCommand: bash render-build.sh
-    startCommand: node server.js
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node server.js
     plan: free
     envVars:
       - key: NODE_ENV
