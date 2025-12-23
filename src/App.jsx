@@ -59,6 +59,9 @@ import { cn } from './lib/utils'
 import { API_BASE_URL } from './config'
 
 function App() {
+  // VERSION: v2025.12.23.1625 - FORCE CACHE BUST
+  // API Configuration - MUST use VPS directly
+  
   // Authentication & User State
   const [token, setToken] = useState(null)
   const [username, setUsername] = useState('')
@@ -109,11 +112,17 @@ function App() {
   
   // CRITICAL: Log API URL configuration on mount
   useEffect(() => {
-    console.log('%c🔧 API CONFIGURATION', 'background: #4C5FD5; color: white; padding: 4px 8px; font-weight: bold;')
+    console.log('%c🔧 API CONFIGURATION v2025.12.23.1625', 'background: #4C5FD5; color: white; padding: 4px 8px; font-weight: bold;')
     console.log('API_URL:', API_URL)
     console.log('API_BASE_URL:', API_BASE_URL)
     console.log('Current location:', window.location.href)
     console.log('Will call auth at:', `${API_URL}/api/authenticate`)
+    
+    // Test connectivity immediately on mount
+    fetch(`${API_URL}/api/health`)
+      .then(res => res.json())
+      .then(data => console.log('✅ VPS Health check SUCCESS:', data))
+      .catch(err => console.error('❌ VPS Health check FAILED:', err))
   }, [])
   
   // Log on every render to verify URL
