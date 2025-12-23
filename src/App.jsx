@@ -154,11 +154,11 @@ function App() {
     setLoadingMessage('Authenticating...')
 
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
+      const response = await fetch(`${API_URL}/api/authenticate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: credentials.username,
+          employeeId: credentials.username,
           password: credentials.password,
           airline: airline.toUpperCase()
         })
@@ -166,17 +166,19 @@ function App() {
 
       const data = await response.json()
 
-      if (response.ok) {
-        setToken(data.token)
+      if (data.success && data.authenticated) {
+        // Mock token for now since backend doesn't provide one
+        const mockToken = btoa(`${credentials.username}:${Date.now()}`)
+        setToken(mockToken)
         setUsername(credentials.username)
-        await localforage.setItem('crewToken', data.token)
+        await localforage.setItem('crewToken', mockToken)
         await localforage.setItem('crewUsername', credentials.username)
         await localforage.setItem('crewAirline', airline)
         
         // Fetch schedule
-        await fetchSchedule(data.token)
+        await fetchSchedule(mockToken)
       } else {
-        setError(data.message || 'Login failed')
+        setError(data.error || data.message || 'Authentication not available. Backend is in lightweight mode.')
       }
     } catch (err) {
       setError('Connection error. Please check your internet connection.')
@@ -192,21 +194,25 @@ function App() {
     setLoadingMessage('Fetching your schedule...')
 
     try {
-      const response = await fetch(`${API_URL}/api/schedule`, {
-        method: 'GET',
+      const response = await fetch(`${API_URL}/api/scrape`, {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          employeeId: username,
+          airline: airline.toUpperCase()
+        })
       })
 
       const data = await response.json()
 
-      if (response.ok) {
-        setSchedule(data)
-        await localforage.setItem('crewSchedule', data)
+      if (data.success && data.schedule) {
+        setSchedule(data.schedule)
+        await localforage.setItem('crewSchedule', data.schedule)
       } else {
-        setError(data.message || 'Failed to fetch schedule')
+        // For now, show error that scraping is not available
+        setError(data.message || 'Schedule scraping is not available in lightweight mode')
       }
     } catch (err) {
       setError('Failed to load schedule')
