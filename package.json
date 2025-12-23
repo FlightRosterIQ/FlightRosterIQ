@@ -42,7 +42,7 @@
     "localforage": "^1.10.0",
     "lucide-react": "^0.468.0",
     "node-fetch": "^2.7.0",
-    "puppeteer": "^22.15.0",
+    "puppeteer": "^24.15.0",
     "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
     "react-dom": "^17.0.0 || ^18.0.0 || ^19.0.0",
     "tailwind-merge": "^2.6.0"
