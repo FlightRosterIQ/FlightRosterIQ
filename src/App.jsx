@@ -104,7 +104,13 @@ function App() {
   const [selectedChat, setSelectedChat] = useState(null)
   const [messageInput, setMessageInput] = useState('')
   
-  const API_URL = API_BASE_URL
+  // Force production backend URL
+  const API_URL = 'http://157.245.126.24:8080'
+  
+  console.log('🔧 API Configuration:', { 
+    API_BASE_URL_imported: API_BASE_URL,
+    API_URL_used: API_URL 
+  })
 
   // Check for mobile device
   useEffect(() => {
