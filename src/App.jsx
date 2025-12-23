@@ -188,6 +188,7 @@ function App() {
       MuiCard: {
         styleOverrides: {
           root: {
+            borderRadius: '20px',
             boxShadow: theme === 'dark' 
               ? '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)'
               : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
@@ -206,6 +207,29 @@ function App() {
         styleOverrides: {
           root: {
             borderRadius: '12px',
+          },
+        },
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            borderRadius: '20px',
+          },
+        },
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            borderRadius: '24px',
+          },
+        },
+      },
+      MuiTextField: {
+        styleOverrides: {
+          root: {
+            '& .MuiOutlinedInput-root': {
+              borderRadius: '16px',
+            },
           },
         },
       },
