@@ -107,16 +107,17 @@ function App() {
   const [selectedChat, setSelectedChat] = useState(null)
   const [messageInput, setMessageInput] = useState('')
   
-  // Force production backend URL - ALWAYS use VPS directly
-  const API_URL = 'https://157.245.126.24:8080'
+  // Use relative URL - Vercel proxy handles routing to backend
+  const API_URL = API_BASE_URL
   
   // CRITICAL: Log API URL configuration on mount
   useEffect(() => {
-    console.log('%c🔧 API CONFIGURATION v2025.12.23.1625', 'background: #4C5FD5; color: white; padding: 4px 8px; font-weight: bold;')
+    console.log('%c🔧 API CONFIGURATION v2025.12.23.PROXY', 'background: #4C5FD5; color: white; padding: 4px 8px; font-weight: bold;')
     console.log('API_URL:', API_URL)
     console.log('API_BASE_URL:', API_BASE_URL)
     console.log('Current location:', window.location.href)
     console.log('Will call auth at:', `${API_URL}/api/authenticate`)
+    console.log('✓ Using Vercel proxy - no mixed content!')
     
     // Test connectivity immediately on mount
     fetch(`${API_URL}/api/health`)
