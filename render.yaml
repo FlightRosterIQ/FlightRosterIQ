@@ -3,6 +3,7 @@ services:
     name: flightroster-backend
     runtime: node
     rootDir: backend
+    dockerfilePath: null
     buildCommand: bash render-build.sh
     startCommand: node server.js
     envVars:
