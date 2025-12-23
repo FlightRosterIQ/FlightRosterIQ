@@ -104,12 +104,14 @@ function App() {
   const [selectedChat, setSelectedChat] = useState(null)
   const [messageInput, setMessageInput] = useState('')
   
-  // Force production backend URL
+  // Force production backend URL - ALWAYS use VPS directly
   const API_URL = 'http://157.245.126.24:8080'
   
-  console.log('🔧 API Configuration:', { 
+  // Log on every render to verify URL
+  console.log('🔧 API Configuration (render ' + Date.now() + '):', { 
     API_BASE_URL_imported: API_BASE_URL,
-    API_URL_used: API_URL 
+    API_URL_used: API_URL,
+    window_location: window.location.href
   })
 
   // Check for mobile device
@@ -167,8 +169,13 @@ function App() {
     setLoadingMessage('Authenticating...')
 
     try {
+      // Build timestamp: 2025-12-23T16:21:00Z - Force cache bust
       const authUrl = `${API_URL}/api/authenticate`
-      console.log('Attempting authentication at:', authUrl)
+      console.log('🔐 Attempting authentication at:', authUrl)
+      console.log('📤 Request body:', {
+        employeeId: credentials.username,
+        airline: airline.toUpperCase()
+      })
       
       const response = await fetch(authUrl, {
         method: 'POST',
