@@ -323,13 +323,13 @@ function App() {
     { label: 'Monthly', value: 'monthly', icon: <Calendar className="w-4 h-4" /> },
     { label: 'Daily', value: 'daily', icon: <Clock className="w-4 h-4" /> },
     { label: 'Friends', value: 'friends', icon: <Users className="w-4 h-4" /> },
-    { label: 'Notifications', value: 'notifications', icon: <Bell className="w-4 h-4" /> },
+    { label: 'Alerts', value: 'notifications', icon: <Bell className="w-4 h-4" /> },
     { label: 'Stats', value: 'stats', icon: <RefreshCw className="w-4 h-4" /> },
     { label: 'Settings', value: 'settings', icon: <Settings className="w-4 h-4" /> },
   ]
 
   return (
-    <div className={cn('min-h-screen', theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50')}>
+    <div className={cn('min-h-screen pb-20', theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50')}>
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -347,24 +347,12 @@ function App() {
             <IconButton onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
               {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
             </IconButton>
-            
-            <IconButton>
-              <Badge variant="danger" className="absolute -top-1 -right-1 px-1.5 min-w-[1.25rem] h-5">
-                3
-              </Badge>
-              <Bell className="w-5 h-5" />
-            </IconButton>
 
             <Button variant="ghost" onClick={handleLogout} className="gap-2">
               <LogOut className="w-4 h-4" />
               Logout
             </Button>
           </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="max-w-7xl mx-auto px-4">
-          <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
         </div>
       </header>
 
@@ -498,11 +486,11 @@ function App() {
           </Card>
         )}
 
-        {/* Notifications View */}
+        {/* Alerts View */}
         {activeTab === 'notifications' && !loading && (
           <Card>
             <CardHeader>
-              <h2 className="text-xl font-semibold">Notifications</h2>
+              <h2 className="text-xl font-semibold">Alerts</h2>
               <Button variant="ghost" size="sm" onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}>
                 Mark all as read
               </Button>
@@ -676,6 +664,29 @@ function App() {
           </DialogFooter>
         </Dialog>
       )}
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
+        <div className="max-w-7xl mx-auto px-2">
+          <div className="flex items-center justify-around">
+            {tabs.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={cn(
+                  'flex flex-col items-center justify-center py-2 px-3 flex-1 transition-colors',
+                  activeTab === tab.value
+                    ? 'text-primary-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                {tab.icon}
+                <span className="text-xs mt-1 font-medium">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </nav>
     </div>
   )
 }
