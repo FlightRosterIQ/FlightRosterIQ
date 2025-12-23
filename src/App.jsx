@@ -49,7 +49,7 @@ import {
 } from './components/ui'
 
 import { cn } from './lib/utils'
-import config from './config'
+import { API_BASE_URL } from './config'
 
 function App() {
   // Authentication & User State
@@ -97,7 +97,7 @@ function App() {
   const [selectedChat, setSelectedChat] = useState(null)
   const [messageInput, setMessageInput] = useState('')
   
-  const API_URL = config.API_URL
+  const API_URL = API_BASE_URL
 
   // Check for mobile device
   useEffect(() => {
