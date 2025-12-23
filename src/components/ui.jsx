@@ -1,83 +1,135 @@
 import { cn } from '../lib/utils'
+import { Slot } from '@radix-ui/react-slot'
+import { cva } from 'class-variance-authority'
+import * as AvatarPrimitive from '@radix-ui/react-avatar'
+import * as DialogPrimitive from '@radix-ui/react-dialog'
+import { X } from 'lucide-react'
 
-export const Button = ({ children, variant = 'primary', size = 'md', className, ...props }) => {
-  const baseStyles = 'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
-  
-  const variants = {
-    primary: 'bg-primary text-primary-foreground hover:opacity-90 active:opacity-80 shadow-sm hover:shadow-md',
-    secondary: 'bg-secondary text-secondary-foreground hover:bg-muted active:bg-muted',
-    outline: 'border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground',
-    ghost: 'text-foreground hover:bg-muted active:bg-muted',
-    danger: 'bg-destructive text-destructive-foreground hover:opacity-90 active:opacity-80 shadow-sm hover:shadow-md',
-    success: 'bg-success text-success-foreground hover:opacity-90 active:opacity-80 shadow-sm hover:shadow-md',
+const buttonVariants = cva(
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*="size-"])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        destructive: 'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
+        outline: 'border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        link: 'text-primary underline-offset-4 hover:underline',
+        // Legacy variants for backwards compatibility
+        primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        danger: 'bg-destructive text-white hover:bg-destructive/90',
+        success: 'bg-success text-success-foreground hover:bg-success/90',
+      },
+      size: {
+        default: 'h-9 px-4 py-2 has-[>svg]:px-3',
+        sm: 'h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5',
+        lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
+        icon: 'size-9 rounded-md',
+        // Legacy size for backwards compatibility
+        md: 'h-9 px-4 py-2',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
   }
-  
-  const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg',
-  }
+)
+
+export const Button = ({ className, variant, size, asChild = false, ...props }) => {
+  const Comp = asChild ? Slot : 'button'
   
   return (
-    <button
-      className={cn(baseStyles, variants[variant], sizes[size], className)}
+    <Comp
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    >
-      {children}
-    </button>
+    />
   )
 }
 
-export const Card = ({ children, className, ...props }) => {
+export { buttonVariants }
+
+export const Card = ({ className, ...props }) => {
   return (
     <div
+      data-slot="card"
       className={cn(
-        'bg-card text-card-foreground rounded-xl shadow-sm overflow-hidden border border-border',
+        'bg-card text-card-foreground flex flex-col gap-6 rounded-xl border',
         className
       )}
       {...props}
-    >
-      {children}
-    </div>
+    />
   )
 }
 
-export const CardHeader = ({ children, className, ...props }) => {
+export const CardHeader = ({ className, ...props }) => {
   return (
-    <div className={cn('px-6 py-4 border-b border-border', className)} {...props}>
-      {children}
-    </div>
-  )
-}
-
-export const CardContent = ({ children, className, ...props }) => {
-  return (
-    <div className={cn('px-6 py-4', className)} {...props}>
-      {children}
-    </div>
-  )
-}
-
-export const Input = ({ label, error, className, ...props }) => {
-  return (
-    <div className="w-full">
-      {label && (
-        <label className="block text-sm font-medium text-foreground mb-1">
-          {label}
-        </label>
+    <div
+      data-slot="card-header"
+      className={cn(
+        '@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 pt-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6',
+        className
       )}
-      <input
-        className={cn(
-          'w-full px-4 py-2 rounded-lg bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all',
-          error && 'border-destructive focus:ring-destructive',
-          className
-        )}
-        {...props}
-      />
-      {error && (
-        <p className="mt-1 text-sm text-destructive">{error}</p>
+      {...props}
+    />
+  )
+}
+
+export const CardTitle = ({ className, ...props }) => {
+  return (
+    <div
+      data-slot="card-title"
+      className={cn('line-clamp-2 text-base font-semibold tracking-tight', className)}
+      {...props}
+    />
+  )
+}
+
+export const CardDescription = ({ className, ...props }) => {
+  return (
+    <div
+      data-slot="card-description"
+      className={cn('text-muted-foreground line-clamp-2 text-sm', className)}
+      {...props}
+    />
+  )
+}
+
+export const CardContent = ({ className, ...props }) => {
+  return (
+    <div
+      data-slot="card-content"
+      className={cn('px-6', className)}
+      {...props}
+    />
+  )
+}
+
+export const CardFooter = ({ className, ...props }) => {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn('flex items-center px-6 pb-6', className)}
+      {...props}
+    />
+  )
+}
+
+export const Input = ({ className, type, ...props }) => {
+  return (
+    <input
+      type={type}
+      data-slot="input"
+      className={cn(
+        'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-base bg-input-background transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+        'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+        'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+        className
       )}
-    </div>
+      {...props}
+    />
   )
 }
 
@@ -90,9 +142,13 @@ export const Select = ({ label, error, children, className, ...props }) => {
         </label>
       )}
       <select
+        data-slot="select"
         className={cn(
-          'w-full px-4 py-2 rounded-lg bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all',
-          error && 'border-destructive focus:ring-destructive',
+          'flex h-9 w-full items-center justify-between rounded-md border border-input bg-input-background px-3 py-2 text-sm shadow-xs dark:bg-input/30',
+          'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+          'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+          error && 'border-destructive',
           className
         )}
         {...props}
@@ -106,48 +162,86 @@ export const Select = ({ label, error, children, className, ...props }) => {
   )
 }
 
-export const Badge = ({ children, variant = 'default', className, ...props }) => {
-  const variants = {
-    default: 'bg-muted text-muted-foreground',
-    primary: 'bg-primary/10 text-primary',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-yellow-100 text-yellow-800',
-    danger: 'bg-destructive/10 text-destructive',
+const badgeVariants = cva(
+  'inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none transition-[color,box-shadow] overflow-hidden',
+  {
+    variants: {
+      variant: {
+        default: 'border-transparent bg-primary text-primary-foreground',
+        secondary: 'border-transparent bg-secondary text-secondary-foreground',
+        destructive: 'border-transparent bg-destructive text-white',
+        outline: 'text-foreground border-border',
+        // Legacy variants
+        primary: 'border-transparent bg-primary text-primary-foreground',
+        success: 'border-transparent bg-success text-success-foreground',
+        warning: 'border-transparent bg-yellow-500 text-white',
+        danger: 'border-transparent bg-destructive text-white',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
   }
-  
+)
+
+export const Badge = ({ className, variant, ...props }) => {
   return (
-    <span
-      className={cn(
-        'inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium',
-        variants[variant],
-        className
-      )}
+    <div
+      data-slot="badge"
+      className={cn(badgeVariants({ variant }), className)}
       {...props}
-    >
-      {children}
-    </span>
+    />
   )
 }
 
-export const Alert = ({ children, variant = 'info', className, ...props }) => {
-  const variants = {
-    info: 'bg-primary/10 border-primary/20 text-primary',
-    success: 'bg-success/10 border-success/20 text-success',
-    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    error: 'bg-destructive/10 border-destructive/20 text-destructive',
+const alertVariants = cva(
+  'relative w-full rounded-lg border px-4 py-3 text-sm',
+  {
+    variants: {
+      variant: {
+        default: 'bg-card text-card-foreground',
+        destructive: 'text-destructive bg-card border-destructive/20',
+        // Legacy variants
+        info: 'bg-primary/10 border-primary/20 text-primary',
+        success: 'bg-success/10 border-success/20 text-success',
+        warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+        error: 'bg-destructive/10 border-destructive/20 text-destructive',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
   }
-  
+)
+
+export const Alert = ({ className, variant, ...props }) => {
   return (
     <div
-      className={cn(
-        'rounded-lg border-2 px-4 py-3',
-        variants[variant],
-        className
-      )}
+      data-slot="alert"
+      role="alert"
+      className={cn(alertVariants({ variant }), className)}
       {...props}
-    >
-      {children}
-    </div>
+    />
+  )
+}
+
+export const AlertTitle = ({ className, ...props }) => {
+  return (
+    <div
+      data-slot="alert-title"
+      className={cn('font-medium tracking-tight mb-1', className)}
+      {...props}
+    />
+  )
+}
+
+export const AlertDescription = ({ className, ...props }) => {
+  return (
+    <div
+      data-slot="alert-description"
+      className={cn('text-sm', className)}
+      {...props}
+    />
   )
 }
 
@@ -164,50 +258,68 @@ export const Spinner = ({ size = 'md', className }) => {
 }
 
 export const Dialog = ({ isOpen, onClose, children, className }) => {
-  if (!isOpen) return null
-  
   return (
-    <>
-      <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-40 animate-fade-in"
-        onClick={onClose}
-      />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
+    <DialogPrimitive.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          data-slot="dialog-overlay"
+          className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+        />
+        <DialogPrimitive.Content
+          data-slot="dialog-content"
           className={cn(
-            'bg-card text-card-foreground rounded-xl shadow-md max-w-md w-full max-h-[90vh] overflow-auto animate-slide-up border border-border',
+            'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-card p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-xl',
             className
           )}
-          onClick={(e) => e.stopPropagation()}
         >
           {children}
-        </div>
-      </div>
-    </>
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   )
 }
 
-export const DialogHeader = ({ children, className, ...props }) => {
+export const DialogHeader = ({ className, ...props }) => {
   return (
-    <div className={cn('px-6 py-4 border-b border-border', className)} {...props}>
-      {children}
-    </div>
+    <div
+      data-slot="dialog-header"
+      className={cn('flex flex-col space-y-1.5 text-center sm:text-left', className)}
+      {...props}
+    />
   )
 }
 
-export const DialogContent = ({ children, className, ...props }) => {
+export const DialogContent = ({ className, ...props }) => {
   return (
-    <div className={cn('px-6 py-4', className)} {...props}>
-      {children}
-    </div>
+    <div
+      data-slot="dialog-content"
+      className={cn('', className)}
+      {...props}
+    />
   )
 }
 
-export const DialogFooter = ({ children, className, ...props }) => {
+export const DialogFooter = ({ className, ...props }) => {
   return (
-    <div className={cn('px-6 py-4 border-t border-border flex justify-end gap-2', className)} {...props}>
-      {children}
-    </div>
+    <div
+      data-slot="dialog-footer"
+      className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2', className)}
+      {...props}
+    />
+  )
+}
+
+export const DialogTitle = ({ className, ...props }) => {
+  return (
+    <DialogPrimitive.Title
+      data-slot="dialog-title"
+      className={cn('text-lg font-semibold leading-none tracking-tight', className)}
+      {...props}
+    />
   )
 }
 
@@ -235,22 +347,39 @@ export const Tabs = ({ tabs, activeTab, onChange, className }) => {
   )
 }
 
-export const Avatar = ({ src, alt, size = 'md', className, children }) => {
-  const sizes = {
-    sm: 'w-8 h-8 text-xs',
-    md: 'w-10 h-10 text-sm',
-    lg: 'w-12 h-12 text-base',
-    xl: 'w-16 h-16 text-lg',
-  }
-  
+export const Avatar = ({ className, ...props }) => {
   return (
-    <div className={cn('rounded-full overflow-hidden bg-muted flex items-center justify-center font-medium text-muted-foreground', sizes[size], className)}>
-      {src ? (
-        <img src={src} alt={alt} className="w-full h-full object-cover" />
-      ) : (
-        children || alt?.charAt(0).toUpperCase()
+    <AvatarPrimitive.Root
+      data-slot="avatar"
+      className={cn(
+        'relative flex size-10 shrink-0 overflow-hidden rounded-full',
+        className
       )}
-    </div>
+      {...props}
+    />
+  )
+}
+
+export const AvatarImage = ({ className, ...props }) => {
+  return (
+    <AvatarPrimitive.Image
+      data-slot="avatar-image"
+      className={cn('aspect-square size-full', className)}
+      {...props}
+    />
+  )
+}
+
+export const AvatarFallback = ({ className, ...props }) => {
+  return (
+    <AvatarPrimitive.Fallback
+      data-slot="avatar-fallback"
+      className={cn(
+        'bg-muted flex size-full items-center justify-center rounded-full',
+        className
+      )}
+      {...props}
+    />
   )
 }
 
