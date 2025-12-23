@@ -1,9 +1,120 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
+// Puppeteer removed - too heavy for Render free tier
+// Use client-side scraping or different hosting for scraper
 const app = express();
 const PORT = process.env.PORT || 8080;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+app.use(express.json());
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  next();
+});
+
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'ok',
+        service: 'FlightRosterIQ Backend',
+        timestamp: new Date().toISOString(),
+        message: 'Backend is running. Scraping disabled on free tier - use manual schedule entry.'
+    });
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'healthy', 
+        service: 'FlightRosterIQ Backend',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Authentication endpoint - returns message that scraping is not available
+app.post('/api/authenticate', async (req, res) => {
+    const { employeeId, password, airline } = req.body;
+    console.log(`🔐 AUTH REQUEST: ${airline?.toUpperCase() || 'ABX'} pilot ${employeeId}`);
+    
+    if (!employeeId || !password) {
+        return res.status(400).json({
+            success: false,
+            error: 'Employee ID and password are required'
+        });
+    }
+    
+    // Return message that scraping is not available on this tier
+    res.json({
+        success: false,
+        authenticated: false,
+        error: 'Automatic scraping not available',
+        message: 'Backend is running in lightweight mode. Please enter your schedule manually or use the mobile app to sync.',
+        fallback: {
+            portalUrls: {
+                abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
+                ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
+            },
+            selectedPortal: airline?.toLowerCase() || 'abx',
+            portalName: airline?.toUpperCase() || 'ABX Air'
+        }
+    });
+});
+
+// Scrape endpoint
+app.post('/api/scrape', async (req, res) => {
+    console.log('🔄 SCRAPE REQUEST');
+    const { employeeId, airline } = req.body;
+    
+    res.json({
+        success: false,
+        error: 'Scraping not available',
+        message: 'Automatic schedule scraping is disabled. Please enter schedule manually.',
+        fallback: {
+            portalUrls: {
+                abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
+                ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
+            },
+            selectedPortal: airline?.toLowerCase() || 'abx',
+            portalName: airline?.toUpperCase() || 'ABX Air'
+        }
+    });
+});
+
+// Family codes endpoints (basic storage)
+const familyCodes = new Map();
+
+app.post('/api/family/generate-code', async (req, res) => {
+    const { employeeId } = req.body;
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    familyCodes.set(code, { employeeId, created: Date.now() });
+    res.json({ success: true, code });
+});
+
+app.post('/api/family/get-codes', async (req, res) => {
+    const { employeeId } = req.body;
+    const codes = Array.from(familyCodes.entries())
+        .filter(([_, data]) => data.employeeId === employeeId)
+        .map(([code, _]) => code);
+    res.json({ success: true, codes });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log('🚀 FlightRosterIQ Backend - Lightweight Mode');
+    console.log(`🌐 Server running on port ${PORT}`);
+    console.log(`✅ Health check: GET /api/health`);
+    console.log(`⚠️  Scraping disabled - Render free tier limitation`);
+});
+
+process.on('SIGTERM', () => {
+    console.log('🛑 Shutting down...');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('🛑 Shutting down...');
+    process.exit(0);
+});
 
 app.use(express.json());
 app.use((req, res, next) => {
