@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0-dev",
-  "buildDate": "2025-12-22T16:30:00Z",
+  "version": "1.1.0-main",
+  "buildDate": "2025-12-23T16:30:00Z",
   "features": [
     "🎨 Clean, modern card-based design",
     "🌙 Enhanced dark theme with deep purple (#1A1A2E)",
