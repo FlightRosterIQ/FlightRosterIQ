@@ -1,7 +1,7 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
 const app = express();
-const PORT = 8080;
+const PORT = process.env.PORT || 8080;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -21,6 +21,72 @@ const PORTALS = {
   abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
   ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
 };
+
+// Parse crew portal dates (handles year rollover)
+function parseCrewDate(dateStr, year = new Date().getFullYear()) {
+  const months = {
+    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+  };
+  
+  const match = dateStr.match(/(\d{2})([A-Za-z]{3})/);
+  if (!match) return null;
+  
+  const day = parseInt(match[1]);
+  const monthName = match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase();
+  const month = months[monthName];
+  
+  if (month === undefined) return null;
+  
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  let actualYear = year;
+  
+  if (currentMonth === 11 && month <= 1) {
+    actualYear = year + 1;
+  }
+  
+  const date = new Date(actualYear, month, day);
+  const monthStr = String(month + 1).padStart(2, '0');
+  const dayStr = String(day).padStart(2, '0');
+  return `${actualYear}-${monthStr}-${dayStr}`;
+}
+
+// Extract crew members from page
+async function extractCrewMembers(page) {
+  try {
+    const crewMembers = await page.evaluate(() => {
+      const crew = [];
+      const tables = document.querySelectorAll('table');
+      
+      tables.forEach(table => {
+        const rows = table.querySelectorAll('tr');
+        rows.forEach(row => {
+          const cells = Array.from(row.querySelectorAll('td'));
+          if (cells.length >= 3) {
+            const text = cells.map(c => c.textContent.trim()).join(' ');
+            const nameMatch = text.match(/([A-Z][a-z]+),?\s+([A-Z][a-z]+)/);
+            const roleMatch = text.match(/(Captain|First Officer|CA|FO)/i);
+            
+            if (nameMatch) {
+              crew.push({
+                name: `${nameMatch[2]} ${nameMatch[1]}`,
+                role: roleMatch ? roleMatch[1] : 'Crew',
+                employeeId: text.match(/\d{5,}/)?.[0] || 'N/A'
+              });
+            }
+          }
+        });
+      });
+      
+      return crew.length > 0 ? crew : null;
+    });
+    
+    return crewMembers;
+  } catch (err) {
+    return null;
+  }
+}
 
 app.get('/api/health', (req, res) => {
     res.json({ 
@@ -119,28 +185,72 @@ app.post('/api/authenticate', async (req, res) => {
                 // Wait for crew portal to fully load
                 await sleep(5000);
                 
-                // Extract schedule data from the actual crew portal
-                let scheduleData = [];
+                // Extract full schedule data with crew members
+                let scheduleData = { flights: [], pairings: [] };
                 try {
-                    // Try to extract schedule information from common elements
-                    const scheduleText = await page.evaluate(() => {
-                        const body = document.body.innerText;
-                        const scheduleKeywords = ['Flight', 'Duty', 'Schedule', 'Roster', 'Trip', 'Pairing'];
+                    // Extract schedule from portal
+                    const extractedData = await page.evaluate(() => {
+                        const data = { flights: [], rawText: '' };
                         
-                        for (const keyword of scheduleKeywords) {
-                            if (body.includes(keyword)) {
-                                return `Schedule data found containing: ${keyword}`;
-                            }
-                        }
-                        return 'Crew portal accessed successfully';
+                        // Try to get schedule table/grid
+                        const tables = document.querySelectorAll('table, [class*="schedule"], [class*="roster"], [class*="duty"]');
+                        
+                        tables.forEach(table => {
+                            const rows = table.querySelectorAll('tr, [class*="row"]');
+                            rows.forEach(row => {
+                                const text = row.textContent || '';
+                                
+                                // Look for flight numbers (GB1234, etc)
+                                const flightMatch = text.match(/([A-Z]{2}\d{4})/);
+                                // Look for airports (3-letter codes)
+                                const airportsMatch = text.match(/([A-Z]{3})\s+.*?([A-Z]{3})/);
+                                // Look for times (HH:MM format)
+                                const timesMatch = text.match(/(\d{2}:\d{2}).*?(\d{2}:\d{2})/);
+                                // Look for dates (DDMon format)
+                                const dateMatch = text.match(/(\d{2}[A-Z][a-z]{2})/);
+                                
+                                if (flightMatch && airportsMatch && timesMatch) {
+                                    data.flights.push({
+                                        flightNumber: flightMatch[1],
+                                        origin: airportsMatch[1],
+                                        destination: airportsMatch[2],
+                                        departure: timesMatch[1],
+                                        arrival: timesMatch[2],
+                                        date: dateMatch ? dateMatch[1] : null,
+                                        rawText: text.trim()
+                                    });
+                                }
+                            });
+                        });
+                        
+                        // Fallback: get all body text for manual parsing
+                        data.rawText = document.body.innerText;
+                        
+                        return data;
                     });
                     
-                    scheduleData = [scheduleText];
-                    console.log(`📅 Schedule data: ${scheduleText}`);
+                    // Try to extract crew members if we have flights
+                    if (extractedData.flights.length > 0) {
+                        console.log(`✅ Found ${extractedData.flights.length} flights`);
+                        
+                        // Try to get crew for first flight as example
+                        try {
+                            const crewMembers = await extractCrewMembers(page);
+                            if (crewMembers) {
+                                extractedData.flights[0].crewMembers = crewMembers;
+                                console.log(`👥 Extracted ${crewMembers.length} crew members`);
+                            }
+                        } catch (crewErr) {
+                            console.log('⚠️ Could not extract crew:', crewErr.message);
+                        }
+                    }
+                    
+                    scheduleData = extractedData;
+                    console.log(`📅 Schedule extraction complete`);
                     
                 } catch (extractError) {
                     console.log('📅 Schedule extraction note:', extractError.message);
-                    scheduleData = ['Real authentication successful - portal accessed'];
+                    scheduleData = { flights: [], note: 'Real authentication successful - portal accessed' };
                 }
                 
                 await browser.close();
