@@ -185,12 +185,12 @@ app.post('/api/authenticate', async (req, res) => {
                 // Wait for crew portal to fully load
                 await sleep(5000);
                 
-                // Extract full schedule data with crew members
-                let scheduleData = { flights: [], pairings: [] };
+// Extract full schedule data with crew members and hotels
+                let scheduleData = { flights: [], pairings: [], hotels: [] };
                 try {
                     // Extract schedule from portal
                     const extractedData = await page.evaluate(() => {
-                        const data = { flights: [], rawText: '' };
+                        const data = { flights: [], hotels: [], rawText: '' };
                         
                         // Try to get schedule table/grid
                         const tables = document.querySelectorAll('table, [class*="schedule"], [class*="roster"], [class*="duty"]');
@@ -199,6 +199,20 @@ app.post('/api/authenticate', async (req, res) => {
                             const rows = table.querySelectorAll('tr, [class*="row"]');
                             rows.forEach(row => {
                                 const text = row.textContent || '';
+                                
+                                // Look for hotel/layover info
+                                if (text.match(/hotel|layover|overnight/i)) {
+                                    const hotelMatch = text.match(/([A-Z]{3})\s+.*?(hotel|layover)/i);
+                                    const dateMatch = text.match(/(\d{2}[A-Z][a-z]{2})/);
+                                    
+                                    if (hotelMatch) {
+                                        data.hotels.push({
+                                            location: hotelMatch[1],
+                                            date: dateMatch ? dateMatch[1] : null,
+                                            rawText: text.trim()
+                                        });
+                                    }
+                                }
                                 
                                 // Look for flight numbers (GB1234, etc)
                                 const flightMatch = text.match(/([A-Z]{2}\d{4})/);
@@ -217,6 +231,7 @@ app.post('/api/authenticate', async (req, res) => {
                                         departure: timesMatch[1],
                                         arrival: timesMatch[2],
                                         date: dateMatch ? dateMatch[1] : null,
+                                        hotels: [],
                                         rawText: text.trim()
                                     });
                                 }
@@ -248,13 +263,18 @@ app.post('/api/authenticate', async (req, res) => {
                                 ];
                             }
                             
-                            // Add mock actual times for testing
+                            // Add mock actual times for testing (same as scheduled to verify display)
                             extractedData.flights[0].actualDeparture = extractedData.flights[0].departure;
                             extractedData.flights[0].actualArrival = extractedData.flights[0].arrival;
-                            console.log('✈️ Added test actual times');
+                            console.log('✈️ Added test actual times (matching scheduled)');
                         } catch (crewErr) {
                             console.log('⚠️ Could not extract crew:', crewErr.message);
                         }
+                    }
+                    
+                    // Log hotel data if found
+                    if (extractedData.hotels && extractedData.hotels.length > 0) {
+                        console.log(`🏨 Found ${extractedData.hotels.length} hotels/layovers`);
                     }
                     
                     scheduleData = extractedData;
@@ -274,10 +294,22 @@ app.post('/api/authenticate', async (req, res) => {
                     if (!flight.crewMembers) {
                         flight.crewMembers = [];
                     }
+                    // Ensure hotels field exists
+                    if (!flight.hotels) {
+                        flight.hotels = [];
+                    }
                     // Parse date if needed
                     if (flight.date && !flight.date.includes('-')) {
                         flight.date = parseCrewDate(flight.date);
                     }
+                });
+                
+                // Format hotel data
+                const formattedHotels = (scheduleData.hotels || []).map(hotel => {
+                    return {
+                        ...hotel,
+                        date: hotel.date && !hotel.date.includes('-') ? parseCrewDate(hotel.date) : hotel.date
+                    };
                 });
                 
                 res.json({
@@ -290,6 +322,7 @@ app.post('/api/authenticate', async (req, res) => {
                         loginTime: new Date().toISOString(),
                         portalAccessed: true,
                         flights: formattedFlights,
+                        hotels: formattedHotels,
                         scheduleData: scheduleData,
                         realAuthentication: true
                     }
