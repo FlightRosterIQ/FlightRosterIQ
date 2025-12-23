@@ -1,14 +1,15 @@
 import { cn } from '../lib/utils'
 
 export const Button = ({ children, variant = 'primary', size = 'md', className, ...props }) => {
-  const baseStyles = 'inline-flex items-center justify-center rounded-3xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
+  const baseStyles = 'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
   
   const variants = {
-    primary: 'bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800 shadow-md hover:shadow-lg',
-    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 active:bg-gray-400',
-    outline: 'border-2 border-primary-600 text-primary-600 hover:bg-primary-50 active:bg-primary-100',
-    ghost: 'text-gray-700 hover:bg-gray-100 active:bg-gray-200',
-    danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-md hover:shadow-lg',
+    primary: 'bg-primary text-primary-foreground hover:opacity-90 active:opacity-80 shadow-sm hover:shadow-md',
+    secondary: 'bg-secondary text-secondary-foreground hover:bg-muted active:bg-muted',
+    outline: 'border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground',
+    ghost: 'text-foreground hover:bg-muted active:bg-muted',
+    danger: 'bg-destructive text-destructive-foreground hover:opacity-90 active:opacity-80 shadow-sm hover:shadow-md',
+    success: 'bg-success text-success-foreground hover:opacity-90 active:opacity-80 shadow-sm hover:shadow-md',
   }
   
   const sizes = {
@@ -31,7 +32,7 @@ export const Card = ({ children, className, ...props }) => {
   return (
     <div
       className={cn(
-        'bg-white rounded-2xl shadow-md overflow-hidden',
+        'bg-card text-card-foreground rounded-xl shadow-sm overflow-hidden border border-border',
         className
       )}
       {...props}
@@ -43,7 +44,7 @@ export const Card = ({ children, className, ...props }) => {
 
 export const CardHeader = ({ children, className, ...props }) => {
   return (
-    <div className={cn('px-6 py-4 border-b border-gray-200', className)} {...props}>
+    <div className={cn('px-6 py-4 border-b border-border', className)} {...props}>
       {children}
     </div>
   )
@@ -61,20 +62,20 @@ export const Input = ({ label, error, className, ...props }) => {
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-foreground mb-1">
           {label}
         </label>
       )}
       <input
         className={cn(
-          'w-full px-4 py-2 rounded-2xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all',
-          error && 'border-red-500 focus:ring-red-500',
+          'w-full px-4 py-2 rounded-lg bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all',
+          error && 'border-destructive focus:ring-destructive',
           className
         )}
         {...props}
       />
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <p className="mt-1 text-sm text-destructive">{error}</p>
       )}
     </div>
   )
@@ -84,14 +85,14 @@ export const Select = ({ label, error, children, className, ...props }) => {
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-foreground mb-1">
           {label}
         </label>
       )}
       <select
         className={cn(
-          'w-full px-4 py-2 rounded-2xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all bg-white',
-          error && 'border-red-500 focus:ring-red-500',
+          'w-full px-4 py-2 rounded-lg bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all',
+          error && 'border-destructive focus:ring-destructive',
           className
         )}
         {...props}
@@ -99,7 +100,7 @@ export const Select = ({ label, error, children, className, ...props }) => {
         {children}
       </select>
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <p className="mt-1 text-sm text-destructive">{error}</p>
       )}
     </div>
   )
@@ -107,17 +108,17 @@ export const Select = ({ label, error, children, className, ...props }) => {
 
 export const Badge = ({ children, variant = 'default', className, ...props }) => {
   const variants = {
-    default: 'bg-gray-200 text-gray-800',
-    primary: 'bg-primary-100 text-primary-800',
-    success: 'bg-green-100 text-green-800',
+    default: 'bg-muted text-muted-foreground',
+    primary: 'bg-primary/10 text-primary',
+    success: 'bg-success/10 text-success',
     warning: 'bg-yellow-100 text-yellow-800',
-    danger: 'bg-red-100 text-red-800',
+    danger: 'bg-destructive/10 text-destructive',
   }
   
   return (
     <span
       className={cn(
-        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+        'inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium',
         variants[variant],
         className
       )}
@@ -130,16 +131,16 @@ export const Badge = ({ children, variant = 'default', className, ...props }) =>
 
 export const Alert = ({ children, variant = 'info', className, ...props }) => {
   const variants = {
-    info: 'bg-blue-50 border-blue-200 text-blue-800',
-    success: 'bg-green-50 border-green-200 text-green-800',
+    info: 'bg-primary/10 border-primary/20 text-primary',
+    success: 'bg-success/10 border-success/20 text-success',
     warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
+    error: 'bg-destructive/10 border-destructive/20 text-destructive',
   }
   
   return (
     <div
       className={cn(
-        'rounded-2xl border-2 px-4 py-3',
+        'rounded-lg border-2 px-4 py-3',
         variants[variant],
         className
       )}
@@ -158,7 +159,7 @@ export const Spinner = ({ size = 'md', className }) => {
   }
   
   return (
-    <div className={cn('inline-block animate-spin rounded-full border-4 border-gray-200 border-t-primary-600', sizes[size], className)} />
+    <div className={cn('inline-block animate-spin rounded-full border-4 border-muted border-t-primary', sizes[size], className)} />
   )
 }
 
@@ -174,7 +175,7 @@ export const Dialog = ({ isOpen, onClose, children, className }) => {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           className={cn(
-            'bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-auto animate-slide-up',
+            'bg-card text-card-foreground rounded-xl shadow-md max-w-md w-full max-h-[90vh] overflow-auto animate-slide-up border border-border',
             className
           )}
           onClick={(e) => e.stopPropagation()}
@@ -188,7 +189,7 @@ export const Dialog = ({ isOpen, onClose, children, className }) => {
 
 export const DialogHeader = ({ children, className, ...props }) => {
   return (
-    <div className={cn('px-6 py-4 border-b border-gray-200', className)} {...props}>
+    <div className={cn('px-6 py-4 border-b border-border', className)} {...props}>
       {children}
     </div>
   )
@@ -204,7 +205,7 @@ export const DialogContent = ({ children, className, ...props }) => {
 
 export const DialogFooter = ({ children, className, ...props }) => {
   return (
-    <div className={cn('px-6 py-4 border-t border-gray-200 flex justify-end gap-2', className)} {...props}>
+    <div className={cn('px-6 py-4 border-t border-border flex justify-end gap-2', className)} {...props}>
       {children}
     </div>
   )
@@ -212,7 +213,7 @@ export const DialogFooter = ({ children, className, ...props }) => {
 
 export const Tabs = ({ tabs, activeTab, onChange, className }) => {
   return (
-    <div className={cn('border-b border-gray-200', className)}>
+    <div className={cn('border-b border-border', className)}>
       <nav className="flex space-x-8" aria-label="Tabs">
         {tabs.map((tab) => (
           <button
@@ -221,8 +222,8 @@ export const Tabs = ({ tabs, activeTab, onChange, className }) => {
             className={cn(
               'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
               activeTab === tab.value
-                ? 'border-primary-600 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted'
             )}
           >
             {tab.icon && <span className="mr-2">{tab.icon}</span>}
@@ -243,7 +244,7 @@ export const Avatar = ({ src, alt, size = 'md', className, children }) => {
   }
   
   return (
-    <div className={cn('rounded-full overflow-hidden bg-gray-200 flex items-center justify-center font-medium text-gray-600', sizes[size], className)}>
+    <div className={cn('rounded-full overflow-hidden bg-muted flex items-center justify-center font-medium text-muted-foreground', sizes[size], className)}>
       {src ? (
         <img src={src} alt={alt} className="w-full h-full object-cover" />
       ) : (
@@ -255,8 +256,8 @@ export const Avatar = ({ src, alt, size = 'md', className, children }) => {
 
 export const IconButton = ({ children, variant = 'default', size = 'md', className, ...props }) => {
   const variants = {
-    default: 'text-gray-700 hover:bg-gray-100 active:bg-gray-200',
-    primary: 'text-primary-600 hover:bg-primary-50 active:bg-primary-100',
+    default: 'text-foreground hover:bg-muted active:bg-muted',
+    primary: 'text-primary hover:bg-primary/10 active:bg-primary/20',
   }
   
   const sizes = {
@@ -268,7 +269,7 @@ export const IconButton = ({ children, variant = 'default', size = 'md', classNa
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center rounded-xl transition-all duration-200',
+        'inline-flex items-center justify-center rounded-lg transition-all duration-200',
         variants[variant],
         sizes[size],
         className

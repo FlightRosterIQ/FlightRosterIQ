@@ -2,100 +2,55 @@
 
 @layer base {
   :root {
-    --background: 245 245 245;
-    --foreground: 26 26 46;
-    --card: 255 255 255;
+    --background: #E8E8EC;
+    --foreground: #1F1F2E;
+    --card: #ffffff;
+    --card-foreground: #1F1F2E;
+    --primary: #4C5FD5;
+    --primary-foreground: #ffffff;
+    --secondary: #f5f5f7;
+    --secondary-foreground: #030213;
+    --muted: #ececf0;
+    --muted-foreground: #717182;
+    --accent: #4C5FD5;
+    --accent-foreground: #ffffff;
+    --destructive: #EF4444;
+    --destructive-foreground: #ffffff;
+    --success: #22C55E;
+    --success-foreground: #ffffff;
+    --border: rgba(0, 0, 0, 0.08);
+    --input: transparent;
+    --input-background: #f3f3f5;
     
     /* Safe area insets for notched devices */
     --safe-area-inset-top: env(safe-area-inset-top);
     --safe-area-inset-right: env(safe-area-inset-right);
     --safe-area-inset-bottom: env(safe-area-inset-bottom);
     --safe-area-inset-left: env(safe-area-inset-left);
-    --card-foreground: 26 26 46;
-    --popover: 255 255 255;
-    --popover-foreground: 26 26 46;
-    --primary: 79 108 255;
-    --primary-foreground: 255 255 255;
-    --secondary: 240 240 243;
-    --secondary-foreground: 26 26 46;
-    --muted: 156 163 175;
-    --muted-foreground: 115 115 140;
-    --accent: 79 108 255;
-    --accent-foreground: 255 255 255;
-    --destructive: 239 68 68;
-    --destructive-foreground: 255 255 255;
-    --border: 229 231 235;
-    --input: 229 231 235;
-    --ring: 79 108 255;
-    --radius: 1rem;
-    
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    line-height: 1.5;
-    font-weight: 400;
-    color-scheme: light dark;
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    -webkit-tap-highlight-color: transparent;
   }
-
+  
   .dark {
-    --background: 26 26 46;
-    --foreground: 250 250 250;
-    --card: 37 37 56;
-    --card-foreground: 250 250 250;
-    --popover: 37 37 56;
-    --popover-foreground: 250 250 250;
-    --primary: 107 127 255;
-    --primary-foreground: 255 255 255;
-    --secondary: 30 30 46;
-    --secondary-foreground: 250 250 250;
-    --muted: 30 30 46;
-    --muted-foreground: 163 163 163;
-    --accent: 30 30 46;
-    --accent-foreground: 250 250 250;
-    --destructive: 239 68 68;
-    --destructive-foreground: 255 255 255;
-    --border: 45 45 64;
-    --input: 45 45 64;
-    --ring: 107 127 255;
-  }
-}
-
-@layer base {
-  * {
-    border-color: hsl(var(--border));
-    scroll-behavior: smooth;
+    --background: #1A1A2E;
+    --foreground: #E8E8EC;
+    --card: #252538;
+    --card-foreground: #E8E8EC;
+    --primary: #6B7FFF;
+    --primary-foreground: #ffffff;
+    --muted: #2A2A3E;
+    --muted-foreground: #9494A8;
+    --border: rgba(255, 255, 255, 0.1);
+    --input-background: #2A2A3E;
   }
   
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    margin: 0;
-    display: flex;
-    place-items: center;
-    min-width: 320px;
-    min-height: 100vh;
-    overflow-x: hidden;
-    /* Safe area padding for PWA/app mode */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  
-  #root {
-    width: 100%;
-    min-height: 100vh;
-    /* Safe area padding for notched devices */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
   }
 }
 
-/* iOS-style safe areas */
-@supports (padding: max(0px)) {
-  body {
-    padding-left: max(0px, env(safe-area-inset-left));
-    padding-right: max(0px, env(safe-area-inset-right));
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
   }
 }

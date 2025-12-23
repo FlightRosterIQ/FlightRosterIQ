@@ -236,15 +236,15 @@ function App() {
   // Render Login Screen
   if (!token) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-primary to-accent flex items-center justify-center p-4">
         <Card className="w-full max-w-md animate-slide-up">
           <CardHeader>
             <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-full mb-4">
-                <Plane className="w-8 h-8 text-primary-600" />
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
+                <Plane className="w-8 h-8 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">Flight Roster IQ</h1>
-              <p className="text-gray-600 mt-2">Crew Schedule Management</p>
+              <h1 className="text-2xl font-bold text-foreground">Flight Roster IQ</h1>
+              <p className="text-muted-foreground mt-2">Crew Schedule Management</p>
             </div>
           </CardHeader>
           
@@ -305,7 +305,7 @@ function App() {
               </Button>
             </form>
 
-            <div className="mt-6 text-center text-sm text-gray-600">
+            <div className="mt-6 text-center text-sm text-muted-foreground">
               <p>Need help? Contact support</p>
             </div>
           </CardContent>
@@ -326,17 +326,17 @@ function App() {
   ]
 
   return (
-    <div className={cn('min-h-screen', theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50')}>
+    <div className={cn('min-h-screen bg-background', theme === 'dark' && 'dark')}>
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-30">
+      <header className="bg-card shadow-sm sticky top-0 z-30 border-b border-border">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center">
-              <Plane className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <Plane className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Flight Roster IQ</h1>
-              <p className="text-sm text-gray-500">{username} • {airline.toUpperCase()}</p>
+              <h1 className="text-xl font-bold text-foreground">Flight Roster IQ</h1>
+              <p className="text-sm text-muted-foreground">{username} • {airline.toUpperCase()}</p>
             </div>
           </div>
 
@@ -370,7 +370,7 @@ function App() {
         {loading && (
           <div className="flex items-center justify-center py-12">
             <Spinner size="lg" />
-            <span className="ml-3 text-gray-600">{loadingMessage}</span>
+            <span className="ml-3 text-muted-foreground">{loadingMessage}</span>
           </div>
         )}
 
@@ -380,27 +380,27 @@ function App() {
             <Card>
               <CardHeader>
                 <h2 className="text-xl font-semibold">Monthly Schedule</h2>
-                <p className="text-gray-500">{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+                <p className="text-muted-foreground">{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
               </CardHeader>
               <CardContent>
                 {schedule?.flights?.length > 0 ? (
                   <div className="space-y-3">
                     {schedule.flights.slice(0, 10).map((flight, idx) => (
-                      <Card key={idx} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedFlight(flight)}>
+                      <Card key={idx} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedFlight(flight)}>
                         <CardContent className="py-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
-                                <Plane className="w-6 h-6 text-primary-600" />
+                              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                                <Plane className="w-6 h-6 text-primary" />
                               </div>
                               <div>
                                 <div className="font-semibold text-lg">{flight.origin} → {flight.destination}</div>
-                                <div className="text-sm text-gray-500">Flight {flight.flightNumber}</div>
+                                <div className="text-sm text-muted-foreground">Flight {flight.flightNumber}</div>
                               </div>
                             </div>
                             <div className="text-right">
                               <div className="text-sm font-medium">{new Date(flight.departure).toLocaleDateString()}</div>
-                              <div className="text-sm text-gray-500">{new Date(flight.departure).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                              <div className="text-sm text-muted-foreground">{new Date(flight.departure).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                             </div>
                           </div>
                         </CardContent>
@@ -409,8 +409,8 @@ function App() {
                   </div>
                 ) : (
                   <div className="text-center py-12">
-                    <Plane className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">No flights scheduled</p>
+                    <Plane className="w-16 h-16 text-muted mx-auto mb-4" />
+                    <p className="text-muted-foreground">No flights scheduled</p>
                   </div>
                 )}
               </CardContent>
@@ -435,14 +435,14 @@ function App() {
                 {dailyFlights.length > 0 ? (
                   <div className="space-y-4">
                     {dailyFlights.map((flight, idx) => (
-                      <Card key={idx} className="hover:shadow-lg transition-shadow">
+                      <Card key={idx} className="hover:shadow-md transition-shadow">
                         <CardContent>
                           <div className="flex items-start justify-between">
                             <div>
                               <div className="text-lg font-semibold">{flight.origin} → {flight.destination}</div>
-                              <div className="text-sm text-gray-500 mt-1">Flight {flight.flightNumber}</div>
+                              <div className="text-sm text-muted-foreground mt-1">Flight {flight.flightNumber}</div>
                               <div className="flex items-center gap-2 mt-2 text-sm">
-                                <Clock className="w-4 h-4 text-gray-400" />
+                                <Clock className="w-4 h-4 text-muted-foreground" />
                                 <span>{new Date(flight.departure).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                               </div>
                             </div>
@@ -454,21 +454,21 @@ function App() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-gray-500">No flights on this date</p>
+                    <p className="text-muted-foreground">No flights on this date</p>
                   </div>
                 )}
 
                 {hotels.length > 0 && (
                   <div className="mt-6">
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      <Hotel className="w-5 h-5 text-primary-600" />
+                      <Hotel className="w-5 h-5 text-primary" />
                       Layover Hotels
                     </h3>
                     {hotels.map((hotel, idx) => (
                       <Card key={idx}>
                         <CardContent>
                           <div className="font-medium">{hotel.name}</div>
-                          <div className="text-sm text-gray-500">{hotel.location}</div>
+                          <div className="text-sm text-muted-foreground">{hotel.location}</div>
                         </CardContent>
                       </Card>
                     ))}
@@ -487,8 +487,8 @@ function App() {
             </CardHeader>
             <CardContent>
               <div className="text-center py-12">
-                <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No friends added yet</p>
+                <Users className="w-16 h-16 text-muted mx-auto mb-4" />
+                <p className="text-muted-foreground">No friends added yet</p>
                 <Button className="mt-4">Add Friends</Button>
               </div>
             </CardContent>
@@ -548,18 +548,18 @@ function App() {
                 <div className="text-2xl font-bold">
                   {selectedFlight.origin} → {selectedFlight.destination}
                 </div>
-                <div className="text-gray-500">Flight {selectedFlight.flightNumber}</div>
+                <div className="text-muted-foreground">Flight {selectedFlight.flightNumber}</div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-gray-500">Departure</div>
+                  <div className="text-sm text-muted-foreground">Departure</div>
                   <div className="font-semibold">
                     {new Date(selectedFlight.departure).toLocaleString()}
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-500">Arrival</div>
+                  <div className="text-sm text-muted-foreground">Arrival</div>
                   <div className="font-semibold">
                     {new Date(selectedFlight.arrival).toLocaleString()}
                   </div>
@@ -575,7 +575,7 @@ function App() {
                         <Avatar size="sm">{member.name?.[0]}</Avatar>
                         <div>
                           <div className="font-medium">{member.name}</div>
-                          <div className="text-sm text-gray-500">{member.role}</div>
+                          <div className="text-sm text-muted-foreground">{member.role}</div>
                         </div>
                       </div>
                     ))}
