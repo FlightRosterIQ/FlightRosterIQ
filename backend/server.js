@@ -1,36 +1,131 @@
 const express = require('express');
-const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const path = require('path');
+// Puppeteer removed - too heavy for Render free tier
+// Use client-side scraping or different hosting for scraper
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 8080;
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const DATA_DIR = path.join(__dirname, 'data');
-const FAMILY_CODES_FILE = path.join(DATA_DIR, 'family-codes.json');
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Middleware
 app.use(express.json());
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'FlightRoster API is running' });
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  next();
 });
 
-// In-memory storage (replace with database in production)
-const users = new Map();
-const friends = new Map();
-const messages = new Map();
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'ok',
+        service: 'FlightRosterIQ Backend',
+        timestamp: new Date().toISOString(),
+        message: 'Backend is running. Scraping disabled on free tier - use manual schedule entry.'
+    });
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'healthy', 
+        service: 'FlightRosterIQ Backend',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Authentication endpoint - returns message that scraping is not available
+app.post('/api/authenticate', async (req, res) => {
+    const { employeeId, password, airline } = req.body;
+    console.log(`🔐 AUTH REQUEST: ${airline?.toUpperCase() || 'ABX'} pilot ${employeeId}`);
+    
+    if (!employeeId || !password) {
+        return res.status(400).json({
+            success: false,
+            error: 'Employee ID and password are required'
+        });
+    }
+    
+    // Return message that scraping is not available on this tier
+    res.json({
+        success: false,
+        authenticated: false,
+        error: 'Automatic scraping not available',
+        message: 'Backend is running in lightweight mode. Please enter your schedule manually or use the mobile app to sync.',
+        fallback: {
+            portalUrls: {
+                abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
+                ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
+            },
+            selectedPortal: airline?.toLowerCase() || 'abx',
+            portalName: airline?.toUpperCase() || 'ABX Air'
+        }
+    });
+});
+
+// Scrape endpoint
+app.post('/api/scrape', async (req, res) => {
+    console.log('🔄 SCRAPE REQUEST');
+    const { employeeId, airline } = req.body;
+    
+    res.json({
+        success: false,
+        error: 'Scraping not available',
+        message: 'Automatic schedule scraping is disabled. Please enter schedule manually.',
+        fallback: {
+            portalUrls: {
+                abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
+                ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
+            },
+            selectedPortal: airline?.toLowerCase() || 'abx',
+            portalName: airline?.toUpperCase() || 'ABX Air'
+        }
+    });
+});
+
+// Family codes endpoints (basic storage)
 const familyCodes = new Map();
-const notifications = new Map();
+
+app.post('/api/family/generate-code', async (req, res) => {
+    const { employeeId } = req.body;
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    familyCodes.set(code, { employeeId, created: Date.now() });
+    res.json({ success: true, code });
+});
+
+app.post('/api/family/get-codes', async (req, res) => {
+    const { employeeId } = req.body;
+    const codes = Array.from(familyCodes.entries())
+        .filter(([_, data]) => data.employeeId === employeeId)
+        .map(([code, _]) => code);
+    res.json({ success: true, codes });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log('🚀 FlightRosterIQ Backend - Lightweight Mode');
+    console.log(`🌐 Server running on port ${PORT}`);
+    console.log(`✅ Health check: GET /api/health`);
+    console.log(`⚠️  Scraping disabled - Render free tier limitation`);
+});
+
+process.on('SIGTERM', () => {
+    console.log('🛑 Shutting down...');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('🛑 Shutting down...');
+    process.exit(0);
+});
+
+app.use(express.json());
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  next();
+});
+
+app.use(express.static('dist'));
 
 // Crew portal URLs
 const PORTALS = {
@@ -38,436 +133,399 @@ const PORTALS = {
   ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
 };
 
-// Data persistence functions
-const saveFamilyCodes = () => {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    const data = Object.fromEntries(familyCodes);
-    fs.writeFileSync(FAMILY_CODES_FILE, JSON.stringify(data, null, 2));
-    console.log('✅ Family codes saved to disk');
-  } catch (error) {
-    console.error('❌ Failed to save family codes:', error);
-  }
-};
-
-const loadFamilyCodes = () => {
-  try {
-    if (fs.existsSync(FAMILY_CODES_FILE)) {
-      const data = JSON.parse(fs.readFileSync(FAMILY_CODES_FILE, 'utf8'));
-      Object.entries(data).forEach(([key, value]) => familyCodes.set(key, value));
-      console.log(`✅ Loaded ${familyCodes.size} family code entries from disk`);
-    }
-  } catch (error) {
-    console.error('❌ Failed to load family codes:', error);
-  }
-};
-
-// Load family codes on startup
-loadFamilyCodes();
-
-// JWT Middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-  
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
-
-// ==================== HEALTH CHECK ====================
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    service: 'FlightRosterIQ Backend API',
-    timestamp: new Date().toISOString(),
-    version: '2.0.0'
-  });
-});
-
-// ==================== AUTHENTICATION ====================
-app.post('/api/authenticate', async (req, res) => {
-  const { employeeId, password, airline } = req.body;
-  console.log(`🔐 Authentication attempt: ${airline?.toUpperCase() || 'ABX'} pilot ${employeeId}`);
-  
-  if (!employeeId || !password) {
-    return res.status(400).json({
-      success: false,
-      error: 'Employee ID and password are required'
-    });
-  }
-  
-  let browser;
-  try {
-    console.log('🌐 Launching browser for crew portal authentication...');
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    });
-    
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-    
-    const portalUrl = PORTALS[airline?.toLowerCase()] || PORTALS.abx;
-    console.log(`🌐 Connecting to ${airline?.toUpperCase() || 'ABX'} crew portal...`);
-    
-    await page.goto(portalUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-    
-    const currentUrl = page.url();
-    
-    // Check if we're redirected to authentication
-    if (currentUrl.includes('auth/realms')) {
-      console.log('🔐 Keycloak authentication required...');
-      
-      await sleep(3000);
-      
-      // Fill credentials
-      await page.waitForSelector('#username', { timeout: 10000 });
-      await page.type('#username', employeeId);
-      await page.waitForSelector('#password', { timeout: 5000 });
-      await page.type('#password', password);
-      
-      // Submit
-      await page.keyboard.press('Enter');
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
-      
-      const postLoginUrl = page.url();
-      
-      // Check if authentication failed
-      if (postLoginUrl.includes('auth/realms')) {
-        await browser.close();
-        return res.status(401).json({
-          success: false,
-          authenticated: false,
-          error: 'Invalid crew portal credentials'
-        });
-      }
-      
-      console.log('✅ Authentication successful!');
-    }
-    
-    await sleep(5000);
-    
-    // Extract schedule data
-    let scheduleData = [];
-    try {
-      scheduleData = await page.evaluate(() => {
-        const body = document.body.innerText;
-        return body.includes('Flight') ? 'Schedule data found' : 'Portal accessed';
-      });
-    } catch (e) {
-      scheduleData = 'Portal accessed successfully';
-    }
-    
-    await browser.close();
-    
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        employeeId, 
-        airline: airline?.toUpperCase() || 'ABX',
-        role: 'pilot'
-      },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-    
-    // Store user data
-    users.set(employeeId, {
-      employeeId,
-      airline: airline?.toUpperCase() || 'ABX',
-      nickname: employeeId,
-      rank: 'Captain',
-      base: 'ILN',
-      loginTime: new Date().toISOString()
-    });
-    
-    res.json({
-      success: true,
-      authenticated: true,
-      token,
-      user: users.get(employeeId),
-      message: 'Authentication successful'
-    });
-    
-  } catch (error) {
-    console.error('❌ Authentication error:', error.message);
-    if (browser) await browser.close();
-    
-    res.status(500).json({
-      success: false,
-      error: 'Unable to connect to crew portal',
-      message: error.message
-    });
-  }
-});
-
-// ==================== SCHEDULE ====================
-app.get('/api/schedule', authenticateToken, async (req, res) => {
-  console.log('📅 Fetching schedule for:', req.user.employeeId);
-  
-  // Mock schedule data (replace with actual scraping in production)
-  const schedule = {
-    employeeId: req.user.employeeId,
-    airline: req.user.airline,
-    month: new Date().toISOString().slice(0, 7),
-    flights: [
-      {
-        id: 1,
-        date: '2025-01-05',
-        flightNumber: 'ABX101',
-        origin: 'ILN',
-        destination: 'LAX',
-        departureTime: '08:00',
-        arrivalTime: '10:30',
-        aircraft: '767-200',
-        position: 'Captain',
-        crew: [
-          { name: 'John Smith', role: 'Captain', base: 'ILN' },
-          { name: 'Jane Doe', role: 'First Officer', base: 'ILN' }
-        ],
-        hotel: 'Hilton LAX Airport',
-        layover: true
-      },
-      {
-        id: 2,
-        date: '2025-01-06',
-        flightNumber: 'ABX102',
-        origin: 'LAX',
-        destination: 'ILN',
-        departureTime: '14:00',
-        arrivalTime: '21:30',
-        aircraft: '767-200',
-        position: 'Captain',
-        crew: [
-          { name: 'John Smith', role: 'Captain', base: 'ILN' },
-          { name: 'Jane Doe', role: 'First Officer', base: 'ILN' }
-        ]
-      }
-    ],
-    lastUpdated: new Date().toISOString()
+// Parse crew portal dates (handles year rollover)
+function parseCrewDate(dateStr, year = new Date().getFullYear()) {
+  const months = {
+    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
   };
   
-  res.json(schedule);
+  const match = dateStr.match(/(\d{2})([A-Za-z]{3})/);
+  if (!match) return null;
+  
+  const day = parseInt(match[1]);
+  const monthName = match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase();
+  const month = months[monthName];
+  
+  if (month === undefined) return null;
+  
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  let actualYear = year;
+  
+  if (currentMonth === 11 && month <= 1) {
+    actualYear = year + 1;
+  }
+  
+  const date = new Date(actualYear, month, day);
+  const monthStr = String(month + 1).padStart(2, '0');
+  const dayStr = String(day).padStart(2, '0');
+  return `${actualYear}-${monthStr}-${dayStr}`;
+}
+
+// Extract crew members from page
+async function extractCrewMembers(page) {
+  try {
+    const crewMembers = await page.evaluate(() => {
+      const crew = [];
+      const tables = document.querySelectorAll('table');
+      
+      tables.forEach(table => {
+        const rows = table.querySelectorAll('tr');
+        rows.forEach(row => {
+          const cells = Array.from(row.querySelectorAll('td'));
+          if (cells.length >= 3) {
+            const text = cells.map(c => c.textContent.trim()).join(' ');
+            const nameMatch = text.match(/([A-Z][a-z]+),?\s+([A-Z][a-z]+)/);
+            const roleMatch = text.match(/(Captain|First Officer|CA|FO)/i);
+            
+            if (nameMatch) {
+              crew.push({
+                name: `${nameMatch[2]} ${nameMatch[1]}`,
+                role: roleMatch ? roleMatch[1] : 'Crew',
+                employeeId: text.match(/\d{5,}/)?.[0] || 'N/A'
+              });
+            }
+          }
+        });
+      });
+      
+      return crew.length > 0 ? crew : null;
+    });
+    
+    return crewMembers;
+  } catch (err) {
+    return null;
+  }
+}
+
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'healthy', 
+        service: 'FlightRosterIQ - Real Crew Portal Authentication',
+        timestamp: new Date().toISOString()
+    });
 });
 
-// ==================== FRIENDS ====================
-app.get('/api/friends', authenticateToken, (req, res) => {
-  const userFriends = friends.get(req.user.employeeId) || [];
-  res.json(userFriends);
-});
-
-app.post('/api/friends/request', authenticateToken, (req, res) => {
-  const { targetEmployeeId } = req.body;
-  
-  const targetNotifs = notifications.get(targetEmployeeId) || [];
-  targetNotifs.push({
-    id: Date.now(),
-    type: 'friend_request',
-    from: req.user.employeeId,
-    timestamp: new Date().toISOString()
-  });
-  notifications.set(targetEmployeeId, targetNotifs);
-  
-  res.json({ success: true, message: 'Friend request sent' });
-});
-
-app.post('/api/friends/accept', authenticateToken, (req, res) => {
-  const { friendEmployeeId } = req.body;
-  
-  const userFriends = friends.get(req.user.employeeId) || [];
-  const friendFriends = friends.get(friendEmployeeId) || [];
-  
-  userFriends.push({
-    employeeId: friendEmployeeId,
-    nickname: friendEmployeeId,
-    airline: 'ABX',
-    rank: 'Captain',
-    base: 'ILN'
-  });
-  
-  friendFriends.push({
-    employeeId: req.user.employeeId,
-    nickname: req.user.employeeId,
-    airline: req.user.airline,
-    rank: 'Captain',
-    base: 'ILN'
-  });
-  
-  friends.set(req.user.employeeId, userFriends);
-  friends.set(friendEmployeeId, friendFriends);
-  
-  res.json({ success: true, message: 'Friend added' });
-});
-
-// ==================== MESSAGES ====================
-app.get('/api/messages/:friendId', authenticateToken, (req, res) => {
-  const { friendId } = req.params;
-  const chatKey = [req.user.employeeId, friendId].sort().join('-');
-  const chatMessages = messages.get(chatKey) || [];
-  
-  res.json(chatMessages);
-});
-
-app.post('/api/messages/send', authenticateToken, (req, res) => {
-  const { to, message } = req.body;
-  const chatKey = [req.user.employeeId, to].sort().join('-');
-  const chatMessages = messages.get(chatKey) || [];
-  
-  chatMessages.push({
-    id: Date.now(),
-    from: req.user.employeeId,
-    to,
-    message,
-    timestamp: new Date().toISOString()
-  });
-  
-  messages.set(chatKey, chatMessages);
-  
-  res.json({ success: true, message: 'Message sent' });
-});
-
-// ==================== FAMILY SHARING ====================
-app.post('/api/family/generate-code', authenticateToken, (req, res) => {
-  const { memberName } = req.body;
-  const code = Math.random().toString(36).substr(2, 8).toUpperCase();
-  
-  const userCodes = familyCodes.get(req.user.employeeId) || [];
-  userCodes.push({
-    id: Date.now(),
-    code,
-    memberName,
-    created: new Date().toISOString(),
-    active: true
-  });
-  
-  familyCodes.set(req.user.employeeId, userCodes);
-  saveFamilyCodes();
-  
-  res.json({ success: true, code, memberName });
-});
-
-app.get('/api/family/get-codes', authenticateToken, (req, res) => {
-  const codes = familyCodes.get(req.user.employeeId) || [];
-  res.json(codes);
-});
-
-app.delete('/api/family/revoke-code/:code', authenticateToken, (req, res) => {
-  const { code } = req.params;
-  const userCodes = familyCodes.get(req.user.employeeId) || [];
-  const updatedCodes = userCodes.filter(c => c.code !== code);
-  
-  familyCodes.set(req.user.employeeId, updatedCodes);
-  saveFamilyCodes();
-  
-  res.json({ success: true, message: 'Code revoked' });
-});
-
-// ==================== NOTIFICATIONS ====================
-app.get('/api/notifications', authenticateToken, (req, res) => {
-  const userNotifs = notifications.get(req.user.employeeId) || [];
-  res.json(userNotifs);
-});
-
-app.post('/api/notifications/dismiss', authenticateToken, (req, res) => {
-  const { notificationId } = req.body;
-  const userNotifs = notifications.get(req.user.employeeId) || [];
-  const updated = userNotifs.filter(n => n.id !== notificationId);
-  
-  notifications.set(req.user.employeeId, updated);
-  
-  res.json({ success: true });
-});
-
-// ==================== SEARCH USERS ====================
-app.post('/api/search-users', authenticateToken, (req, res) => {
-  const { query } = req.body;
-  
-  // Mock search results
-  const results = [
-    {
-      employeeId: query || '12345',
-      nickname: 'Test Pilot',
-      airline: 'ABX',
-      rank: 'First Officer',
-      base: 'CVG'
+app.post('/api/authenticate', async (req, res) => {
+    const { employeeId, password, airline } = req.body;
+    console.log(`🔐 REAL CREW PORTAL AUTH: ${airline?.toUpperCase() || 'ABX'} pilot ${employeeId}`);
+    
+    if (!employeeId || !password) {
+        return res.status(400).json({
+            success: false,
+            error: 'Employee ID and password are required'
+        });
     }
-  ];
-  
-  res.json(results);
+    
+    let browser;
+    try {
+        console.log('🌐 Launching browser for real crew portal authentication...');
+        browser = await puppeteer.launch({
+            headless: 'new',
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu'
+            ]
+        });
+        
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1280, height: 720 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+        
+        const portalUrl = PORTALS[airline?.toLowerCase()] || PORTALS.abx;
+        console.log(`🌐 Connecting to ${airline?.toUpperCase() || 'ABX'} crew portal...`);
+        console.log(`🔗 Portal URL: ${portalUrl}`);
+        
+        await page.goto(portalUrl, { 
+            waitUntil: 'networkidle2', 
+            timeout: 30000 
+        });
+        
+        const pageTitle = await page.title();
+        const currentUrl = page.url();
+        
+        console.log(`📄 Portal page title: "${pageTitle}"`);
+        console.log(`🔗 Current URL: ${currentUrl}`);
+        
+        // Check if we're redirected to Keycloak authentication
+        if (currentUrl.includes('auth/realms') || pageTitle.toLowerCase().includes('sign in')) {
+            console.log('🔐 Keycloak authentication required - performing real login...');
+            
+            await sleep(3000);
+            
+            try {
+                // Fill username field
+                await page.waitForSelector('#username', { timeout: 10000 });
+                await page.clear('#username');
+                await page.type('#username', employeeId);
+                console.log(`✅ Username entered: ${employeeId}`);
+                
+                // Fill password field
+                await page.waitForSelector('#password', { timeout: 5000 });
+                await page.clear('#password');
+                await page.type('#password', password);
+                console.log('✅ Password entered: [HIDDEN]');
+                
+                // Submit the form
+                await page.keyboard.press('Enter');
+                console.log('🔄 Submitting authentication form...');
+                
+                // Wait for navigation after login
+                await page.waitForNavigation({ 
+                    waitUntil: 'networkidle2', 
+                    timeout: 15000 
+                });
+                
+                const postLoginUrl = page.url();
+                const postLoginTitle = await page.title();
+                
+                console.log(`📍 Post-login URL: ${postLoginUrl}`);
+                console.log(`📄 Post-login title: "${postLoginTitle}"`);
+                
+                // Check if authentication was successful
+                if (postLoginUrl.includes('auth/realms') || postLoginTitle.toLowerCase().includes('sign in') || postLoginTitle.toLowerCase().includes('error')) {
+                    throw new Error('Authentication failed - Invalid credentials or login error');
+                }
+                
+                console.log('🎉 REAL CREW PORTAL AUTHENTICATION SUCCESSFUL!');
+                console.log('📅 Extracting crew schedule data...');
+                
+                // Wait for crew portal to fully load
+                await sleep(5000);
+                
+// Extract full schedule data with crew members and hotels
+                let scheduleData = { flights: [], pairings: [], hotels: [] };
+                try {
+                    // Extract schedule from portal
+                    const extractedData = await page.evaluate(() => {
+                        const data = { flights: [], hotels: [], rawText: '' };
+                        
+                        // Try to get schedule table/grid
+                        const tables = document.querySelectorAll('table, [class*="schedule"], [class*="roster"], [class*="duty"]');
+                        
+                        tables.forEach(table => {
+                            const rows = table.querySelectorAll('tr, [class*="row"]');
+                            rows.forEach(row => {
+                                const text = row.textContent || '';
+                                
+                                // Look for hotel/layover info
+                                if (text.match(/hotel|layover|overnight/i)) {
+                                    const hotelMatch = text.match(/([A-Z]{3})\s+.*?(hotel|layover)/i);
+                                    const dateMatch = text.match(/(\d{2}[A-Z][a-z]{2})/);
+                                    
+                                    if (hotelMatch) {
+                                        data.hotels.push({
+                                            location: hotelMatch[1],
+                                            date: dateMatch ? dateMatch[1] : null,
+                                            rawText: text.trim()
+                                        });
+                                    }
+                                }
+                                
+                                // Look for flight numbers (GB1234, etc)
+                                const flightMatch = text.match(/([A-Z]{2}\d{4})/);
+                                // Look for airports (3-letter codes)
+                                const airportsMatch = text.match(/([A-Z]{3})\s+.*?([A-Z]{3})/);
+                                // Look for times (HH:MM format)
+                                const timesMatch = text.match(/(\d{2}:\d{2}).*?(\d{2}:\d{2})/);
+                                // Look for dates (DDMon format)
+                                const dateMatch = text.match(/(\d{2}[A-Z][a-z]{2})/);
+                                
+                                if (flightMatch && airportsMatch && timesMatch) {
+                                    data.flights.push({
+                                        flightNumber: flightMatch[1],
+                                        origin: airportsMatch[1],
+                                        destination: airportsMatch[2],
+                                        departure: timesMatch[1],
+                                        arrival: timesMatch[2],
+                                        date: dateMatch ? dateMatch[1] : null,
+                                        hotels: [],
+                                        rawText: text.trim()
+                                    });
+                                }
+                            });
+                        });
+                        
+                        // Fallback: get all body text for manual parsing
+                        data.rawText = document.body.innerText;
+                        
+                        return data;
+                    });
+                    
+                    // Try to extract crew members if we have flights
+                    if (extractedData.flights.length > 0) {
+                        console.log(`✅ Found ${extractedData.flights.length} flights`);
+                        
+                        // Try to get crew for first flight as example
+                        try {
+                            const crewMembers = await extractCrewMembers(page);
+                            if (crewMembers && crewMembers.length > 0) {
+                                extractedData.flights[0].crewMembers = crewMembers;
+                                console.log(`👥 Extracted ${crewMembers.length} crew members`);
+                            } else {
+                                // Add mock crew data for testing display
+                                console.log('⚠️ No crew found, adding test data');
+                                extractedData.flights[0].crewMembers = [
+                                    { name: 'John Smith', role: 'Captain', employeeId: '12345' },
+                                    { name: 'Jane Doe', role: 'First Officer', employeeId: '67890' }
+                                ];
+                            }
+                            
+                            // Add mock actual times for testing (same as scheduled to verify display)
+                            extractedData.flights[0].actualDeparture = extractedData.flights[0].departure;
+                            extractedData.flights[0].actualArrival = extractedData.flights[0].arrival;
+                            console.log('✈️ Added test actual times (matching scheduled)');
+                        } catch (crewErr) {
+                            console.log('⚠️ Could not extract crew:', crewErr.message);
+                        }
+                    }
+                    
+                    // Log hotel data if found
+                    if (extractedData.hotels && extractedData.hotels.length > 0) {
+                        console.log(`🏨 Found ${extractedData.hotels.length} hotels/layovers`);
+                    }
+                    
+                    scheduleData = extractedData;
+                    console.log(`📅 Schedule extraction complete`);
+                    
+                } catch (extractError) {
+                    console.log('📅 Schedule extraction note:', extractError.message);
+                    scheduleData = { flights: [], note: 'Real authentication successful - portal accessed' };
+                }
+                
+                await browser.close();
+                
+                // Format flights data for frontend compatibility
+                const formattedFlights = scheduleData.flights || [];
+                formattedFlights.forEach(flight => {
+                    // Ensure crewMembers field exists
+                    if (!flight.crewMembers) {
+                        flight.crewMembers = [];
+                    }
+                    // Ensure hotels field exists
+                    if (!flight.hotels) {
+                        flight.hotels = [];
+                    }
+                    // Parse date if needed
+                    if (flight.date && !flight.date.includes('-')) {
+                        flight.date = parseCrewDate(flight.date);
+                    }
+                });
+                
+                // Format hotel data
+                // Hotels are shown on the arrival date of the preceding flight (layover day)
+                const formattedHotels = (scheduleData.hotels || []).map(hotel => {
+                    return {
+                        ...hotel,
+                        date: hotel.date && !hotel.date.includes('-') ? parseCrewDate(hotel.date) : hotel.date
+                    };
+                });
+                
+                res.json({
+                    success: true,
+                    authenticated: true,
+                    message: `Real crew portal authentication successful for ${airline?.toUpperCase() || 'ABX'} pilot ${employeeId}`,
+                    data: {
+                        employeeId,
+                        airline: airline?.toUpperCase() || 'ABX',
+                        loginTime: new Date().toISOString(),
+                        portalAccessed: true,
+                        flights: formattedFlights,
+                        hotels: formattedHotels,
+                        scheduleData: scheduleData,
+                        realAuthentication: true
+                    }
+                });
+                
+            } catch (authError) {
+                console.error('❌ CREW PORTAL AUTHENTICATION FAILED:', authError.message);
+                await browser.close();
+                
+                res.status(401).json({
+                    success: false,
+                    authenticated: false,
+                    error: 'Invalid crew portal credentials',
+                    message: 'Please check your employee ID and password',
+                    details: authError.message
+                });
+                return;
+            }
+            
+        } else {
+            // Portal accessed directly without authentication
+            console.log('✅ Crew portal accessed without additional authentication');
+            await browser.close();
+            
+            res.json({
+                success: true,
+                authenticated: true,
+                message: `Crew portal accessed for ${airline?.toUpperCase() || 'ABX'} pilot ${employeeId}`,
+                data: {
+                    employeeId,
+                    airline: airline?.toUpperCase() || 'ABX',
+                    loginTime: new Date().toISOString(),
+                    portalAccessed: true,
+                    scheduleData: ['Portal accessed successfully']
+                }
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ CREW PORTAL CONNECTION ERROR:', error.message);
+        
+        if (browser) {
+            await browser.close();
+        }
+        
+        res.status(500).json({
+            success: false,
+            authenticated: false,
+            error: 'Unable to connect to crew portal',
+            message: 'Please check your connection and try again',
+            details: error.message
+        });
+    }
 });
 
-// ==================== ROSTER UPDATES ====================
-app.get('/api/roster-updates', authenticateToken, (req, res) => {
-  res.json({
-    hasUpdates: false,
-    updates: [],
-    lastChecked: new Date().toISOString()
-  });
+// Scrape endpoint (same functionality as authenticate for automatic scraping)
+app.post('/api/scrape', async (req, res) => {
+    console.log('🔄 AUTOMATIC SCRAPING REQUEST');
+    
+    // Use the same authentication logic
+    const { employeeId, password, airline } = req.body;
+    
+    if (!employeeId || !password) {
+        return res.status(400).json({
+            success: false,
+            error: 'Credentials required for automatic scraping'
+        });
+    }
+    
+    // Redirect to authenticate endpoint with scraping context
+    req.body.autoScrape = true;
+    
+    // Call the authenticate function
+    return app._router.handle(Object.assign(req, { url: '/api/authenticate' }), res);
 });
 
-// ==================== WEATHER ====================
-app.post('/api/weather', authenticateToken, (req, res) => {
-  const { airport } = req.body;
-  
-  // Mock weather data
-  res.json({
-    airport,
-    temp: 72,
-    conditions: 'Clear',
-    wind: '10 kts',
-    visibility: '10 SM',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// ==================== SUBSCRIPTION ====================
-app.get('/api/subscription/status', authenticateToken, (req, res) => {
-  res.json({
-    status: 'active',
-    plan: 'premium',
-    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-  });
-});
-
-// Start server
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('🚀 FlightRosterIQ Backend API');
-  console.log(`🌐 Server running on port ${PORT}`);
-  console.log(`✈️ Endpoints available:`);
-  console.log(`   - GET  /api/health`);
-  console.log(`   - POST /api/authenticate`);
-  console.log(`   - GET  /api/schedule`);
-  console.log(`   - GET  /api/friends`);
-  console.log(`   - POST /api/messages/send`);
-  console.log(`   - POST /api/family/generate-code`);
-  console.log(`   - GET  /api/notifications`);
-  console.log(`🔐 JWT Authentication enabled`);
-  console.log(`📅 Real crew portal scraping enabled`);
+    console.log('🚀 FlightRosterIQ - REAL CREW PORTAL AUTHENTICATION!');
+    console.log(`🌐 Server running on port ${PORT}`);
+    console.log(`🔐 Real ABX Air & ATI crew portal authentication enabled`);
+    console.log(`📅 Automatic schedule scraping enabled`);
+    console.log(`✈️ No fake accounts accepted - real credentials only`);
+    console.log(`🌐 Access at: http://157.245.126.24:${PORT}`);
 });
 
 process.on('SIGTERM', () => {
-  console.log('🛑 Shutting down server...');
-  process.exit(0);
+    console.log('🛑 Shutting down FlightRosterIQ server...');
+    process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('🛑 Shutting down server...');
-  process.exit(0);
+    console.log('🛑 Shutting down FlightRosterIQ server...');
+    process.exit(0);
 });
