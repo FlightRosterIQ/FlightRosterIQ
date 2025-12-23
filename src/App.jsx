@@ -5176,7 +5176,7 @@ function App() {
                     </Box>
                   </Stack>
 
-                  {/* Report Time */}
+                  {/* Report Time - Always based on scheduled departure */}
                   <Box sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 1 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                       Report Time:
@@ -5213,10 +5213,10 @@ function App() {
                         </Typography>
                         <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                           <Typography variant="body2" sx={{ color: 'success.dark' }}>
-                            {flight.actualDeparture || flight.departure} - {flight.actualArrival || flight.arrival} LT
+                            {flight.actualDeparture || '--:--'} - {flight.actualArrival || '--:--'} LT
                           </Typography>
                           <Typography variant="body2" sx={{ color: 'success.dark', opacity: 0.8 }}>
-                            {convertToUTC(flight.actualDeparture || flight.departure)} - {convertToUTC(flight.actualArrival || flight.arrival)} UTC
+                            {flight.actualDeparture ? convertToUTC(flight.actualDeparture) : '--:--'} - {flight.actualArrival ? convertToUTC(flight.actualArrival) : '--:--'} UTC
                           </Typography>
                         </Stack>
                       </Box>
