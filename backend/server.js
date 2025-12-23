@@ -1,4 +1,6 @@
 const express = require('express');
+const https = require('https');
+const fs = require('fs');
 // Puppeteer removed - too heavy for Render free tier
 // Use client-side scraping or different hosting for scraper
 const app = express();
@@ -511,14 +513,40 @@ app.post('/api/scrape', async (req, res) => {
     return app._router.handle(Object.assign(req, { url: '/api/authenticate' }), res);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log('🚀 FlightRosterIQ - REAL CREW PORTAL AUTHENTICATION!');
-    console.log(`🌐 Server running on port ${PORT}`);
-    console.log(`🔐 Real ABX Air & ATI crew portal authentication enabled`);
-    console.log(`📅 Automatic schedule scraping enabled`);
-    console.log(`✈️ No fake accounts accepted - real credentials only`);
-    console.log(`🌐 Access at: http://157.245.126.24:${PORT}`);
-});
+// SSL Certificate paths (if available)
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH || '/etc/letsencrypt/live/yourdomain.com/privkey.pem';
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '/etc/letsencrypt/live/yourdomain.com/fullchain.pem';
+
+// Check if SSL certificates exist
+const hasSSL = fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH);
+
+if (hasSSL) {
+    // HTTPS Server with SSL
+    const httpsOptions = {
+        key: fs.readFileSync(SSL_KEY_PATH),
+        cert: fs.readFileSync(SSL_CERT_PATH)
+    };
+    
+    https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
+        console.log('🚀 FlightRosterIQ - REAL CREW PORTAL AUTHENTICATION!');
+        console.log(`🔒 HTTPS Server running on port ${PORT}`);
+        console.log(`🔐 Real ABX Air & ATI crew portal authentication enabled`);
+        console.log(`📅 Automatic schedule scraping enabled`);
+        console.log(`✈️ No fake accounts accepted - real credentials only`);
+        console.log(`🌐 Access at: https://157.245.126.24:${PORT}`);
+    });
+} else {
+    // Fallback to HTTP if no SSL certificates
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log('🚀 FlightRosterIQ - REAL CREW PORTAL AUTHENTICATION!');
+        console.log(`⚠️  HTTP Server running on port ${PORT} (SSL certificates not found)`);
+        console.log(`🔐 Real ABX Air & ATI crew portal authentication enabled`);
+        console.log(`📅 Automatic schedule scraping enabled`);
+        console.log(`✈️ No fake accounts accepted - real credentials only`);
+        console.log(`🌐 Access at: http://157.245.126.24:${PORT}`);
+        console.log(`💡 To enable HTTPS, set SSL_KEY_PATH and SSL_CERT_PATH environment variables`);
+    });
+}
 
 process.on('SIGTERM', () => {
     console.log('🛑 Shutting down FlightRosterIQ server...');
