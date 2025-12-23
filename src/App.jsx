@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import localforage from 'localforage'
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 import {
@@ -48,15 +48,8 @@ import {
   IconButton
 } from './components/ui'
 
-import { FlightCard } from './components/FlightCard'
-import { CrewCard } from './components/CrewCard'
-import { MonthlyView } from './components/MonthlyView'
-import { DailyView } from './components/DailyView'
-import { FriendsView } from './components/FriendsView'
-import { SettingsView } from './components/SettingsView'
-
 import { cn } from './lib/utils'
-import { API_BASE_URL } from './config'
+import config from './config'
 
 function App() {
   // Authentication & User State
@@ -104,14 +97,14 @@ function App() {
   const [selectedChat, setSelectedChat] = useState(null)
   const [messageInput, setMessageInput] = useState('')
   
-  // Use API_BASE_URL from config (empty for Vercel proxy, or localhost for dev)
-  const API_URL = API_BASE_URL
+  // Notifications
+  const [notifications, setNotifications] = useState([
+    { id: 1, type: 'schedule', message: 'Schedule updated for December', read: false },
+    { id: 2, type: 'crew', message: 'New crew member assigned', read: false },
+    { id: 3, type: 'info', message: 'Welcome to FlightRosterIQ', read: true }
+  ])
   
-  console.log('🔧 API Configuration:', { 
-    API_BASE_URL_imported: API_BASE_URL,
-    API_URL_used: API_URL,
-    mode: API_BASE_URL ? 'Direct' : 'Vercel Proxy'
-  })
+  const API_URL = config.API_URL
 
   // Check for mobile device
   useEffect(() => {
@@ -168,48 +161,32 @@ function App() {
     setLoadingMessage('Authenticating...')
 
     try {
-      const authUrl = `${API_URL}/api/authenticate`
-      console.log('Attempting authentication at:', authUrl)
-      
-      const response = await fetch(authUrl, {
+      const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          employeeId: credentials.username,
+          username: credentials.username,
           password: credentials.password,
           airline: airline.toUpperCase()
         })
       })
 
-      console.log('Response status:', response.status, response.statusText)
-
-      // Check if response is ok before parsing JSON
-      if (!response.ok) {
-        const text = await response.text()
-        console.error('Server error response:', text)
-        throw new Error(`Server error (${response.status}): ${text}`)
-      }
-
       const data = await response.json()
-      console.log('Authentication response:', data)
 
-      if (data.success && data.authenticated) {
-        // Mock token for now since backend doesn't provide one
-        const mockToken = btoa(`${credentials.username}:${Date.now()}`)
-        setToken(mockToken)
+      if (response.ok) {
+        setToken(data.token)
         setUsername(credentials.username)
-        await localforage.setItem('crewToken', mockToken)
+        await localforage.setItem('crewToken', data.token)
         await localforage.setItem('crewUsername', credentials.username)
         await localforage.setItem('crewAirline', airline)
         
         // Fetch schedule
-        await fetchSchedule(mockToken)
+        await fetchSchedule(data.token)
       } else {
-        setError(data.error || data.message || 'Authentication not available. Backend is in lightweight mode.')
+        setError(data.message || 'Login failed')
       }
     } catch (err) {
-      console.error('Authentication error:', err)
-      setError(err.message || 'Connection error. Please check your internet connection.')
+      setError('Connection error. Please check your internet connection.')
     } finally {
       setLoading(false)
       setLoadingMessage('')
@@ -222,25 +199,21 @@ function App() {
     setLoadingMessage('Fetching your schedule...')
 
     try {
-      const response = await fetch(`${API_URL}/api/scrape`, {
-        method: 'POST',
+      const response = await fetch(`${API_URL}/api/schedule`, {
+        method: 'GET',
         headers: {
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          employeeId: username,
-          airline: airline.toUpperCase()
-        })
+        }
       })
 
       const data = await response.json()
 
-      if (data.success && data.schedule) {
-        setSchedule(data.schedule)
-        await localforage.setItem('crewSchedule', data.schedule)
+      if (response.ok) {
+        setSchedule(data)
+        await localforage.setItem('crewSchedule', data)
       } else {
-        // For now, show error that scraping is not available
-        setError(data.message || 'Schedule scraping is not available in lightweight mode')
+        setError(data.message || 'Failed to fetch schedule')
       }
     } catch (err) {
       setError('Failed to load schedule')
@@ -264,15 +237,15 @@ function App() {
   // Render Login Screen
   if (!token) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary to-accent flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center p-4">
         <Card className="w-full max-w-md animate-slide-up">
           <CardHeader>
             <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
-                <Plane className="w-8 h-8 text-primary" />
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-full mb-4">
+                <Plane className="w-8 h-8 text-primary-600" />
               </div>
-              <h1 className="text-2xl font-bold text-foreground">Flight Roster IQ</h1>
-              <p className="text-muted-foreground mt-2">Crew Schedule Management</p>
+              <h1 className="text-2xl font-bold text-gray-900">Flight Roster IQ</h1>
+              <p className="text-gray-600 mt-2">Crew Schedule Management</p>
             </div>
           </CardHeader>
           
@@ -333,7 +306,7 @@ function App() {
               </Button>
             </form>
 
-            <div className="mt-6 text-center text-sm text-muted-foreground">
+            <div className="mt-6 text-center text-sm text-gray-600">
               <p>Need help? Contact support</p>
             </div>
           </CardContent>
@@ -350,21 +323,23 @@ function App() {
     { label: 'Monthly', value: 'monthly', icon: <Calendar className="w-4 h-4" /> },
     { label: 'Daily', value: 'daily', icon: <Clock className="w-4 h-4" /> },
     { label: 'Friends', value: 'friends', icon: <Users className="w-4 h-4" /> },
+    { label: 'Notifications', value: 'notifications', icon: <Bell className="w-4 h-4" /> },
+    { label: 'Stats', value: 'stats', icon: <RefreshCw className="w-4 h-4" /> },
     { label: 'Settings', value: 'settings', icon: <Settings className="w-4 h-4" /> },
   ]
 
   return (
-    <div className={cn('min-h-screen bg-background', theme === 'dark' && 'dark')}>
+    <div className={cn('min-h-screen', theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50')}>
       {/* Header */}
-      <header className="bg-card shadow-sm sticky top-0 z-30 border-b border-border">
+      <header className="bg-white shadow-sm sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <Plane className="w-6 h-6 text-primary-foreground" />
+            <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center">
+              <Plane className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Flight Roster IQ</h1>
-              <p className="text-sm text-muted-foreground">{username} ΓÇó {airline.toUpperCase()}</p>
+              <h1 className="text-xl font-bold text-gray-900">Flight Roster IQ</h1>
+              <p className="text-sm text-gray-500">{username} • {airline.toUpperCase()}</p>
             </div>
           </div>
 
@@ -398,46 +373,253 @@ function App() {
         {loading && (
           <div className="flex items-center justify-center py-12">
             <Spinner size="lg" />
-            <span className="ml-3 text-muted-foreground">{loadingMessage}</span>
+            <span className="ml-3 text-gray-600">{loadingMessage}</span>
           </div>
         )}
 
         {/* Monthly View */}
         {activeTab === 'monthly' && !loading && (
-          <MonthlyView 
-            schedule={schedule}
-            currentMonth={currentMonth}
-            onFlightClick={(flight) => setSelectedFlight(flight)}
-          />
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <h2 className="text-xl font-semibold">Monthly Schedule</h2>
+                <p className="text-gray-500">{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+              </CardHeader>
+              <CardContent>
+                {schedule?.flights?.length > 0 ? (
+                  <div className="space-y-3">
+                    {schedule.flights.slice(0, 10).map((flight, idx) => (
+                      <Card key={idx} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedFlight(flight)}>
+                        <CardContent className="py-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+                                <Plane className="w-6 h-6 text-primary-600" />
+                              </div>
+                              <div>
+                                <div className="font-semibold text-lg">{flight.origin} → {flight.destination}</div>
+                                <div className="text-sm text-gray-500">Flight {flight.flightNumber}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-medium">{new Date(flight.departure).toLocaleDateString()}</div>
+                              <div className="text-sm text-gray-500">{new Date(flight.departure).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Plane className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No flights scheduled</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Daily View */}
         {activeTab === 'daily' && !loading && (
-          <DailyView 
-            selectedDate={selectedDate}
-            dailyFlights={dailyFlights}
-            hotels={hotels}
-            onDateChange={(date) => setSelectedDate(date)}
-            onFlightClick={(flight) => setSelectedFlight(flight)}
-          />
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <h2 className="text-xl font-semibold">Daily Schedule</h2>
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="mt-2"
+                />
+              </CardHeader>
+              <CardContent>
+                {dailyFlights.length > 0 ? (
+                  <div className="space-y-4">
+                    {dailyFlights.map((flight, idx) => (
+                      <Card key={idx} className="hover:shadow-lg transition-shadow">
+                        <CardContent>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="text-lg font-semibold">{flight.origin} → {flight.destination}</div>
+                              <div className="text-sm text-gray-500 mt-1">Flight {flight.flightNumber}</div>
+                              <div className="flex items-center gap-2 mt-2 text-sm">
+                                <Clock className="w-4 h-4 text-gray-400" />
+                                <span>{new Date(flight.departure).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              </div>
+                            </div>
+                            <Badge variant="primary">{flight.aircraftType || 'B767'}</Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No flights on this date</p>
+                  </div>
+                )}
+
+                {hotels.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <Hotel className="w-5 h-5 text-primary-600" />
+                      Layover Hotels
+                    </h3>
+                    {hotels.map((hotel, idx) => (
+                      <Card key={idx}>
+                        <CardContent>
+                          <div className="font-medium">{hotel.name}</div>
+                          <div className="text-sm text-gray-500">{hotel.location}</div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Friends View */}
         {activeTab === 'friends' && !loading && (
-          <FriendsView 
-            friends={[]}
-            onAddFriend={() => console.log('Add friend functionality coming soon')}
-          />
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-semibold">Friends & Crew</h2>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-12">
+                <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">No friends added yet</p>
+                <Button className="mt-4">Add Friends</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Notifications View */}
+        {activeTab === 'notifications' && !loading && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-semibold">Notifications</h2>
+              <Button variant="ghost" size="sm" onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}>
+                Mark all as read
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {notifications.length > 0 ? (
+                <div className="space-y-3">
+                  {notifications.map((notif) => (
+                    <Card key={notif.id} className={!notif.read ? 'bg-primary/5 border-primary/20' : ''}>
+                      <CardContent className="flex items-start gap-3">
+                        <div className={`w-2 h-2 rounded-full mt-2 ${!notif.read ? 'bg-primary' : 'bg-gray-300'}`} />
+                        <div className="flex-1">
+                          <div className="font-medium">{notif.message}</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            {notif.type === 'schedule' ? '📅 Schedule' : notif.type === 'crew' ? '👥 Crew' : 'ℹ️ Info'}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No notifications</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Stats View */}
+        {activeTab === 'stats' && !loading && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-semibold">Flight Statistics</h2>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <Card>
+                  <CardContent className="text-center">
+                    <div className="text-3xl font-bold text-primary">{schedule?.flights?.length || 0}</div>
+                    <div className="text-sm text-muted-foreground mt-1">Total Flights</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="text-center">
+                    <div className="text-3xl font-bold text-success">{Math.floor((schedule?.flights?.length || 0) * 4.5)}</div>
+                    <div className="text-sm text-muted-foreground mt-1">Flight Hours</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <h3 className="font-semibold">Destinations</h3>
+                </CardHeader>
+                <CardContent>
+                  {schedule?.flights ? (
+                    <div className="space-y-2">
+                      {[...new Set(schedule.flights.map(f => f.destination))].slice(0, 5).map((dest, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-primary" />
+                            {dest}
+                          </span>
+                          <Badge>{schedule.flights.filter(f => f.destination === dest).length}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No data available</p>
+                  )}
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
         )}
 
         {/* Settings View */}
         {activeTab === 'settings' && !loading && (
-          <SettingsView 
-            username={username}
-            settings={{}}
-            onSettingsChange={(settings) => console.log('Settings changed:', settings)}
-            onDeleteAccount={() => console.log('Delete account functionality coming soon')}
-          />
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-semibold">Settings</h2>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="font-semibold mb-3">Pilot Information</h3>
+                <div className="space-y-3">
+                  <Input label="Full Name" defaultValue={username} />
+                  <Input label="Employee ID" placeholder="Enter ID" />
+                  <Select label="Base">
+                    <option>CVG - Cincinnati</option>
+                    <option>ILN - Wilmington</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3">Notifications</h3>
+                <div className="flex items-center justify-between">
+                  <span>Schedule Changes</span>
+                  <input type="checkbox" className="w-4 h-4" defaultChecked />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3">Preferences</h3>
+                <Select label="Timezone">
+                  <option>UTC</option>
+                  <option>Local</option>
+                </Select>
+              </div>
+
+              <Button variant="danger" className="w-full">Delete Account</Button>
+            </CardContent>
+          </Card>
         )}
       </main>
 
@@ -449,44 +631,40 @@ function App() {
           </DialogHeader>
           <DialogContent>
             <div className="space-y-4">
-              {/* Flight Header */}
-              <div className="bg-card rounded-xl shadow-sm p-5 border border-border">
-                <div className="text-2xl font-bold text-foreground">
-                  {selectedFlight.origin} ΓåÆ {selectedFlight.destination}
+              <div>
+                <div className="text-2xl font-bold">
+                  {selectedFlight.origin} → {selectedFlight.destination}
                 </div>
-                <div className="text-muted-foreground mt-1">Flight {selectedFlight.flightNumber}</div>
-                {selectedFlight.aircraftType && (
-                  <Badge variant="primary" className="mt-3">{selectedFlight.aircraftType}</Badge>
-                )}
+                <div className="text-gray-500">Flight {selectedFlight.flightNumber}</div>
               </div>
 
-              {/* Times */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-card rounded-xl shadow-sm p-4 border border-border">
-                  <div className="text-sm text-muted-foreground mb-1">Departure</div>
-                  <div className="font-semibold text-foreground">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm text-gray-500">Departure</div>
+                  <div className="font-semibold">
                     {new Date(selectedFlight.departure).toLocaleString()}
                   </div>
                 </div>
-                <div className="bg-card rounded-xl shadow-sm p-4 border border-border">
-                  <div className="text-sm text-muted-foreground mb-1">Arrival</div>
-                  <div className="font-semibold text-foreground">
+                <div>
+                  <div className="text-sm text-gray-500">Arrival</div>
+                  <div className="font-semibold">
                     {new Date(selectedFlight.arrival).toLocaleString()}
                   </div>
                 </div>
               </div>
 
-              {/* Crew */}
               {selectedFlight.crew && selectedFlight.crew.length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-3 text-foreground">Crew Members</h3>
-                  <div className="space-y-3">
+                  <h3 className="font-semibold mb-2">Crew</h3>
+                  <div className="space-y-2">
                     {selectedFlight.crew.map((member, idx) => (
-                      <CrewCard 
-                        key={idx} 
-                        member={member}
-                        onContact={(type, member) => console.log(`Contact ${member.name} via ${type}`)}
-                      />
+                      <div key={idx} className="flex items-center gap-3">
+                        <Avatar size="sm">{member.name?.[0]}</Avatar>
+                        <div>
+                          <div className="font-medium">{member.name}</div>
+                          <div className="text-sm text-gray-500">{member.role}</div>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
