@@ -9,7 +9,7 @@
     },
     {
       "source": "/api/:path*",
-      "destination": "https://flightrosteriq.onrender.com/api/:path*"
+      "destination": "http://157.245.126.24:8080/api/:path*"
     }
   ]
 }
