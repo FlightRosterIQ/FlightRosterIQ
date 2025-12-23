@@ -156,10 +156,10 @@ Configured caching strategies:
 
 Create `.env.production` in crew-schedule-app:
 ```
-VITE_API_URL=https://your-backend.onrender.com
+VITE_API_URL=https://your-backend-url.com
 ```
 
-Update backend server URL in App.jsx or use environment variable.
+Update backend server URL in config.js or use environment variable.
 
 ## Support
 

@@ -1,6 +1,4 @@
 const express = require('express');
-// Puppeteer removed - too heavy for Render free tier
-// Use client-side scraping or different hosting for scraper
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -103,7 +101,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('🚀 FlightRosterIQ Backend - Lightweight Mode');
     console.log(`🌐 Server running on port ${PORT}`);
     console.log(`✅ Health check: GET /api/health`);
-    console.log(`⚠️  Scraping disabled - Render free tier limitation`);
+    console.log(`⚠️  Automatic scraping not available`);
 });
 
 process.on('SIGTERM', () => {
