@@ -305,6 +305,7 @@ app.post('/api/authenticate', async (req, res) => {
                 });
                 
                 // Format hotel data
+                // Hotels are shown on the arrival date of the preceding flight (layover day)
                 const formattedHotels = (scheduleData.hotels || []).map(hotel => {
                     return {
                         ...hotel,
