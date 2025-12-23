@@ -5110,7 +5110,13 @@ function App() {
             <Card 
               key={idx} 
               sx={{ mb: 2, cursor: 'pointer', '&:hover': { boxShadow: 4 } }} 
-              onClick={() => setSelectedFlight({...flight, originalDate: selectedDate})}
+              onClick={() => {
+                console.log('Flight data:', flight);
+                console.log('Actual Departure:', flight.actualDeparture);
+                console.log('Actual Arrival:', flight.actualArrival);
+                console.log('Crew Members:', flight.crewMembers);
+                setSelectedFlight({...flight, originalDate: selectedDate});
+              }}
               elevation={2}
             >
               <CardContent>
