@@ -107,6 +107,15 @@ function App() {
   // Force production backend URL - ALWAYS use VPS directly
   const API_URL = 'http://157.245.126.24:8080'
   
+  // CRITICAL: Log API URL configuration on mount
+  useEffect(() => {
+    console.log('%c🔧 API CONFIGURATION', 'background: #4C5FD5; color: white; padding: 4px 8px; font-weight: bold;')
+    console.log('API_URL:', API_URL)
+    console.log('API_BASE_URL:', API_BASE_URL)
+    console.log('Current location:', window.location.href)
+    console.log('Will call auth at:', `${API_URL}/api/authenticate`)
+  }, [])
+  
   // Log on every render to verify URL
   console.log('🔧 API Configuration (render ' + Date.now() + '):', { 
     API_BASE_URL_imported: API_BASE_URL,
