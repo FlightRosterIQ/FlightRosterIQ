@@ -1,9 +1,8 @@
 services:
   - type: web
     name: flightroster-backend
-    runtime: node
+    env: node
     rootDir: backend
-    dockerfilePath: null
     buildCommand: bash render-build.sh
     startCommand: node server.js
     envVars:
