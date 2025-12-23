@@ -161,7 +161,10 @@ function App() {
     setLoadingMessage('Authenticating...')
 
     try {
-      const response = await fetch(`${API_URL}/api/authenticate`, {
+      const authUrl = `${API_URL}/api/authenticate`
+      console.log('Attempting authentication at:', authUrl)
+      
+      const response = await fetch(authUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -171,7 +174,17 @@ function App() {
         })
       })
 
+      console.log('Response status:', response.status, response.statusText)
+
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        const text = await response.text()
+        console.error('Server error response:', text)
+        throw new Error(`Server error (${response.status}): ${text}`)
+      }
+
       const data = await response.json()
+      console.log('Authentication response:', data)
 
       if (data.success && data.authenticated) {
         // Mock token for now since backend doesn't provide one
@@ -188,7 +201,8 @@ function App() {
         setError(data.error || data.message || 'Authentication not available. Backend is in lightweight mode.')
       }
     } catch (err) {
-      setError('Connection error. Please check your internet connection.')
+      console.error('Authentication error:', err)
+      setError(err.message || 'Connection error. Please check your internet connection.')
     } finally {
       setLoading(false)
       setLoadingMessage('')
