@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: flightroster-backend
+    runtime: node
+    rootDir: backend
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
