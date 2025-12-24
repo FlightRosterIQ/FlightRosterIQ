@@ -37,6 +37,7 @@ import {
   ListItemText,
   ListItemIcon,
   ListItemAvatar,
+  MenuList,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -68,6 +69,7 @@ import {
   FlightTakeoff as TakeoffIcon,
   DarkMode as DarkModeIcon,
   LightMode as LightModeIcon,
+  SettingsBrightness as SystemThemeIcon,
   Menu as MenuIcon
 } from '@mui/icons-material'
 
@@ -131,7 +133,39 @@ function App() {
     theme: 'light'
   })
   const [theme, setTheme] = useState('light')
+  const [themePreference, setThemePreference] = useState('light') // 'light', 'dark', or 'system'
   const [showThemeDropdown, setShowThemeDropdown] = useState(false)
+  
+  // Detect and apply system theme preference
+  useEffect(() => {
+    const loadThemePreference = async () => {
+      const savedPreference = await localforage.getItem('themePreference') || 'light'
+      setThemePreference(savedPreference)
+      
+      if (savedPreference === 'system') {
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        setTheme(systemTheme)
+      } else {
+        setTheme(savedPreference)
+      }
+    }
+    
+    loadThemePreference()
+    
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const handleSystemThemeChange = (e) => {
+      if (themePreference === 'system') {
+        setTheme(e.matches ? 'dark' : 'light')
+      }
+    }
+    
+    mediaQuery.addEventListener('change', handleSystemThemeChange)
+    
+    return () => {
+      mediaQuery.removeEventListener('change', handleSystemThemeChange)
+    }
+  }, [themePreference])
   
   // Material-UI Theme Configuration (Dynamic based on theme state)
   const muiTheme = useMemo(() => createTheme({
@@ -498,6 +532,23 @@ function App() {
     return () => clearTimeout(timeoutId)
   }, [token])
 
+  // Close theme dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showThemeDropdown && !event.target.closest('.theme-dropdown-container')) {
+        setShowThemeDropdown(false)
+      }
+    }
+    
+    if (showThemeDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showThemeDropdown])
+
   useEffect(() => {
     loadCachedData()
     initializePushNotifications()
@@ -757,6 +808,7 @@ function App() {
       const cachedSchedule = await localforage.getItem('schedule')
       const cachedFriends = await localforage.getItem('friends')
       const cachedSettings = await localforage.getItem('settings')
+      const cachedThemePreference = await localforage.getItem('themePreference')
       const cachedUserType = await localforage.getItem('userType')
       const cachedAirline = await localforage.getItem('airline')
       const cachedUsername = await localforage.getItem('username')
@@ -778,6 +830,15 @@ function App() {
       if (cachedSchedule) setSchedule(cachedSchedule)
       if (cachedFriends) setFriends(cachedFriends)
       if (cachedSettings) setSettings(cachedSettings)
+      if (cachedThemePreference) {
+        setThemePreference(cachedThemePreference)
+        if (cachedThemePreference === 'system') {
+          const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          setTheme(systemTheme)
+        } else {
+          setTheme(cachedThemePreference)
+        }
+      }
       if (cachedUserType) setUserType(cachedUserType)
       if (cachedAirline) setAirline(cachedAirline)
       if (cachedUsername) setUsername(cachedUsername)
@@ -6113,13 +6174,78 @@ function App() {
                 </IconButton>
               )}
               
-              <IconButton
-                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                size="small"
-                color="primary"
-              >
-                {theme === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
-              </IconButton>
+              <Box className="theme-dropdown-container" sx={{ position: 'relative' }}>
+                <IconButton
+                  onClick={() => setShowThemeDropdown(!showThemeDropdown)}
+                  size="small"
+                  color="primary"
+                >
+                  {themePreference === 'system' ? <SystemThemeIcon /> : 
+                   themePreference === 'dark' ? <DarkModeIcon /> : <LightModeIcon />}
+                </IconButton>
+                
+                {showThemeDropdown && (
+                  <Paper
+                    sx={{
+                      position: 'absolute',
+                      right: 0,
+                      top: '100%',
+                      mt: 1,
+                      minWidth: 120,
+                      zIndex: 1300,
+                      boxShadow: 3
+                    }}
+                  >
+                    <MenuList>
+                      <MenuItem
+                        onClick={async () => {
+                          setThemePreference('light')
+                          setTheme('light')
+                          await localforage.setItem('themePreference', 'light')
+                          setShowThemeDropdown(false)
+                        }}
+                        selected={themePreference === 'light'}
+                      >
+                        <ListItemIcon>
+                          <LightModeIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>LIGHT</ListItemText>
+                      </MenuItem>
+                      
+                      <MenuItem
+                        onClick={async () => {
+                          setThemePreference('dark')
+                          setTheme('dark')
+                          await localforage.setItem('themePreference', 'dark')
+                          setShowThemeDropdown(false)
+                        }}
+                        selected={themePreference === 'dark'}
+                      >
+                        <ListItemIcon>
+                          <DarkModeIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>DARK</ListItemText>
+                      </MenuItem>
+                      
+                      <MenuItem
+                        onClick={async () => {
+                          setThemePreference('system')
+                          const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+                          setTheme(systemTheme)
+                          await localforage.setItem('themePreference', 'system')
+                          setShowThemeDropdown(false)
+                        }}
+                        selected={themePreference === 'system'}
+                      >
+                        <ListItemIcon>
+                          <SystemThemeIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>SYSTEM</ListItemText>
+                      </MenuItem>
+                    </MenuList>
+                  </Paper>
+                )}
+              </Box>
             </Stack>
           )}
         </Toolbar>
