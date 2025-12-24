@@ -11,8 +11,8 @@ const config = {
     WS_URL: 'ws://localhost:3001'
   },
   production: {
-    // Production - use relative URLs, Vercel proxies to backend
-    API_BASE_URL: '',  // Relative URL - Vercel rewrites /api/* to backend
+    // Production - direct connection to VPS backend
+    API_BASE_URL: 'http://157.245.126.24:8080',  // Direct to VPS backend
     WS_URL: 'ws://157.245.126.24:8080'  // WebSocket still direct (if needed)
   }
 };

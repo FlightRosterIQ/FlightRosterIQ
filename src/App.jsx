@@ -180,8 +180,8 @@ function App() {
         contrastText: theme === 'dark' ? '#E8E8EC' : '#030213',
       },
       background: {
-        default: theme === 'dark' ? '#1A1A2E' : '#E8E8EC',
-        paper: theme === 'dark' ? '#252538' : '#ffffff',
+        default: theme === 'dark' ? '#1A1A2E' : '#F5F5F7',
+        paper: theme === 'dark' ? '#252538' : '#FAFAFA',
       },
       text: {
         primary: theme === 'dark' ? '#E8E8EC' : '#1F1F2E',
