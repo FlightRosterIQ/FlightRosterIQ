@@ -1664,12 +1664,16 @@ function App() {
         
         const result = await response.json()
         
-        if (result.success) {
-          setIsRegisteredUser(false)
-          await localforage.setItem('isRegisteredUser', false)
-        }
+        // Always update UI state regardless of backend response
+        setIsRegisteredUser(false)
+        await localforage.setItem('isRegisteredUser', false)
+        setShowRegistrationPopup(false)
       } catch (err) {
         console.error('Unregister error:', err)
+        // Still update UI even on error
+        setIsRegisteredUser(false)
+        await localforage.setItem('isRegisteredUser', false)
+        setShowRegistrationPopup(false)
       }
     }
   }
