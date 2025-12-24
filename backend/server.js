@@ -395,8 +395,75 @@ app.post('/api/authenticate', async (req, res) => {
                     console.error('⚠️ Error expanding crew details:', crewError.message);
                 }
                 
+                // Step 4: Extract notifications from the bell icon
+                console.log('🔔 Extracting notifications...');
+                let notifications = [];
+                try {
+                    // Click the notifications bell button
+                    await page.evaluate(() => {
+                        // Find the bell icon button
+                        // Path: "M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"
+                        const bellButton = Array.from(document.querySelectorAll('button, [role="button"]')).find(btn => {
+                            const svg = btn.querySelector('svg');
+                            if (!svg) return false;
+                            const path = svg.querySelector('path');
+                            return path && path.getAttribute('d')?.includes('M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07');
+                        });
+                        
+                        if (bellButton) {
+                            console.log('Found notifications bell button');
+                            bellButton.click();
+                        } else {
+                            console.log('Notifications bell button not found');
+                        }
+                    });
+                    
+                    // Wait for notifications panel to open
+                    await sleep(1500);
+                    
+                    // Extract notification items
+                    notifications = await page.evaluate(() => {
+                        const notificationItems = [];
+                        
+                        // Find all notification items by data-test-id="news-item-title"
+                        const newsItems = document.querySelectorAll('[data-test-id="news-item-title"]');
+                        
+                        newsItems.forEach((item, index) => {
+                            const title = item.textContent?.trim();
+                            
+                            // Get the parent element to extract additional details
+                            const parent = item.closest('[class*="news"], [class*="notification"], [class*="item"]') || item.parentElement;
+                            const fullText = parent?.textContent?.trim() || '';
+                            
+                            // Try to extract date/time if available
+                            const dateMatch = fullText.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})|(\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4})/);
+                            const timeMatch = fullText.match(/(\d{1,2}:\d{2}(?:\s*[AP]M)?)/i);
+                            
+                            if (title) {
+                                notificationItems.push({
+                                    id: `notif_${Date.now()}_${index}`,
+                                    title: title,
+                                    message: fullText.replace(title, '').trim().substring(0, 200),
+                                    date: dateMatch ? dateMatch[0] : null,
+                                    time: timeMatch ? timeMatch[0] : null,
+                                    timestamp: new Date().toISOString(),
+                                    read: false
+                                });
+                            }
+                        });
+                        
+                        console.log(`Found ${notificationItems.length} notifications`);
+                        return notificationItems;
+                    });
+                    
+                    console.log(`✅ Extracted ${notifications.length} notifications`);
+                } catch (notifError) {
+                    console.error('⚠️ Error extracting notifications:', notifError.message);
+                    notifications = [];
+                }
+                
 // Extract full schedule data with crew members and hotels
-                let scheduleData = { flights: [], pairings: [], hotels: [] };
+                let scheduleData = { flights: [], pairings: [], hotels: [], notifications: notifications };
                 try {
                     // Extract schedule from portal
                     const extractedData = await page.evaluate(() => {
