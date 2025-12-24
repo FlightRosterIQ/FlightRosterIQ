@@ -4393,10 +4393,10 @@ function App() {
                       <MenuItem value="">Select Home Airport</MenuItem>
                       <MenuItem value="ANC">ANC</MenuItem>
                       <MenuItem value="ATL">ATL</MenuItem>
-                      <MenuItem value="CVG">CVG</MenuItem>
                       <MenuItem value="BOS">BOS</MenuItem>
                       <MenuItem value="BWI">BWI</MenuItem>
                       <MenuItem value="CLT">CLT</MenuItem>
+                      <MenuItem value="CVG">CVG</MenuItem>
                       <MenuItem value="DCA">DCA</MenuItem>
                       <MenuItem value="DEN">DEN</MenuItem>
                       <MenuItem value="DFW">DFW</MenuItem>
@@ -4444,10 +4444,10 @@ function App() {
                       <MenuItem value="">Select Domicile</MenuItem>
                       <MenuItem value="ANC">ANC</MenuItem>
                       <MenuItem value="ATL">ATL</MenuItem>
-                      <MenuItem value="CVG">CVG</MenuItem>
                       <MenuItem value="BOS">BOS</MenuItem>
                       <MenuItem value="BWI">BWI</MenuItem>
                       <MenuItem value="CLT">CLT</MenuItem>
+                      <MenuItem value="CVG">CVG</MenuItem>
                       <MenuItem value="DCA">DCA</MenuItem>
                       <MenuItem value="DEN">DEN</MenuItem>
                       <MenuItem value="DFW">DFW</MenuItem>
