@@ -45,6 +45,67 @@ app.get('/api/health', (req, res) => {
 // Family codes endpoints (basic storage)
 const familyCodes = new Map();
 
+// User registration storage
+const registeredUsers = new Map(); // Map<employeeId, { nickname, rank, base, airline }>
+
+// ========================================
+// USER REGISTRATION ENDPOINTS
+// ========================================
+app.post('/api/register-user', async (req, res) => {
+    const { employeeId, nickname, rank, base, airline } = req.body;
+    
+    if (!employeeId) {
+        return res.status(400).json({ error: 'Employee ID required' });
+    }
+    
+    registeredUsers.set(employeeId, {
+        employeeId,
+        nickname: nickname || employeeId,
+        rank: rank || 'Pilot',
+        base: base || 'Unknown',
+        airline: airline || 'ABX',
+        registeredAt: Date.now()
+    });
+    
+    console.log(`✅ User registered: ${employeeId} (${nickname})`);
+    res.json({ success: true, message: 'User registered successfully' });
+});
+
+app.post('/api/unregister-user', async (req, res) => {
+    const { employeeId } = req.body;
+    
+    if (!employeeId) {
+        return res.status(400).json({ error: 'Employee ID required' });
+    }
+    
+    const existed = registeredUsers.delete(employeeId);
+    
+    if (existed) {
+        console.log(`❌ User unregistered: ${employeeId}`);
+        res.json({ success: true, message: 'User unregistered successfully' });
+    } else {
+        res.json({ success: false, message: 'User not found' });
+    }
+});
+
+app.get('/api/search-users', async (req, res) => {
+    const { query } = req.query;
+    
+    if (!query || query.length < 2) {
+        return res.json({ users: [] });
+    }
+    
+    const searchLower = query.toLowerCase();
+    const results = Array.from(registeredUsers.values())
+        .filter(user => 
+            user.employeeId.toLowerCase().includes(searchLower) ||
+            user.nickname.toLowerCase().includes(searchLower)
+        )
+        .slice(0, 10); // Limit to 10 results
+    
+    res.json({ users: results });
+});
+
 app.post('/api/family/generate-code', async (req, res) => {
     const { employeeId } = req.body;
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
