@@ -297,6 +297,39 @@ app.post('/api/authenticate', async (req, res) => {
                     }
                 }
                 
+                // Expand all flight details to reveal actual times and report times
+                console.log('📂 Expanding all flight details...');
+                try {
+                    await page.evaluate(() => {
+                        // Find all expand buttons (downward chevron SVG icons)
+                        const expandButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(btn => {
+                            const svg = btn.querySelector('svg');
+                            if (!svg) return false;
+                            const path = svg.querySelector('path');
+                            // Match the downward chevron path: "M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z"
+                            return path && path.getAttribute('d')?.includes('16.59 8.59');
+                        });
+                        
+                        console.log(`Found ${expandButtons.length} flight detail expand buttons`);
+                        
+                        // Click all expand buttons to reveal details
+                        expandButtons.forEach(btn => {
+                            try {
+                                btn.click();
+                            } catch (e) {
+                                console.error('Error clicking expand button:', e);
+                            }
+                        });
+                    });
+                    
+                    // Wait for all details to expand
+                    await sleep(2000);
+                    console.log('✅ All flight details expanded');
+                } catch (expandError) {
+                    console.error('⚠️ Error expanding flight details:', expandError.message);
+                    console.log('Continuing with extraction...');
+                }
+                
 // Extract full schedule data with crew members and hotels
                 let scheduleData = { flights: [], pairings: [], hotels: [] };
                 try {
