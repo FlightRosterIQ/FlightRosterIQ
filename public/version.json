@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "buildDate": "2025-12-24T04:45:00Z",
+  "version": "1.0.3",
+  "buildDate": "2025-12-24T05:15:00Z",
   "features": [
     "✅ Real crew portal authentication enabled",
     "📅 Automatic schedule scraping with Puppeteer",
@@ -11,9 +11,9 @@
     "🎨 Rounded bottom navigation design",
     "📱 Mobile-first responsive layout",
     "🌙 Dark theme support",
-    "⚡ Fast and lightweight UI"
+    "⚡ Fast and lightweight UI",
     "🎯 Professional visual hierarchy",
-    "🔄 System theme preference support"
+    "🔄 System theme preference with Light/Dark/System modes"
   ],
-  "changelog": "Version 1.1.0-dev - Professional Design: Card-based UI with clean white/purple cards, enhanced dark theme with #1A1A2E background and #6B7FFF accent, subtle borders and shadows for depth."
+  "changelog": "Version 1.0.3 - Theme Enhancements: Added theme dropdown with Light, Dark, and System options. System mode automatically detects and follows device theme preferences."
 }

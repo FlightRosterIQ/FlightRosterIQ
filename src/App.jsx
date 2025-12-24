@@ -74,7 +74,7 @@ import {
 } from '@mui/icons-material'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 // FlightRosterIQ Server Configuration
 // Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
@@ -5378,6 +5378,8 @@ function App() {
                         </Typography>
                       </Stack>
                     </Box>
+                    
+                    {/* Always show Actual section if we have any actual times */}
                     {(flight.actualDeparture || flight.actualArrival) && (
                       <Box sx={{ bgcolor: 'success.light', p: 1, borderRadius: 1 }}>
                         <Typography variant="caption" sx={{ fontWeight: 600, color: 'success.dark' }}>
@@ -5385,10 +5387,10 @@ function App() {
                         </Typography>
                         <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                           <Typography variant="body2" sx={{ color: 'success.dark' }}>
-                            {flight.actualDeparture || '--:--'} - {flight.actualArrival || '--:--'} LT
+                            {flight.actualDeparture || flight.departure} - {flight.actualArrival || flight.arrival} LT
                           </Typography>
                           <Typography variant="body2" sx={{ color: 'success.dark', opacity: 0.8 }}>
-                            {flight.actualDeparture ? convertToUTC(flight.actualDeparture) : '--:--'} - {flight.actualArrival ? convertToUTC(flight.actualArrival) : '--:--'} UTC
+                            {convertToUTC(flight.actualDeparture || flight.departure)} - {convertToUTC(flight.actualArrival || flight.arrival)} UTC
                           </Typography>
                         </Stack>
                       </Box>
