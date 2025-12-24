@@ -6301,7 +6301,7 @@ function App() {
                         <ListItemIcon>
                           <LightModeIcon fontSize="small" />
                         </ListItemIcon>
-                        <ListItemText>LIGHT</ListItemText>
+                        <ListItemText>Light</ListItemText>
                       </MenuItem>
                       
                       <MenuItem
@@ -6316,7 +6316,7 @@ function App() {
                         <ListItemIcon>
                           <DarkModeIcon fontSize="small" />
                         </ListItemIcon>
-                        <ListItemText>DARK</ListItemText>
+                        <ListItemText>Dark</ListItemText>
                       </MenuItem>
                       
                       <MenuItem
@@ -6332,7 +6332,7 @@ function App() {
                         <ListItemIcon>
                           <SystemThemeIcon fontSize="small" />
                         </ListItemIcon>
-                        <ListItemText>SYSTEM</ListItemText>
+                        <ListItemText>System</ListItemText>
                       </MenuItem>
                     </MenuList>
                   </Paper>
