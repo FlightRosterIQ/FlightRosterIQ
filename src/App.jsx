@@ -4212,18 +4212,39 @@ function App() {
         </Box>
 
         {statsPeriod !== 'ytd' && (
-          <div className="off-days-section">
-            <h3>📅 Off Days ({displayStats.offDays.length} days)</h3>
-            <div className="off-days-grid">
+          <Card elevation={1} sx={{ borderRadius: 3, mt: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                📅 Off Days ({displayStats.offDays.length} days)
+              </Typography>
               {displayStats.offDays.length > 0 ? (
-                displayStats.offDays.map(day => (
-                  <div key={day} className="off-day-badge">{day}</div>
-                ))
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 1fr))',
+                  gap: 1.5
+                }}>
+                  {displayStats.offDays.map(day => (
+                    <Chip
+                      key={day}
+                      label={day}
+                      color="success"
+                      variant="outlined"
+                      sx={{ 
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        height: '40px',
+                        justifyContent: 'center'
+                      }}
+                    />
+                  ))}
+                </Box>
               ) : (
-                <p style={{color: '#666', fontStyle: 'italic'}}>No off days this month</p>
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  No off days this month
+                </Typography>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
       </Box>
     )
