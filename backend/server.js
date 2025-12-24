@@ -123,9 +123,82 @@ async function extractCrewMembers(page) {
   }
 }
 
+// Navigate to a specific month in the crew portal
+async function navigateToMonth(page, targetMonth, targetYear) {
+  console.log(`🗓️ Navigating to ${targetYear}-${String(targetMonth).padStart(2, '0')}...`);
+  
+  // Get current date to determine starting month
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  
+  console.log(`📅 Current month: ${currentYear}-${String(currentMonth).padStart(2, '0')}`);
+  
+  // Calculate months difference
+  const monthsDiff = (targetYear - currentYear) * 12 + (targetMonth - currentMonth);
+  console.log(`📊 Months to navigate: ${monthsDiff} (${monthsDiff > 0 ? 'forward' : 'backward'})`);
+  
+  if (monthsDiff === 0) {
+    console.log('✅ Already on target month');
+    return;
+  }
+  
+  // Determine direction and button selector
+  const isForward = monthsDiff > 0;
+  const clicks = Math.abs(monthsDiff);
+  const direction = isForward ? 'next' : 'previous';
+  
+  console.log(`🔄 Clicking ${direction} button ${clicks} times...`);
+  
+  // Click the appropriate button multiple times
+  for (let i = 0; i < clicks; i++) {
+    try {
+      // Look for the SVG button - next has right arrow path, previous has left arrow path
+      const buttonSelector = isForward 
+        ? 'svg.IADP-MuiSvgIcon-root path[d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"]'
+        : 'svg.IADP-MuiSvgIcon-root path[d="M15.41 16.59 10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"]';
+      
+      console.log(`  Click ${i + 1}/${clicks}...`);
+      
+      // Wait for the button to be available
+      await page.waitForSelector(buttonSelector, { timeout: 5000 });
+      
+      // Click the parent button (the SVG's parent)
+      await page.evaluate((selector) => {
+        const svgPath = document.querySelector(selector);
+        if (svgPath) {
+          // Find the button parent
+          let element = svgPath.parentElement;
+          while (element && element.tagName !== 'BUTTON') {
+            element = element.parentElement;
+          }
+          if (element) {
+            element.click();
+          }
+        }
+      }, buttonSelector);
+      
+      // Wait for page to update after navigation
+      await sleep(2000);
+      
+    } catch (error) {
+      console.error(`  ❌ Error on click ${i + 1}:`, error.message);
+      throw new Error(`Failed to navigate to month ${targetYear}-${targetMonth}`);
+    }
+  }
+  
+  console.log(`✅ Successfully navigated to ${targetYear}-${String(targetMonth).padStart(2, '0')}`);
+  
+  // Wait for schedule to load
+  await sleep(3000);
+}
+
 app.post('/api/authenticate', async (req, res) => {
-    const { employeeId, password, airline } = req.body;
+    const { employeeId, password, airline, month, year } = req.body;
     console.log(`🔐 REAL CREW PORTAL AUTH: ${airline?.toUpperCase() || 'ABX'} pilot ${employeeId}`);
+    if (month && year) {
+        console.log(`📅 Requested month: ${year}-${String(month).padStart(2, '0')}`);
+    }
     
     if (!employeeId || !password) {
         return res.status(400).json({
@@ -213,6 +286,16 @@ app.post('/api/authenticate', async (req, res) => {
                 
                 // Wait for crew portal to fully load
                 await sleep(5000);
+                
+                // Navigate to requested month if specified
+                if (month && year) {
+                    try {
+                        await navigateToMonth(page, month, year);
+                    } catch (navError) {
+                        console.error('❌ Month navigation error:', navError.message);
+                        console.log('⚠️ Continuing with current month...');
+                    }
+                }
                 
 // Extract full schedule data with crew members and hotels
                 let scheduleData = { flights: [], pairings: [], hotels: [] };
