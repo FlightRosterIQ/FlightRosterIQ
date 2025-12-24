@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import localforage from 'localforage'
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 import { API_BASE_URL, apiCall } from './config'
+import { getRosterWithBackgroundSync } from './scrapers/netlineApiDomAdapter'
 import { 
   ThemeProvider, 
   createTheme, 
@@ -1146,6 +1147,31 @@ function App() {
         setUserId(employeeId)
         await localforage.setItem('userId', employeeId)
         console.log(`👤 User ID stored for roster updates: ${employeeId}`)
+        
+        // 🚀 Fetch roster using new API/DOM scraper
+        console.log('📅 Fetching roster with background sync...')
+        setLoadingMessage('Loading your schedule...')
+        try {
+          await getRosterWithBackgroundSync(employeeId, (duties) => {
+            console.log(`✅ Roster loaded: ${duties.length} duties`)
+            // Transform duties to flights format
+            const flights = duties.map(duty => ({
+              id: duty.logicalId,
+              date: duty.startUtc.split('T')[0],
+              pairing: duty.pairing || duty.logicalId,
+              type: duty.type,
+              legs: duty.legs,
+              crew: duty.crew,
+              hotel: duty.hotel,
+              enriched: duty.enriched
+            }))
+            setFlights(flights)
+            localforage.setItem('flights', flights)
+          })
+        } catch (err) {
+          console.error('❌ Roster fetch failed:', err)
+          // Don't block login on roster fetch failure
+        }
       }
       
       // For family accounts, look up the assigned name from the code
