@@ -5429,10 +5429,10 @@ function App() {
                         </Typography>
                         <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
                           <Typography variant="body2" sx={{ color: 'success.dark' }}>
-                            {flight.actualDeparture || '--:--'} - {flight.actualArrival || '--:--'} LT
+                            {flight.actualDeparture ? (flight.actualDeparture.includes('LT') ? flight.actualDeparture.split('LT')[0].trim().split(' ').pop() : flight.actualDeparture) : '--:--'} - {flight.actualArrival ? (flight.actualArrival.includes('LT') ? flight.actualArrival.split('LT')[0].trim().split(' ').pop() : flight.actualArrival) : '--:--'} LT
                           </Typography>
                           <Typography variant="body2" sx={{ color: 'success.dark', opacity: 0.8 }}>
-                            {flight.actualDeparture ? convertToUTC(flight.actualDeparture) : '--:--'} - {flight.actualArrival ? convertToUTC(flight.actualArrival) : '--:--'} UTC
+                            {flight.actualDeparture ? (flight.actualDeparture.includes('UTC)') ? flight.actualDeparture.match(/\(([^)]+)\)/)?.[1]?.replace('UTC', '').trim() : convertToUTC(flight.actualDeparture)) : '--:--'} - {flight.actualArrival ? (flight.actualArrival.includes('UTC)') ? flight.actualArrival.match(/\(([^)]+)\)/)?.[1]?.replace('UTC', '').trim() : convertToUTC(flight.actualArrival)) : '--:--'} UTC
                           </Typography>
                         </Stack>
                       </Box>
@@ -6493,9 +6493,11 @@ function App() {
                     {selectedFlight.actualDeparture && (
                       <Box sx={{ mt: 0.5 }}>
                         <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
-                          Actual: {selectedFlight.actualDeparture} LT
+                          Actual: {selectedFlight.actualDeparture.includes('LT') ? selectedFlight.actualDeparture.split('LT')[0].trim().split(' ').pop() : selectedFlight.actualDeparture} LT
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.actualDeparture)} UTC</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {selectedFlight.actualDeparture.includes('UTC)') ? selectedFlight.actualDeparture.match(/\(([^)]+)\)/)?.[1]?.replace('UTC', '').trim() : convertToUTC(selectedFlight.actualDeparture)} UTC
+                        </Typography>
                       </Box>
                     )}
                   </Box>
@@ -6540,9 +6542,11 @@ function App() {
                     {selectedFlight.actualArrival && (
                       <Box sx={{ mt: 0.5 }}>
                         <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
-                          Actual: {selectedFlight.actualArrival} LT
+                          Actual: {selectedFlight.actualArrival.includes('LT') ? selectedFlight.actualArrival.split('LT')[0].trim().split(' ').pop() : selectedFlight.actualArrival} LT
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.actualArrival)} UTC</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {selectedFlight.actualArrival.includes('UTC)') ? selectedFlight.actualArrival.match(/\(([^)]+)\)/)?.[1]?.replace('UTC', '').trim() : convertToUTC(selectedFlight.actualArrival)} UTC
+                        </Typography>
                       </Box>
                     )}
                   </Box>
