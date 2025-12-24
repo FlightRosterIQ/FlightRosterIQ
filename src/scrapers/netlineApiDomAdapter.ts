@@ -52,7 +52,7 @@ function rosterHash(duties: Duty[]) {
 
 async function fetchRosterEvents(crewCode: string): Promise<Duty[]> {
   const res = await fetch(
-    `/api/netline/crew/pems/rest/pems/idp/user/roster/${crewCode}/events`,
+    `/api/netline/roster/events?crewCode=${crewCode}`,
     { credentials: 'include' }
   );
 

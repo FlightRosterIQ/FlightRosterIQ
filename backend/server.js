@@ -26,10 +26,19 @@ const messages = new Map();
 const familyCodes = new Map();
 const notifications = new Map();
 
+// NetLine session storage (cookies from authenticated Puppeteer session)
+const netlineSessions = new Map(); // Map<employeeId, { cookies, timestamp }>
+
 // Crew portal URLs
 const PORTALS = {
   abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
   ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
+};
+
+// NetLine API base URLs
+const NETLINE_API = {
+  abx: 'https://crew.abxair.com/api/netline/crew/pems/rest/pems',
+  ati: 'https://crew.atitransport.com/api/netline/crew/pems/rest/pems'
 };
 
 // JWT Middleware
@@ -89,6 +98,35 @@ app.post('/api/authenticate', async (req, res) => {
     await page.setViewport({ width: 1280, height: 720 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
     
+    // Intercept network requests to find API endpoints
+    const apiCalls = [];
+    await page.setRequestInterception(true);
+    
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('updates') || url.includes('events') || url.includes('log') || 
+          url.includes('myInternalMessages') || url.includes('roster') || 
+          url.includes('duties') || url.includes('schedule')) {
+        console.log('📡 API Request:', request.method(), url);
+        apiCalls.push({ method: request.method(), url });
+      }
+      request.continue();
+    });
+    
+    page.on('response', async (response) => {
+      const url = response.url();
+      if (url.includes('updates') || url.includes('events') || url.includes('log') || 
+          url.includes('myInternalMessages') || url.includes('roster') || 
+          url.includes('duties') || url.includes('schedule')) {
+        try {
+          const data = await response.json();
+          console.log('📦 API Response from', url, ':', JSON.stringify(data).substring(0, 500));
+        } catch (e) {
+          console.log('📦 API Response from', url, '(not JSON)');
+        }
+      }
+    });
+    
     const portalUrl = PORTALS[airline?.toLowerCase()] || PORTALS.abx;
     console.log(`🌐 Connecting to ${airline?.toUpperCase() || 'ABX'} crew portal...`);
     
@@ -127,18 +165,250 @@ app.post('/api/authenticate', async (req, res) => {
       console.log('✅ Authentication successful!');
     }
     
-    await sleep(5000);
+    // 🔑 CAPTURE COOKIES after successful auth
+    const cookies = await page.cookies();
+    const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    netlineSessions.set(employeeId, {
+      cookies: cookieString,
+      airline: airline?.toLowerCase() || 'abx',
+      timestamp: Date.now()
+    });
+    console.log('🍪 Stored NetLine session cookies for', employeeId);
     
-    // Extract schedule data
-    let scheduleData = [];
-    try {
-      scheduleData = await page.evaluate(() => {
-        const body = document.body.innerText;
-        return body.includes('Flight') ? 'Schedule data found' : 'Portal accessed';
-      });
-    } catch (e) {
-      scheduleData = 'Portal accessed successfully';
-    }
+    console.log('📅 Scraping crew schedule using NetLine adapter...');
+    await sleep(3000);
+    
+    // Run the NetLine scraper in the browser context
+    const scheduleData = await page.evaluate(async () => {
+      // ========================================
+      // FlightRosterIQ – NetLine Adapter (v2)
+      // ========================================
+      
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      
+      async function retry(fn, tries = 5, delay = 600) {
+        let lastErr;
+        for (let i = 0; i < tries; i++) {
+          try {
+            return await fn();
+          } catch (e) {
+            lastErr = e;
+            await sleep(delay);
+          }
+        }
+        throw lastErr;
+      }
+      
+      // ---------- NAVIGATION ----------
+      function getMonthLabel() {
+        const el = Array.from(document.querySelectorAll('button, div, span'))
+          .find(e => /\(\d{2}\s[A-Za-z]{3}\s-\s\d{2}\s[A-Za-z]{3}\)/.test(e.textContent || ''));
+        if (!el) throw new Error('Month label not found');
+        return el.textContent.trim();
+      }
+      
+      function clickMonth(direction) {
+        const arrows = Array.from(document.querySelectorAll('button'))
+          .filter(b => /chevron|arrow|‹|›|<|>/.test(b.innerText));
+        const btn = direction === 'prev' ? arrows[0] : arrows[arrows.length - 1];
+        btn?.click();
+      }
+      
+      // ---------- DOM OBSERVER ----------
+      function waitForMonthRender(previousLabel) {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            observer.disconnect();
+            reject(new Error('Month render timeout'));
+          }, 8000);
+          
+          const observer = new MutationObserver(() => {
+            try {
+              const label = getMonthLabel();
+              
+              // Month label changed
+              if (label !== previousLabel) {
+                const dutiesReady =
+                  document.querySelectorAll('[class*="duty"], [class*="IADP"], button')
+                    .length > 10;
+                
+                if (dutiesReady) {
+                  clearTimeout(timeout);
+                  observer.disconnect();
+                  resolve(label);
+                }
+              }
+            } catch {
+              // ignore until DOM stabilizes
+            }
+          });
+          
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+        });
+      }
+      
+      // ---------- DOM OBSERVER ----------
+      function waitForMonthRender(previousLabel) {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            observer.disconnect();
+            reject(new Error('Month render timeout'));
+          }, 8000);
+          
+          const observer = new MutationObserver(() => {
+            try {
+              const label = getMonthLabel();
+              
+              // Month label changed
+              if (label !== previousLabel) {
+                const dutiesReady =
+                  document.querySelectorAll('[class*="duty"], [class*="IADP"], button')
+                    .length > 10;
+                
+                if (dutiesReady) {
+                  clearTimeout(timeout);
+                  observer.disconnect();
+                  resolve(label);
+                }
+              }
+            } catch {
+              // ignore until DOM stabilizes
+            }
+          });
+          
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+        });
+      }
+      
+      // ---------- DETECTION ----------
+      function detectDutyType(text) {
+        if (/IADP/i.test(text)) return 'IADP';
+        if (/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/.test(text)) return 'FLIGHT';
+        return 'OTHER';
+      }
+      
+      function extractPairing(text) {
+        return text.match(/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/)?.[0];
+      }
+      
+      function extractRank(text) {
+        return text.match(/Rank:\s*(\w+)/)?.[1];
+      }
+      
+      // ---------- FINDERS ----------
+      function findByText(regex) {
+        return Array.from(document.querySelectorAll('*'))
+          .filter(el => regex.test(el.innerText));
+      }
+      
+      function getDutyBlocks() {
+        return findByText(/Rank:|Premium|\d{2}:\d{2}\s*LT/i);
+      }
+      
+      function expand(el) {
+        el.querySelector('button')?.click();
+      }
+      
+      // ---------- EXTRACTION ----------
+      function extractCrew(el) {
+        return findByText(/CAPT|FO|FE/).map(c => {
+          const t = c.innerText;
+          return {
+            role: t.match(/CAPT|FO|FE/)?.[0],
+            name: t.match(/[A-Z]{3,}/)?.[0],
+            crewId: t.match(/\b\d{5,6}\b/)?.[0],
+            phone: t.match(/\d{3}[-.\s]\d{3}[-.\s]\d{4}/)?.[0]
+          };
+        });
+      }
+      
+      function extractLegs(el) {
+        return findByText(/[A-Z]{3}\s*(→|-)\s*[A-Z]{3}/).map(l => {
+          const t = l.innerText;
+          return {
+            from: t.match(/^[A-Z]{3}/)?.[0],
+            to: t.match(/[A-Z]{3}$/)?.[0],
+            aircraft: t.match(/B\d{3}/)?.[0],
+            tail: t.match(/N\d+[A-Z]*/)?.[0]
+          };
+        });
+      }
+      
+      function extractHotel(el) {
+        return findByText(/Hotel/i)[0]?.innerText;
+      }
+      
+      // ---------- CORE SCRAPE ----------
+      async function scrapeMonth() {
+        await sleep(1200);
+        const month = getMonthLabel();
+        const duties = [];
+        
+        for (const el of getDutyBlocks()) {
+          expand(el);
+          await sleep(250);
+          const text = el.innerText;
+          
+          duties.push({
+            month,
+            pairing: extractPairing(text),
+            rank: extractRank(text),
+            type: detectDutyType(text),
+            legs: extractLegs(el),
+            crew: extractCrew(el),
+            hotel: extractHotel(el)
+          });
+        }
+        return duties;
+      }
+      
+      // ---------- PUBLIC ENTRY ----------
+      async function scrapeNetLineThreeMonths() {
+        return retry(async () => {
+          const originalMonth = getMonthLabel();
+          const all = [];
+          
+          // Previous
+          clickMonth('prev');
+          await waitForMonthRender(originalMonth);
+          all.push(...await scrapeMonth());
+          
+          // Current
+          clickMonth('next');
+          await waitForMonthRender(getMonthLabel());
+          all.push(...await scrapeMonth());
+          
+          // Next
+          clickMonth('next');
+          await waitForMonthRender(getMonthLabel());
+          all.push(...await scrapeMonth());
+          
+          // Restore original
+          clickMonth('prev');
+          await waitForMonthRender(getMonthLabel());
+          clickMonth('prev');
+          await waitForMonthRender(getMonthLabel());
+          
+          return all;
+        });
+      }
+      
+      // Execute the scraper
+      try {
+        const result = await scrapeNetLineThreeMonths();
+        return { success: true, duties: result };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+    
+    console.log('📦 Scrape result:', JSON.stringify(scheduleData).substring(0, 300));
     
     await browser.close();
     
@@ -168,6 +438,7 @@ app.post('/api/authenticate', async (req, res) => {
       authenticated: true,
       token,
       user: users.get(employeeId),
+      schedule: scheduleData,
       message: 'Authentication successful'
     });
     
@@ -178,6 +449,290 @@ app.post('/api/authenticate', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Unable to connect to crew portal',
+      message: error.message
+    });
+  }
+});
+
+// ==================== SCRAPE ====================
+app.post('/api/scrape', async (req, res) => {
+  const { employeeId, password, airline } = req.body;
+  console.log(`🔄 Scrape request: ${airline?.toUpperCase() || 'ABX'} pilot ${employeeId}`);
+  
+  // Reuse the authentication logic to scrape
+  let browser;
+  try {
+    console.log('🌐 Launching browser for crew portal scraping...');
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    });
+    
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 720 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+    
+    // Intercept network requests to find API endpoints
+    const apiCalls = [];
+    await page.setRequestInterception(true);
+    
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('updates') || url.includes('events') || url.includes('log') || 
+          url.includes('myInternalMessages') || url.includes('roster') || 
+          url.includes('duties') || url.includes('schedule')) {
+        console.log('📡 API Request:', request.method(), url);
+        apiCalls.push({ method: request.method(), url });
+      }
+      request.continue();
+    });
+    
+    page.on('response', async (response) => {
+      const url = response.url();
+      if (url.includes('updates') || url.includes('events') || url.includes('log') || 
+          url.includes('myInternalMessages') || url.includes('roster') || 
+          url.includes('duties') || url.includes('schedule')) {
+        try {
+          const data = await response.json();
+          console.log('📦 API Response from', url, ':', JSON.stringify(data).substring(0, 500));
+        } catch (e) {
+          console.log('📦 API Response from', url, '(not JSON)');
+        }
+      }
+    });
+    
+    const portalUrl = PORTALS[airline?.toLowerCase()] || PORTALS.abx;
+    console.log(`🌐 Connecting to ${airline?.toUpperCase() || 'ABX'} crew portal...`);
+    
+    await page.goto(portalUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    
+    const currentUrl = page.url();
+    
+    // Check if we're redirected to authentication
+    if (currentUrl.includes('auth/realms')) {
+      console.log('🔐 Keycloak authentication required...');
+      
+      await sleep(3000);
+      
+      // Fill credentials
+      await page.waitForSelector('#username', { timeout: 10000 });
+      await page.type('#username', employeeId);
+      await page.waitForSelector('#password', { timeout: 5000 });
+      await page.type('#password', password);
+      
+      // Submit
+      await page.keyboard.press('Enter');
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
+      
+      const postLoginUrl = page.url();
+      
+      // Check if authentication failed
+      if (postLoginUrl.includes('auth/realms')) {
+        await browser.close();
+        return res.status(401).json({
+          success: false,
+          authenticated: false,
+          error: 'Invalid crew portal credentials'
+        });
+      }
+      
+      console.log('✅ Authentication successful!');
+    }
+    
+    console.log('📅 Scraping crew schedule using NetLine adapter...');
+    await sleep(3000);
+    
+    // Run the NetLine scraper in the browser context
+    const scheduleData = await page.evaluate(async () => {
+      // [Insert full NetLine adapter code here - same as in /api/authenticate]
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      
+      async function retry(fn, tries = 5, delay = 600) {
+        let lastErr;
+        for (let i = 0; i < tries; i++) {
+          try {
+            return await fn();
+          } catch (e) {
+            lastErr = e;
+            await sleep(delay);
+          }
+        }
+        throw lastErr;
+      }
+      
+      function getMonthLabel() {
+        const el = Array.from(document.querySelectorAll('button, div, span'))
+          .find(e => /\(\d{2}\s[A-Za-z]{3}\s-\s\d{2}\s[A-Za-z]{3}\)/.test(e.textContent || ''));
+        if (!el) throw new Error('Month label not found');
+        return el.textContent.trim();
+      }
+      
+      function clickMonth(direction) {
+        const arrows = Array.from(document.querySelectorAll('button'))
+          .filter(b => /chevron|arrow|‹|›|<|>/.test(b.innerText));
+        const btn = direction === 'prev' ? arrows[0] : arrows[arrows.length - 1];
+        btn?.click();
+      }
+      
+      function waitForMonthRender(previousLabel) {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            observer.disconnect();
+            reject(new Error('Month render timeout'));
+          }, 8000);
+          
+          const observer = new MutationObserver(() => {
+            try {
+              const label = getMonthLabel();
+              if (label !== previousLabel) {
+                const dutiesReady = document.querySelectorAll('[class*="duty"], [class*="IADP"], button').length > 10;
+                if (dutiesReady) {
+                  clearTimeout(timeout);
+                  observer.disconnect();
+                  resolve(label);
+                }
+              }
+            } catch {}
+          });
+          
+          observer.observe(document.body, { childList: true, subtree: true });
+        });
+      }
+      
+      function detectDutyType(text) {
+        if (/IADP/i.test(text)) return 'IADP';
+        if (/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/.test(text)) return 'FLIGHT';
+        return 'OTHER';
+      }
+      
+      function extractPairing(text) {
+        return text.match(/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/)?.[0];
+      }
+      
+      function extractRank(text) {
+        return text.match(/Rank:\s*(\w+)/)?.[1];
+      }
+      
+      function findByText(regex) {
+        return Array.from(document.querySelectorAll('*')).filter(el => regex.test(el.innerText));
+      }
+      
+      function getDutyBlocks() {
+        return findByText(/Rank:|Premium|\d{2}:\d{2}\s*LT/i);
+      }
+      
+      function expand(el) {
+        el.querySelector('button')?.click();
+      }
+      
+      function extractCrew(el) {
+        return findByText(/CAPT|FO|FE/).map(c => {
+          const t = c.innerText;
+          return {
+            role: t.match(/CAPT|FO|FE/)?.[0],
+            name: t.match(/[A-Z]{3,}/)?.[0],
+            crewId: t.match(/\b\d{5,6}\b/)?.[0],
+            phone: t.match(/\d{3}[-.\s]\d{3}[-.\s]\d{4}/)?.[0]
+          };
+        });
+      }
+      
+      function extractLegs(el) {
+        return findByText(/[A-Z]{3}\s*(→|-)\s*[A-Z]{3}/).map(l => {
+          const t = l.innerText;
+          return {
+            from: t.match(/^[A-Z]{3}/)?.[0],
+            to: t.match(/[A-Z]{3}$/)?.[0],
+            aircraft: t.match(/B\d{3}/)?.[0],
+            tail: t.match(/N\d+[A-Z]*/)?.[0]
+          };
+        });
+      }
+      
+      function extractHotel(el) {
+        return findByText(/Hotel/i)[0]?.innerText;
+      }
+      
+      async function scrapeMonth() {
+        await sleep(1200);
+        const month = getMonthLabel();
+        const duties = [];
+        
+        for (const el of getDutyBlocks()) {
+          expand(el);
+          await sleep(250);
+          const text = el.innerText;
+          
+          duties.push({
+            month,
+            pairing: extractPairing(text),
+            rank: extractRank(text),
+            type: detectDutyType(text),
+            legs: extractLegs(el),
+            crew: extractCrew(el),
+            hotel: extractHotel(el)
+          });
+        }
+        return duties;
+      }
+      
+      async function scrapeNetLineThreeMonths() {
+        return retry(async () => {
+          const originalMonth = getMonthLabel();
+          const all = [];
+          
+          clickMonth('prev');
+          await waitForMonthRender(originalMonth);
+          all.push(...await scrapeMonth());
+          
+          clickMonth('next');
+          await waitForMonthRender(getMonthLabel());
+          all.push(...await scrapeMonth());
+          
+          clickMonth('next');
+          await waitForMonthRender(getMonthLabel());
+          all.push(...await scrapeMonth());
+          
+          clickMonth('prev');
+          await waitForMonthRender(getMonthLabel());
+          clickMonth('prev');
+          await waitForMonthRender(getMonthLabel());
+          
+          return all;
+        });
+      }
+      
+      try {
+        const result = await scrapeNetLineThreeMonths();
+        return { success: true, duties: result };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+    
+    console.log('📦 Scrape result:', JSON.stringify(scheduleData).substring(0, 300));
+    
+    await browser.close();
+    
+    res.json({
+      success: true,
+      authenticated: true,
+      data: scheduleData,
+      message: 'Schedule scraped successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Scraping error:', error.message);
+    if (browser) await browser.close();
+    
+    res.status(500).json({
+      success: false,
+      error: 'Unable to scrape crew portal',
       message: error.message
     });
   }
@@ -407,6 +962,71 @@ app.get('/api/subscription/status', authenticateToken, (req, res) => {
     plan: 'premium',
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   });
+});
+
+// ========================================
+// NETLINE API PROXY (for frontend scraper)
+// ========================================
+app.get('/api/netline/roster/events', async (req, res) => {
+  try {
+    const { crewCode } = req.query;
+    
+    if (!crewCode) {
+      return res.status(400).json({ error: 'crewCode required' });
+    }
+    
+    // Get stored session cookies for this crew member
+    const session = netlineSessions.get(crewCode);
+    
+    if (!session) {
+      return res.status(401).json({ 
+        error: 'No authenticated session found. Please login first.',
+        requiresAuth: true
+      });
+    }
+    
+    // Check if session is expired (24 hours)
+    const SESSION_TTL = 24 * 60 * 60 * 1000;
+    if (Date.now() - session.timestamp > SESSION_TTL) {
+      netlineSessions.delete(crewCode);
+      return res.status(401).json({ 
+        error: 'Session expired. Please login again.',
+        requiresAuth: true
+      });
+    }
+    
+    const airline = session.airline || 'abx';
+    const apiBase = NETLINE_API[airline];
+    const url = `${apiBase}/idp/user/roster/${crewCode}/events`;
+    
+    console.log(`🔄 Proxying NetLine API request: ${url}`);
+    
+    // Forward request to NetLine API with stored cookies
+    const fetch = (await import('node-fetch')).default;
+    const netlineRes = await fetch(url, {
+      headers: {
+        'cookie': session.cookies,
+        'accept': 'application/json',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    const contentType = netlineRes.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+      const data = await netlineRes.json();
+      console.log(`✅ NetLine API response: ${JSON.stringify(data).substring(0, 200)}...`);
+      res.json(data);
+    } else {
+      const text = await netlineRes.text();
+      console.log(`⚠️ NetLine API returned non-JSON:`, text.substring(0, 200));
+      res.status(netlineRes.status).send(text);
+    }
+    
+  } catch (err) {
+    console.error('❌ NetLine proxy error:', err);
+    res.status(500).json({ error: 'NetLine proxy failed', details: err.message });
+  }
 });
 
 // Start server
