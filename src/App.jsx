@@ -4957,35 +4957,55 @@ function App() {
         )}
 
         {settingsTab === 'contact' && (
-          <div className="settings-content">
-            <h3>📧 Contact Us</h3>
-            <div className="contact-section">
-              <div className="contact-card">
-                <span className="contact-icon">📧</span>
-                <div>
-                  <strong>Email Support</strong>
-                  <p><a href="mailto:FlightRosterIQ@Gmail.com">FlightRosterIQ@Gmail.com</a></p>
-                  <p className="contact-description">For general inquiries, feature requests, and support</p>
-                </div>
-              </div>
-              <div className="contact-card">
-                <span className="contact-icon">💡</span>
-                <div>
-                  <strong>Feature Requests</strong>
-                  <p>Have an idea to improve the app? We'd love to hear it!</p>
-                  <p className="contact-description">Email us with your suggestions</p>
-                </div>
-              </div>
-              <div className="contact-card">
-                <span className="contact-icon">🐛</span>
-                <div>
-                  <strong>Report Issues</strong>
-                  <p>Found a bug? Let us know so we can fix it</p>
-                  <p className="contact-description">Include details about what went wrong</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <Box className="settings-content">
+            <Typography variant="h6" gutterBottom>📧 Contact Us</Typography>
+            <Stack spacing={2}>
+              <Card elevation={1} sx={{ borderRadius: 3 }}>
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>📧</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Email Support</Typography>
+                      <Typography variant="body2">
+                        <a href="mailto:FlightRosterIQ@Gmail.com" style={{ color: 'inherit', textDecoration: 'underline' }}>
+                          FlightRosterIQ@Gmail.com
+                        </a>
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        For general inquiries, feature requests, and support
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card elevation={1} sx={{ borderRadius: 3 }}>
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>💡</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Feature Requests</Typography>
+                      <Typography variant="body2">Have an idea to improve the app? We'd love to hear it!</Typography>
+                      <Typography variant="body2" color="text.secondary">Email us with your suggestions</Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+              
+              <Card elevation={1} sx={{ borderRadius: 3 }}>
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    <Box sx={{ fontSize: 24 }}>🐛</Box>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">Report Issues</Typography>
+                      <Typography variant="body2">Found a bug? Let us know so we can fix it</Typography>
+                      <Typography variant="body2" color="text.secondary">Include details about what went wrong</Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Stack>
+          </Box>
         )}
 
         <Box className="settings-footer" sx={{ mt: 4, pt: 3, borderTop: 1, borderColor: 'divider' }}>
