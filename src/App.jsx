@@ -6096,6 +6096,8 @@ function App() {
               pl: 2,
               pr: 1,
               scrollSnapType: 'x mandatory',
+              borderBottomLeftRadius: '20px',
+              borderBottomRightRadius: '20px',
               '&::-webkit-scrollbar': {
                 height: '4px'
               },
