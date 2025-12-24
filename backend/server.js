@@ -330,6 +330,71 @@ app.post('/api/authenticate', async (req, res) => {
                     console.log('Continuing with extraction...');
                 }
                 
+                // Step 2: Click info buttons to access crew information
+                console.log('ℹ️ Clicking info buttons to reveal crew sections...');
+                try {
+                    await page.evaluate(() => {
+                        // Find all info buttons (circle with "i" SVG icon)
+                        // Path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
+                        const infoButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(btn => {
+                            const svg = btn.querySelector('svg');
+                            if (!svg) return false;
+                            const path = svg.querySelector('path');
+                            // Match the info icon path
+                            return path && path.getAttribute('d')?.includes('M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10');
+                        });
+                        
+                        console.log(`Found ${infoButtons.length} info buttons`);
+                        
+                        // Click all info buttons
+                        infoButtons.forEach(btn => {
+                            try {
+                                btn.click();
+                            } catch (e) {
+                                console.error('Error clicking info button:', e);
+                            }
+                        });
+                    });
+                    
+                    // Wait for info sections to open
+                    await sleep(1500);
+                    console.log('✅ Info buttons clicked');
+                } catch (infoError) {
+                    console.error('⚠️ Error clicking info buttons:', infoError.message);
+                }
+                
+                // Step 3: Expand crew details dropdowns within info sections
+                console.log('👥 Expanding crew details dropdowns...');
+                try {
+                    await page.evaluate(() => {
+                        // Find all chevron buttons again (some are in the newly opened info sections)
+                        const crewExpandButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(btn => {
+                            const svg = btn.querySelector('svg');
+                            if (!svg) return false;
+                            const path = svg.querySelector('path');
+                            // Match the downward chevron path again
+                            return path && path.getAttribute('d')?.includes('16.59 8.59');
+                        });
+                        
+                        console.log(`Found ${crewExpandButtons.length} crew detail expand buttons`);
+                        
+                        // Click all crew expand buttons
+                        crewExpandButtons.forEach(btn => {
+                            try {
+                                btn.click();
+                            } catch (e) {
+                                console.error('Error clicking crew expand button:', e);
+                            }
+                        });
+                    });
+                    
+                    // Wait for crew details to expand
+                    await sleep(2000);
+                    console.log('✅ All crew details expanded');
+                } catch (crewError) {
+                    console.error('⚠️ Error expanding crew details:', crewError.message);
+                }
+                
 // Extract full schedule data with crew members and hotels
                 let scheduleData = { flights: [], pairings: [], hotels: [] };
                 try {
