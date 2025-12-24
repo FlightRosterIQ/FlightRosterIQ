@@ -6109,11 +6109,18 @@ function App() {
       
       <AppBar position="sticky" elevation={1} sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
         <Toolbar>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexGrow: 1 }}>
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ flexGrow: 1 }}>
             <FlightIcon sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h6" component="h1" sx={{ fontWeight: 700, color: 'primary.main' }}>
               FlightRosterIQ
             </Typography>
+            {token && (
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                Welcome {userType === 'family' && familyMemberName 
+                  ? familyMemberName 
+                  : pilotProfile?.name || username || 'Pilot'}!
+              </Typography>
+            )}
             <Box
               sx={{
                 width: 10,
@@ -6133,7 +6140,7 @@ function App() {
           
           {token && (
             <Stack direction="row" spacing={2} alignItems="center">
-              <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+              <Box sx={{ display: { xs: 'none', md: 'none' } }}>
                 <Typography variant="body2" color="text.secondary">
                   {userType === 'family' && familyMemberName 
                     ? `Welcome ${familyMemberName}!` 
@@ -6443,7 +6450,7 @@ function App() {
                     <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.departure)} UTC</Typography>
                     {selectedFlight.actualDeparture && (
                       <Box sx={{ mt: 0.5 }}>
-                        <Typography variant="body2" color="warning.main">
+                        <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
                           Actual: {selectedFlight.actualDeparture} LT
                         </Typography>
                         <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.actualDeparture)} UTC</Typography>
@@ -6490,7 +6497,7 @@ function App() {
                     })()}
                     {selectedFlight.actualArrival && (
                       <Box sx={{ mt: 0.5 }}>
-                        <Typography variant="body2" color="warning.main">
+                        <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
                           Actual: {selectedFlight.actualArrival} LT
                         </Typography>
                         <Typography variant="caption" color="text.secondary">{convertToUTC(selectedFlight.actualArrival)} UTC</Typography>
