@@ -1,7 +1,4 @@
-@import "tailwindcss";
-
-@layer base {
-  :root {
+:root {
     --background: #E8E8EC;
     --foreground: #1F1F2E;
     --card: #ffffff;
@@ -47,10 +44,3 @@
       'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
       sans-serif;
   }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}

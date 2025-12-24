@@ -3682,10 +3682,10 @@ function App() {
     const hasNotifications = friendRequests.length > 0 || scheduleChanges.length > 0
 
     return (
-      <div className="notifications-view">
-        <div className="notifications-header">
-          <h2>🔔 Notifications</h2>
-        </div>
+      <Box sx={{ p: 2 }}>
+        <Typography variant="h5" sx={{ mb: 2 }}>
+          🔔 Notifications
+        </Typography>
         
         {/* Roster Update Banner */}
         {rosterUpdateAvailable && (
@@ -3741,11 +3741,11 @@ function App() {
         )}
         
         {!hasNotifications && (
-          <div className="no-notifications">
-            <span className="no-notif-icon">🔕</span>
-            <p>No new notifications</p>
-            <p className="no-notif-subtitle">Friend requests and schedule changes will appear here</p>
-          </div>
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <Typography variant="h2" sx={{ mb: 2 }}>🔕</Typography>
+            <Typography variant="body1" sx={{ mb: 1 }}>No new notifications</Typography>
+            <Typography variant="body2" color="text.secondary">Friend requests and schedule changes will appear here</Typography>
+          </Box>
         )}
 
         {userType !== 'family' && friendRequests.length > 0 && (
@@ -3885,7 +3885,7 @@ function App() {
             </List>
           </Box>
         )}
-      </div>
+      </Box>
     )
   }
 
@@ -4005,68 +4005,88 @@ function App() {
                           statsPeriod === 'previous' ? previousMonthName : `Year to Date ${now.getFullYear()}`
 
     return (
-      <div className="stats-view">
-        <div className="stats-header">
-          <h2>📊 Flight Statistics</h2>
-          <div className="stats-period-selector">
-            <button 
-              className={statsPeriod === 'current' ? 'active' : ''}
-              onClick={() => setStatsPeriod('current')}
-            >
-              Current Month
-            </button>
-            <button 
-              className={statsPeriod === 'previous' ? 'active' : ''}
-              onClick={() => setStatsPeriod('previous')}
-            >
-              Previous Month
-            </button>
-            <button 
-              className={statsPeriod === 'ytd' ? 'active' : ''}
-              onClick={() => setStatsPeriod('ytd')}
-            >
-              Year to Date
-            </button>
-          </div>
-        </div>
+      <Box sx={{ p: 2 }}>
+        <Typography variant="h5" sx={{ mb: 3 }}>
+          📊 Flight Statistics
+        </Typography>
+        
+        <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button 
+            variant={statsPeriod === 'current' ? 'contained' : 'outlined'}
+            onClick={() => setStatsPeriod('current')}
+            size="small"
+          >
+            Current Month
+          </Button>
+          <Button 
+            variant={statsPeriod === 'previous' ? 'contained' : 'outlined'}
+            onClick={() => setStatsPeriod('previous')}
+            size="small"
+          >
+            Previous Month
+          </Button>
+          <Button 
+            variant={statsPeriod === 'ytd' ? 'contained' : 'outlined'}
+            onClick={() => setStatsPeriod('ytd')}
+            size="small"
+          >
+            Year to Date
+          </Button>
+        </Box>
 
-        <div className="stats-period-title">
-          <h3>{displayPeriod}</h3>
-        </div>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {displayPeriod}
+        </Typography>
 
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon">✈️</div>
-            <div className="stat-content">
-              <div className="stat-label">Flight Hours</div>
-              <div className="stat-value">{displayStats.flightHours}</div>
-            </div>
-          </div>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h4">✈️</Typography>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Flight Hours</Typography>
+                  <Typography variant="h5">{displayStats.flightHours}</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
 
-          <div className="stat-card">
-            <div className="stat-icon">⏱️</div>
-            <div className="stat-content">
-              <div className="stat-label">Duty Hours</div>
-              <div className="stat-value">{displayStats.dutyHours}</div>
-            </div>
-          </div>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h4">⏱️</Typography>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Duty Hours</Typography>
+                  <Typography variant="h5">{displayStats.dutyHours}</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
 
-          <div className="stat-card">
-            <div className="stat-icon">🛬</div>
-            <div className="stat-content">
-              <div className="stat-label">Landings</div>
-              <div className="stat-value">{displayStats.landings}</div>
-            </div>
-          </div>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h4">🛬</Typography>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Landings</Typography>
+                  <Typography variant="h5">{displayStats.landings}</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
 
-          <div className="stat-card">
-            <div className="stat-icon">🏨</div>
-            <div className="stat-content">
-              <div className="stat-label">Layovers</div>
-              <div className="stat-value">{displayStats.layovers}</div>
-            </div>
-          </div>
-        </div>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h4">🏨</Typography>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Layovers</Typography>
+                  <Typography variant="h5">{displayStats.layovers}</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
 
         {statsPeriod !== 'ytd' && (
           <div className="off-days-section">
@@ -4082,7 +4102,7 @@ function App() {
             </div>
           </div>
         )}
-      </div>
+      </Box>
     )
   }
 
