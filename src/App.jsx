@@ -4828,7 +4828,7 @@ function App() {
             Made with ❤️ for airline crew members
           </Typography>
           <Typography variant="caption" color="text.secondary" align="center" display="block" gutterBottom>
-            Supported by Drew McGee (ABX AIR pilot)
+            Supported by ABX AIR pilot
           </Typography>
           <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
             <Button 
