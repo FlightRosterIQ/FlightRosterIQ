@@ -1,13 +1,17 @@
 {
-  "version": "1.1.0-main",
-  "buildDate": "2025-12-23T16:30:00Z",
+  "version": "1.0.2",
+  "buildDate": "2025-12-24T04:45:00Z",
   "features": [
-    "🎨 Clean, modern card-based design",
-    "🌙 Enhanced dark theme with deep purple (#1A1A2E)",
-    "💜 Brighter indigo accent (#6B7FFF)",
+    "✅ Real crew portal authentication enabled",
+    "📅 Automatic schedule scraping with Puppeteer",
+    "🔄 Live schedule sync from ABX/ATI portals",
+    "🏨 Hotel and layover information extraction",
+    "👥 Crew member details and roles",
+    "✈️ Aircraft tail numbers and types",
+    "🎨 Rounded bottom navigation design",
     "📱 Mobile-first responsive layout",
-    "✨ Subtle shadows and smooth transitions",
-    "⚡ Fast and lightweight UI",
+    "🌙 Dark theme support",
+    "⚡ Fast and lightweight UI"
     "🎯 Professional visual hierarchy",
     "🔄 System theme preference support"
   ],
