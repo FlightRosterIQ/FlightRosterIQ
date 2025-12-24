@@ -6059,80 +6059,6 @@ function App() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {loading && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: 20,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 2000,
-            display: 'flex',
-            justifyContent: 'center'
-          }}
-        >
-          <Card
-            elevation={6}
-            sx={{
-              px: 3,
-              py: 2,
-              borderRadius: 3,
-              backgroundColor: theme === 'dark' ? 'rgba(37, 37, 56, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-              backdropFilter: 'blur(10px)',
-              boxShadow: theme === 'dark' 
-                ? '0 8px 32px rgba(0, 0, 0, 0.5)' 
-                : '0 8px 32px rgba(0, 0, 0, 0.12)',
-              border: theme === 'dark' 
-                ? '1px solid rgba(255, 255, 255, 0.1)' 
-                : '1px solid rgba(0, 0, 0, 0.08)',
-            }}
-          >
-            <Stack direction="row" spacing={2} alignItems="center">
-              <CircularProgress size={20} />
-              <Typography variant="body2" fontWeight={500}>
-                {loadingMessage || 'Loading...'}
-              </Typography>
-            </Stack>
-          </Card>
-        </Box>
-      )}
-      {scrapingInProgress && !loading && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: 20,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 2000,
-            display: 'flex',
-            justifyContent: 'center'
-          }}
-        >
-          <Card
-            elevation={6}
-            sx={{
-              px: 3,
-              py: 2,
-              borderRadius: 3,
-              backgroundColor: theme === 'dark' ? 'rgba(37, 37, 56, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-              backdropFilter: 'blur(10px)',
-              boxShadow: theme === 'dark' 
-                ? '0 8px 32px rgba(0, 0, 0, 0.5)' 
-                : '0 8px 32px rgba(0, 0, 0, 0.12)',
-              border: theme === 'dark' 
-                ? '1px solid rgba(255, 255, 255, 0.1)' 
-                : '1px solid rgba(0, 0, 0, 0.08)',
-            }}
-          >
-            <Stack direction="row" spacing={2} alignItems="center">
-              <CircularProgress size={20} color="primary" />
-              <Typography variant="body2" fontWeight={500}>
-                Loading schedule data from crew portal...
-              </Typography>
-            </Stack>
-          </Card>
-        </Box>
-      )}
       
       {/* Trial Expiration Modal */}
       {showSubscriptionModal && subscriptionStatus === 'expired' && userType !== 'family' && (
@@ -6236,6 +6162,28 @@ function App() {
       <AppBar position="sticky" elevation={1} sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
         <Toolbar>
           <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ flexGrow: 1 }}>
+            {(loading || scrapingInProgress) && (
+              <Card
+                elevation={3}
+                sx={{
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 2,
+                  backgroundColor: theme === 'dark' ? 'rgba(37, 37, 56, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                  backdropFilter: 'blur(8px)',
+                  border: theme === 'dark' 
+                    ? '1px solid rgba(255, 255, 255, 0.1)' 
+                    : '1px solid rgba(0, 0, 0, 0.08)',
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CircularProgress size={14} />
+                  <Typography variant="caption" fontWeight={500} sx={{ fontSize: '0.75rem' }}>
+                    {loadingMessage || (scrapingInProgress ? 'Loading...' : 'Loading...')}
+                  </Typography>
+                </Stack>
+              </Card>
+            )}
             <FlightIcon sx={{ fontSize: 32, color: 'primary.main' }} />
             <Typography variant="h6" component="h1" sx={{ fontWeight: 700, color: 'primary.main' }}>
               FlightRosterIQ
