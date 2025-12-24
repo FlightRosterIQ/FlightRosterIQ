@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import localforage from 'localforage'
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
+import { API_BASE_URL, apiCall } from './config'
 import { 
   ThemeProvider, 
   createTheme, 
@@ -76,30 +77,7 @@ import {
 // App Version - Update this with each build
 const APP_VERSION = '1.0.3';
 
-// FlightRosterIQ Server Configuration
-// Always use relative URLs - Vercel will proxy to VPS via vercel.json rewrites
-const API_BASE_URL = '';
-
-// Helper function for API calls
-const apiCall = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  const defaultOptions = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    ...options
-  };
-
-  try {
-    const response = await fetch(url, defaultOptions);
-    return response;
-  } catch (error) {
-    console.error(`API call failed for ${endpoint}:`, error);
-    throw error;
-  }
-};
+// API_BASE_URL and apiCall are now imported from config.js
 
 localforage.config({
   name: 'FlightRosterIQ',
