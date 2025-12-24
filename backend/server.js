@@ -5,6 +5,15 @@ const PORT = process.env.PORT || 8080;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// NetLine session storage (cookies from authenticated Puppeteer session)
+const netlineSessions = new Map(); // Map<employeeId, { cookies, airline, timestamp }>
+
+// NetLine API base URLs
+const NETLINE_API = {
+  abx: 'https://crew.abxair.com/api/netline/crew/pems/rest/pems',
+  ati: 'https://crew.atitransport.com/api/netline/crew/pems/rest/pems'
+};
+
 app.use(express.json());
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -282,6 +291,17 @@ app.post('/api/authenticate', async (req, res) => {
                 }
                 
                 console.log('🎉 REAL CREW PORTAL AUTHENTICATION SUCCESSFUL!');
+                
+                // 🔑 CAPTURE COOKIES after successful auth
+                const cookies = await page.cookies();
+                const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+                netlineSessions.set(employeeId, {
+                  cookies: cookieString,
+                  airline: airline?.toLowerCase() || 'abx',
+                  timestamp: Date.now()
+                });
+                console.log('🍪 Stored NetLine session cookies for', employeeId);
+                
                 console.log('📅 Extracting crew schedule data...');
                 
                 // Wait for crew portal to fully load
@@ -675,6 +695,71 @@ app.post('/api/scrape', async (req, res) => {
     
     // Call the authenticate function
     return app._router.handle(Object.assign(req, { url: '/api/authenticate' }), res);
+});
+
+// ========================================
+// NETLINE API PROXY (for frontend scraper)
+// ========================================
+app.get('/api/netline/roster/events', async (req, res) => {
+  try {
+    const { crewCode } = req.query;
+    
+    if (!crewCode) {
+      return res.status(400).json({ error: 'crewCode required' });
+    }
+    
+    // Get stored session cookies for this crew member
+    const session = netlineSessions.get(crewCode);
+    
+    if (!session) {
+      return res.status(401).json({ 
+        error: 'No authenticated session found. Please login first.',
+        requiresAuth: true
+      });
+    }
+    
+    // Check if session is expired (24 hours)
+    const SESSION_TTL = 24 * 60 * 60 * 1000;
+    if (Date.now() - session.timestamp > SESSION_TTL) {
+      netlineSessions.delete(crewCode);
+      return res.status(401).json({ 
+        error: 'Session expired. Please login again.',
+        requiresAuth: true
+      });
+    }
+    
+    const airline = session.airline || 'abx';
+    const apiBase = NETLINE_API[airline];
+    const url = `${apiBase}/idp/user/roster/${crewCode}/events`;
+    
+    console.log(`🔄 Proxying NetLine API request: ${url}`);
+    
+    // Forward request to NetLine API with stored cookies
+    const fetch = (await import('node-fetch')).default;
+    const netlineRes = await fetch(url, {
+      headers: {
+        'cookie': session.cookies,
+        'accept': 'application/json',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    const contentType = netlineRes.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+      const data = await netlineRes.json();
+      console.log(`✅ NetLine API response: ${JSON.stringify(data).substring(0, 200)}...`);
+      res.json(data);
+    } else {
+      const text = await netlineRes.text();
+      console.log(`⚠️ NetLine API returned non-JSON:`, text.substring(0, 200));
+      res.status(netlineRes.status).send(text);
+    }
+    
+  } catch (err) {
+    console.error('❌ NetLine proxy error:', err);
+    res.status(500).json({ error: 'NetLine proxy failed', details: err.message });
+  }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
