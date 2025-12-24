@@ -4885,33 +4885,75 @@ function App() {
         )}
 
         {settingsTab === 'faqs' && (
-          <div className="settings-content">
-            <h3>❓ Frequently Asked Questions</h3>
-            <div className="faq-item beta-notice">
-              <p><strong>⚠️ BETA VERSION</strong></p>
-              <p>This app is currently in BETA testing. If you experience any bugs or issues, please report them to <a href="mailto:FlightRosterIQ@Gmail.com">FlightRosterIQ@Gmail.com</a> so we can improve the app!</p>
-            </div>
-            <div className="faq-item">
-              <p><strong>Q: How do I add friends?</strong></p>
-              <p>A: Go to Friends tab and search by name or employee number</p>
-            </div>
-            <div className="faq-item">
-              <p><strong>Q: Can I request new features?</strong></p>
-              <p>A: Absolutely! We love hearing your ideas. Feel free to request any cool features via email.</p>
-            </div>
-            <div className="faq-item">
-              <p><strong>Q: How do I view weather information?</strong></p>
-              <p>A: Click on any airport code (like CVG or LAX) in the daily schedule to see current weather</p>
-            </div>
-            <div className="faq-item">
-              <p><strong>Q: How do I track an aircraft?</strong></p>
-              <p>A: Click on any tail number (like #N123AB) to see live tracking information</p>
-            </div>
-            <div className="faq-item">
-              <p><strong>Q: Does this work offline?</strong></p>
-              <p>A: Yes! Your schedule is cached locally so you can access it without internet</p>
-            </div>
-          </div>
+          <Box sx={{ p: 2 }}>
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>❓ Frequently Asked Questions</Typography>
+            
+            <Card elevation={2} sx={{ mb: 2, bgcolor: 'warning.light', borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'warning.dark', mb: 1 }}>
+                  ⚠️ BETA VERSION
+                </Typography>
+                <Typography variant="body2" color="text.primary">
+                  This app is currently in BETA testing. If you experience any bugs or issues, please report them to <a href="mailto:FlightRosterIQ@Gmail.com" style={{ color: '#4C5FD5' }}>FlightRosterIQ@Gmail.com</a> so we can improve the app!
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card elevation={1} sx={{ mb: 2, borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  Q: How do I add friends?
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  A: Go to Friends tab and search by name or employee number
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card elevation={1} sx={{ mb: 2, borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  Q: Can I request new features?
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  A: Absolutely! We love hearing your ideas. Feel free to request any cool features via email.
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card elevation={1} sx={{ mb: 2, borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  Q: How do I view weather information?
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  A: Click on any airport code (like CVG or LAX) in the daily schedule to see current weather
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card elevation={1} sx={{ mb: 2, borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  Q: How do I track an aircraft?
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  A: Click on any tail number (like #N123AB) to see live tracking information
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card elevation={1} sx={{ mb: 2, borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  Q: Does this work offline?
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  A: Yes! Your schedule is cached locally so you can access it without internet
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
         )}
 
         {settingsTab === 'contact' && (
