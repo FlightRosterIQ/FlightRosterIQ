@@ -175,13 +175,15 @@ app.post('/api/authenticate', async (req, res) => {
             try {
                 // Fill username field
                 await page.waitForSelector('#username', { timeout: 10000 });
-                await page.clear('#username');
+                await page.click('#username', { clickCount: 3 }); // Select all
+                await page.keyboard.press('Backspace'); // Clear
                 await page.type('#username', employeeId);
                 console.log(`✅ Username entered: ${employeeId}`);
                 
                 // Fill password field
                 await page.waitForSelector('#password', { timeout: 5000 });
-                await page.clear('#password');
+                await page.click('#password', { clickCount: 3 }); // Select all
+                await page.keyboard.press('Backspace'); // Clear
                 await page.type('#password', password);
                 console.log('✅ Password entered: [HIDDEN]');
                 
