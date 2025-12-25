@@ -495,7 +495,8 @@ function App() {
         }
         
         // Scrape all 3 months (previous, current, next) on every login/refresh
-        await handleMultiMonthScraping(employeeId, password, airline, true)
+// ❌ DEPRECATED: await handleMultiMonthScraping(employeeId, password, airline, true)
+        console.warn('⚠️ Background scraping disabled - use getRosterWithBackgroundSync')
       } catch (error) {
         console.error('Background scraping error:', error)
       } finally {
@@ -510,6 +511,30 @@ function App() {
     
     return () => clearTimeout(timeoutId)
   }, [token])
+
+  // Handle auth session expiry
+  useEffect(() => {
+    const handleAuthRequired = (event) => {
+      console.warn('⚠️ [AUTH] Session expired or authentication required')
+      
+      // Show error notification
+      setError('Your session has expired. Please log in again.')
+      
+      // Clear local data
+      setToken(null)
+      setSchedule(null)
+      setLoggedIn(false)
+      
+      // Force logout
+      handleLogout()
+    }
+    
+    window.addEventListener('netline-auth-required', handleAuthRequired)
+    
+    return () => {
+      window.removeEventListener('netline-auth-required', handleAuthRequired)
+    }
+  }, [])
 
   // Close theme dropdown when clicking outside
   useEffect(() => {
@@ -790,6 +815,10 @@ function App() {
     try {
       const cachedToken = await localforage.getItem('authToken')
       const cachedSchedule = await localforage.getItem('schedule')
+      console.log('🔍 Loading cached data...')
+      console.log('🔍 cachedSchedule from localforage:', cachedSchedule)
+      console.log('🔍 cachedSchedule.flights:', cachedSchedule?.flights)
+      console.log('🔍 cachedSchedule.flights length:', cachedSchedule?.flights?.length)
       const cachedFriends = await localforage.getItem('friends')
       const cachedSettings = await localforage.getItem('settings')
       const cachedThemePreference = await localforage.getItem('themePreference')
@@ -811,7 +840,10 @@ function App() {
       const cachedSubscriptionExpiry = await localforage.getItem('subscriptionExpiry')
       
       if (cachedToken) setToken(cachedToken)
-      if (cachedSchedule) setSchedule(cachedSchedule)
+      if (cachedSchedule) {
+        console.log('✅ Setting schedule from cached data:', cachedSchedule)
+        setSchedule(cachedSchedule)
+      }
       if (cachedFriends) setFriends(cachedFriends)
       if (cachedSettings) setSettings(cachedSettings)
       if (cachedThemePreference) {
@@ -1148,30 +1180,7 @@ function App() {
         await localforage.setItem('userId', employeeId)
         console.log(`👤 User ID stored for roster updates: ${employeeId}`)
         
-        // 🚀 Fetch roster using new API/DOM scraper
-        console.log('📅 Fetching roster with background sync...')
-        setLoadingMessage('Loading your schedule...')
-        try {
-          await getRosterWithBackgroundSync(employeeId, (duties) => {
-            console.log(`✅ Roster loaded: ${duties.length} duties`)
-            // Transform duties to flights format
-            const flights = duties.map(duty => ({
-              id: duty.logicalId,
-              date: duty.startUtc.split('T')[0],
-              pairing: duty.pairing || duty.logicalId,
-              type: duty.type,
-              legs: duty.legs,
-              crew: duty.crew,
-              hotel: duty.hotel,
-              enriched: duty.enriched
-            }))
-            setFlights(flights)
-            localforage.setItem('flights', flights)
-          })
-        } catch (err) {
-          console.error('❌ Roster fetch failed:', err)
-          // Don't block login on roster fetch failure
-        }
+        // Note: Roster loading moved to after login success (see below)
       }
       
       // For family accounts, look up the assigned name from the code
@@ -1203,55 +1212,234 @@ function App() {
       // Set active tab to monthly view immediately
       setActiveTab('monthly')
       
-      // AUTOMATIC SCRAPING: Start scraping in background after successful login
+      // ✅ NEW ADAPTER: Load roster using NetLine API
       if (accountType === 'pilot') {
-        console.log('🔄 Starting automatic crew portal scraping in background...')
+        console.log('✅ [LOGIN] Pilot account detected, starting roster load...')
+        console.log('✅ [LOGIN] Employee ID:', credentials.username.trim())
         setScrapingInProgress(true)
-        // Store encrypted credentials for refresh (in production, use proper encryption)
-        await localforage.setItem('tempPassword', credentials.password)
         
-        // Check if this is first login
-        const hasScrapedBefore = await localforage.getItem('hasScrapedBefore')
-        const isFirstLogin = !hasScrapedBefore
+        // First, authenticate with NetLine to create session
+        console.log('🔐 [LOGIN] Authenticating with NetLine...')
+        setLoadingMessage('Authenticating with crew portal...')
         
-        // Run scraping in background without blocking UI
-        setTimeout(() => {
-          handleMultiMonthScraping(credentials.username.trim(), credentials.password, airline, isFirstLogin).catch(err => {
-            console.error('Auto-scraping error:', err)
-            setScrapingInProgress(false)
+        try {
+          const authResponse = await apiCall('/api/authenticate', {
+            method: 'POST',
+            body: JSON.stringify({
+              employeeId: credentials.username.trim(),
+              password: credentials.password,
+              airline: airline || 'abx'
+            })
           })
-        }, 100)
+          
+          const authResult = await authResponse.json()
+          
+          if (!authResult.success) {
+            console.error('❌ [LOGIN] NetLine authentication failed:', authResult.error)
+            setError('Failed to authenticate with crew portal. Please check your credentials.')
+            setScrapingInProgress(false)
+            return
+          }
+          
+          console.log('✅ [LOGIN] NetLine authentication successful')
+          setLoadingMessage('Loading your schedule...')
+          
+          // Now use the adapter to load roster with background sync
+          console.log('✅ [LOGIN] Calling getRosterWithBackgroundSync...')
+          
+          getRosterWithBackgroundSync(credentials.username.trim(), duties => {
+            console.log('✅ [LOGIN] Adapter callback fired with duties:', duties.length)
+            console.log('[FRIQ] Duties received:', duties)
+            
+            if (!duties || duties.length === 0) {
+              console.warn('⚠️ [LOGIN] No duties returned from adapter')
+              setScrapingInProgress(false)
+              setError('No schedule data found. This may be your first login - schedule will load after authentication.')
+              return
+            }
+            
+            // Transform duties to the format expected by the app
+            // Each duty can have multiple legs, create a flight entry for each leg
+            const flights = []
+            duties.forEach(duty => {
+              // For each leg in the duty, create a flight entry
+              duty.legs.forEach((leg, legIndex) => {
+                const legDate = leg.departUtc ? leg.departUtc.split('T')[0] : duty.startUtc.split('T')[0]
+                flights.push({
+                  id: `${duty.logicalId}_leg${legIndex}`,
+                  flightNumber: leg.flightNumber || duty.pairing || 'Unknown',
+                  pairingId: duty.pairing,
+                  date: legDate,
+                  origin: leg.from || 'Unknown',
+                  destination: leg.to || 'Unknown',
+                  departure: leg.departUtc || duty.startUtc,
+                  arrival: leg.arriveUtc || duty.endUtc,
+                  aircraft: leg.aircraft || 'Unknown',
+                  aircraftType: leg.aircraft || 'Unknown',
+                  tailNumber: leg.tail || '',
+                  tail: leg.tail || '',
+                  status: 'Confirmed',
+                  rank: duty.crew.find(c => c.role === 'PIC' || c.role === 'CA') ? 'CA' : 'FO',
+                  crewMembers: duty.crew,
+                  hotels: duty.hotel ? [{ name: duty.hotel }] : [],
+                  isCodeshare: false,
+                  operatingAirline: null,
+                  actualDeparture: null,
+                  actualArrival: null,
+                  isDeadhead: leg.deadhead || false,
+                  isReserveDuty: duty.type === 'OTHER',
+                  isTraining: duty.type === 'TRAINING',
+                  dutyType: duty.type,
+                  legNumber: legIndex + 1,
+                  totalLegs: duty.legs.length
+                })
+              })
+              
+              // If no legs but duty exists (training/reserve), create a duty entry
+              if (!duty.legs || duty.legs.length === 0) {
+                flights.push({
+                  id: duty.logicalId,
+                  flightNumber: duty.pairing || 'Unknown',
+                  pairingId: duty.pairing,
+                  date: duty.startUtc.split('T')[0],
+                  origin: 'Base',
+                  destination: 'Base',
+                  departure: duty.startUtc,
+                  arrival: duty.endUtc,
+                  aircraft: 'N/A',
+                  aircraftType: 'N/A',
+                  tailNumber: '',
+                  tail: '',
+                  status: 'Confirmed',
+                  rank: 'FO',
+                  crewMembers: duty.crew || [],
+                  hotels: duty.hotel ? [{ name: duty.hotel }] : [],
+                  isCodeshare: false,
+                  operatingAirline: null,
+                  actualDeparture: null,
+                  actualArrival: null,
+                  isDeadhead: false,
+                  isReserveDuty: duty.type === 'OTHER',
+                  isTraining: duty.type === 'TRAINING',
+                  dutyType: duty.type
+                })
+              }
+            })
+            
+            const transformedSchedule = {
+              flights,
+              hotelsByDate: {}
+            }
+            
+            console.log('✅ [LOGIN] Transformed schedule:', transformedSchedule.flights.length, 'flights')
+            setSchedule(transformedSchedule)
+            setScrapingInProgress(false)
+            
+            // Cache the schedule
+            localforage.setItem('schedule', transformedSchedule)
+            console.log('✅ [LOGIN] Schedule set and cached successfully')
+          })
+          
+        } catch (err) {
+          console.error('❌ [LOGIN] Authentication or roster loading failed:', err)
+          setScrapingInProgress(false)
+          setError('Failed to load schedule: ' + err.message)
+        }
       } else if (accountType === 'family' && memberInfo) {
-        // For family accounts, scrape using the pilot's credentials
-        console.log('🔄 Starting automatic scraping for family member...')
+        // ✅ NEW ADAPTER: Load roster for family member using NetLine API
+        console.log('✅ [LOGIN] Family account detected, starting roster load...')
+        console.log('✅ [LOGIN] Pilot Employee ID:', memberInfo.pilotEmployeeId)
         setScrapingInProgress(true)
         
-        // Check if this is first login
-        const hasScrapedBefore = await localforage.getItem('hasScrapedBefore')
-        const isFirstLogin = !hasScrapedBefore
-        
-        // Run scraping with pilot's credentials
-        setTimeout(() => {
-          handleMultiMonthScraping(memberInfo.pilotEmployeeId, memberInfo.password, memberInfo.airline, isFirstLogin)
-            .then(() => {
-              // After scraping, load the schedule from cache
-              const loadFamilySchedule = async () => {
-                const currentMonth = new Date().getMonth() + 1
-                const currentYear = new Date().getFullYear()
-                const cacheKey = `schedule_${currentYear}_${String(currentMonth).padStart(2, '0')}`
-                const cachedSchedule = await localforage.getItem(cacheKey)
-                if (cachedSchedule) {
-                  setSchedule(cachedSchedule)
-                  console.log('✅ Family schedule loaded from cache')
-                }
-              }
-              loadFamilySchedule()
+        // Use the new adapter to load roster with pilot's employee ID
+        console.log('✅ [LOGIN] Calling getRosterWithBackgroundSync...')
+        getRosterWithBackgroundSync(memberInfo.pilotEmployeeId, duties => {
+          console.log('✅ [LOGIN] Adapter callback fired with duties:', duties.length)
+          console.log('[FRIQ] Duties received for family member:', duties)
+          
+          // Transform duties to the format expected by the app
+          // Each duty can have multiple legs, create a flight entry for each leg
+          const flights = []
+          duties.forEach(duty => {
+            // For each leg in the duty, create a flight entry
+            duty.legs.forEach((leg, legIndex) => {
+              const legDate = leg.departUtc ? leg.departUtc.split('T')[0] : duty.startUtc.split('T')[0]
+              flights.push({
+                id: `${duty.logicalId}_leg${legIndex}`,
+                flightNumber: leg.flightNumber || duty.pairing || 'Unknown',
+                pairingId: duty.pairing,
+                date: legDate,
+                origin: leg.from || 'Unknown',
+                destination: leg.to || 'Unknown',
+                departure: leg.departUtc || duty.startUtc,
+                arrival: leg.arriveUtc || duty.endUtc,
+                aircraft: leg.aircraft || 'Unknown',
+                aircraftType: leg.aircraft || 'Unknown',
+                tailNumber: leg.tail || '',
+                tail: leg.tail || '',
+                status: 'Confirmed',
+                rank: 'FO',
+                crewMembers: duty.crew || [],
+                hotels: duty.hotel ? [{ name: duty.hotel }] : [],
+                isCodeshare: false,
+                operatingAirline: null,
+                actualDeparture: null,
+                actualArrival: null,
+                isDeadhead: leg.deadhead || false,
+                isReserveDuty: duty.type === 'OTHER',
+                isTraining: duty.type === 'TRAINING',
+                dutyType: duty.type,
+                legNumber: legIndex + 1,
+                totalLegs: duty.legs.length
+              })
             })
-            .catch(err => {
-              console.error('Auto-scraping error for family:', err)
-              setScrapingInProgress(false)
-            })
-        }, 100)
+            
+            // If no legs but duty exists (training/reserve), create a duty entry
+            if (!duty.legs || duty.legs.length === 0) {
+              flights.push({
+                id: duty.logicalId,
+                flightNumber: duty.pairing || 'Unknown',
+                pairingId: duty.pairing,
+                date: duty.startUtc.split('T')[0],
+                origin: 'Base',
+                destination: 'Base',
+                departure: duty.startUtc,
+                arrival: duty.endUtc,
+                aircraft: 'N/A',
+                aircraftType: 'N/A',
+                tailNumber: '',
+                tail: '',
+                status: 'Confirmed',
+                rank: 'FO',
+                crewMembers: duty.crew || [],
+                hotels: duty.hotel ? [{ name: duty.hotel }] : [],
+                isCodeshare: false,
+                operatingAirline: null,
+                actualDeparture: null,
+                actualArrival: null,
+                isDeadhead: false,
+                isReserveDuty: duty.type === 'OTHER',
+                isTraining: duty.type === 'TRAINING',
+                dutyType: duty.type
+              })
+            }
+          })
+          
+          const transformedSchedule = {
+            flights,
+            hotelsByDate: {}
+          }
+          
+          setSchedule(transformedSchedule)
+          setScrapingInProgress(false)
+          
+          // Cache the schedule
+          const currentMonth = new Date().getMonth() + 1
+          const currentYear = new Date().getFullYear()
+          const cacheKey = `schedule_${currentYear}_${String(currentMonth).padStart(2, '0')}`
+          localforage.setItem(cacheKey, transformedSchedule)
+          console.log('✅ Family schedule loaded via NetLine API')
+        })
       }
     } catch (err) {
       setError('Login error. Please try again.')
@@ -2240,7 +2428,11 @@ function App() {
   }
 
   // Automatic Crew Portal Scraping Functions
+  // ❌ DEPRECATED: Old Puppeteer-based scraping - replaced by NetLine API adapter
   const handleMultiMonthScraping = async (employeeId, password, airline, isFirstLogin = false) => {
+    console.warn('⚠️ DEPRECATED: handleMultiMonthScraping is no longer used. Use getRosterWithBackgroundSync instead.')
+    return
+    /* COMMENTED OUT - OLD SCRAPING CODE
     console.log('🚀 MULTI-MONTH SCRAPING: Starting crew portal scraping...')
     console.log(`📋 First login: ${isFirstLogin}`)
     
@@ -2332,9 +2524,14 @@ function App() {
     setScrapingInProgress(false)
     setLoadingMessage('')
     console.log('✅ MULTI-MONTH SCRAPING: All months processed')
+    */
   }
 
+  // ❌ DEPRECATED: Old Puppeteer-based scraping - replaced by NetLine API adapter
   const handleAutomaticScraping = async (employeeId, password, airline, month = null, year = null, firstLogin = false, retryCount = 0) => {
+    console.warn('⚠️ DEPRECATED: handleAutomaticScraping is no longer used. Use getRosterWithBackgroundSync instead.')
+    return
+    /* COMMENTED OUT - OLD SCRAPING CODE
     const maxRetries = 3
     const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 10000) // Exponential backoff: 1s, 2s, 4s, max 10s
     
@@ -2989,6 +3186,7 @@ function App() {
     } finally {
       setScraperLoading(false)
     }
+    */
   }
 
   const resetScraperForm = () => {
@@ -3030,22 +3228,29 @@ function App() {
   }
 
   const getScheduleForDate = (dateString) => {
+    console.log('🔍 getScheduleForDate called with:', dateString)
+    console.log('🔍 schedule object:', schedule)
     if (!schedule) {
-      console.log('getScheduleForDate: No schedule data')
+      console.log('❌ getScheduleForDate: No schedule data')
       return null
     }
     
     try {
       const flights = []
       
-      console.log('getScheduleForDate: Looking for date', dateString)
-      console.log('getScheduleForDate: Schedule structure', schedule)
+      console.log('✅ getScheduleForDate: Looking for date', dateString)
+      console.log('✅ getScheduleForDate: Schedule structure', schedule)
+      console.log('✅ getScheduleForDate: schedule.flights exists?', !!schedule.flights)
+      console.log('✅ getScheduleForDate: schedule.flights is array?', Array.isArray(schedule.flights))
+      console.log('✅ getScheduleForDate: schedule.flights length:', schedule.flights?.length)
       
       // Handle new format from scraper: { flights: [...] }
       if (schedule.flights && Array.isArray(schedule.flights)) {
+        console.log('✅ Processing schedule.flights array with', schedule.flights.length, 'flights')
         for (const flight of schedule.flights) {
-          console.log('Checking flight date:', flight.date, 'against', dateString)
+          console.log('   Checking flight:', {date: flight.date, pairing: flight.pairingId, origin: flight.origin, dest: flight.destination})
           if (flight.date === dateString) {
+            console.log('   ✅ MATCH! Adding flight to results')
             flights.push({ ...flight, pairingId: flight.pairingId || 'N/A' })
           }
         }
@@ -5261,7 +5466,12 @@ function App() {
   }
 
   const renderDailyView = () => {
+    console.log('🔍 renderDailyView called')
+    console.log('🔍 selectedDate:', selectedDate)
+    console.log('🔍 schedule state:', schedule)
+    console.log('🔍 schedule.flights:', schedule?.flights)
     const flights = getScheduleForDate(selectedDate)
+    console.log('🔍 getScheduleForDate returned:', flights)
     const selectedDateObj = new Date(selectedDate + 'T00:00:00')
     const formattedDate = selectedDateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     
@@ -7372,4 +7582,4 @@ function App() {
   )
 }
 
-export default App
+export default Appe

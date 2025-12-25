@@ -7,8 +7,8 @@ const isDevelopment = window.location.hostname === 'localhost' || window.locatio
 const config = {
   development: {
     // Local development - direct connection to backend
-    API_BASE_URL: 'http://localhost:3001',
-    WS_URL: 'ws://localhost:3001'
+    API_BASE_URL: 'http://localhost:8080',
+    WS_URL: 'ws://localhost:8080'
   },
   production: {
     // Production - use relative URLs so Vercel proxy handles HTTPS

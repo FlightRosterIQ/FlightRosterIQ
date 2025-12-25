@@ -51,13 +51,33 @@ function rosterHash(duties: Duty[]) {
 // ---------- STEP 1: API FETCH ----------
 
 async function fetchRosterEvents(crewCode: string): Promise<Duty[]> {
-  const res = await fetch(
-    `/api/netline/roster/events?crewCode=${crewCode}`,
-    { credentials: 'include' }
-  );
+  const url = `/api/netline/roster/events?crewCode=${crewCode}`;
+  console.log('[FRIQ][FETCH] Calling:', url);
+  
+  const res = await fetch(url, { credentials: 'include' });
+  
+  console.log('[FRIQ][FETCH] Response status:', res.status);
+  console.log('[FRIQ][FETCH] Response headers:', Object.fromEntries(res.headers.entries()));
 
   const json = await res.json();
-  if (!json.success) throw new Error('NetLine /events failed');
+  console.log('[FRIQ][NetLine API RAW]', json);
+  
+  // Handle session expiry or auth required
+  if (!json.success && json.requiresAuth) {
+    console.error('[FRIQ][FETCH] Session expired or auth required');
+    
+    // Dispatch custom event for UI to handle
+    window.dispatchEvent(new CustomEvent('netline-auth-required', {
+      detail: { error: json.error, crewCode: json.crewCode }
+    }));
+    
+    throw new Error('Authentication required');
+  }
+  
+  if (!json.success) {
+    console.error('[FRIQ][FETCH] API returned success:false', json);
+    throw new Error(json.error || 'NetLine /events failed');
+  }
 
   return json.result.map((e: any) => ({
     logicalId: e.logicalId,
@@ -141,26 +161,32 @@ export async function getRosterWithBackgroundSync(
   crewCode: string,
   onUpdate?: (duties: Duty[]) => void
 ): Promise<Duty[]> {
+  console.log('[FRIQ][ADAPTER] getRosterWithBackgroundSync called with crewCode:', crewCode);
+  
   const cacheKey = `netline-${crewCode}`;
   const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 hours
 
   // 1️⃣ Load cache immediately
+  console.log('[FRIQ][ADAPTER] Checking cache...');
   const cached = await loadRoster(cacheKey, CACHE_TTL);
   if (cached) {
-    console.info('[FRIQ] Roster loaded from cache');
+    console.info('[FRIQ][ADAPTER] Roster loaded from cache, count:', cached.length);
     onUpdate?.(cached);
 
     // 2️⃣ Background refresh (non-blocking)
     (async () => {
       try {
+        console.log('[FRIQ][ADAPTER] Starting background refresh...');
         const fresh = await fetchAndMerge(crewCode);
         if (rosterHash(fresh) !== rosterHash(cached)) {
-          console.info('[FRIQ] Roster updated in background');
+          console.info('[FRIQ][ADAPTER] Roster updated in background');
           await saveRoster(cacheKey, fresh);
           onUpdate?.(fresh);
+        } else {
+          console.info('[FRIQ][ADAPTER] No changes detected in background refresh');
         }
       } catch (e) {
-        console.warn('[FRIQ] Background refresh failed', e);
+        console.error('[FRIQ][ADAPTER] Background refresh failed', e);
       }
     })();
 
@@ -168,9 +194,17 @@ export async function getRosterWithBackgroundSync(
   }
 
   // 3️⃣ No cache → normal fetch
-  const fresh = await fetchAndMerge(crewCode);
-  await saveRoster(cacheKey, fresh);
-  onUpdate?.(fresh);
+  console.log('[FRIQ][ADAPTER] No cache found, fetching fresh data...');
+  try {
+    const fresh = await fetchAndMerge(crewCode);
+    console.log('[FRIQ][ADAPTER] Fresh data fetched, count:', fresh.length);
+    await saveRoster(cacheKey, fresh);
+    onUpdate?.(fresh);
+    return fresh;
+  } catch (e) {
+    console.error('[FRIQ][ADAPTER] Initial fetch failed', e);
+    throw e;
+  }
   return fresh;
 }
 

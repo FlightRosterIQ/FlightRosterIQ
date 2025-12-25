@@ -3,10 +3,16 @@ const puppeteer = require('puppeteer');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Production modules
+const sessionStore = require('./sessionStore');
+const RateLimiter = require('./middleware/rateLimiter');
+const sessionValidator = require('./middleware/sessionValidator');
+const logger = require('./logger');
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// NetLine session storage (cookies from authenticated Puppeteer session)
-const netlineSessions = new Map(); // Map<employeeId, { cookies, airline, timestamp }>
+// Initialize session store
+sessionStore.init().catch(err => logger.error('Session store init failed:', err));
 
 // NetLine API base URLs
 const NETLINE_API = {
@@ -15,6 +21,8 @@ const NETLINE_API = {
 };
 
 app.use(express.json());
+
+// CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -22,6 +30,16 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
   next();
 });
+
+// Request logging
+app.use((req, res, next) => {
+  logger.request(req);
+  next();
+});
+
+// Rate limiting (100 req/min per IP)
+const apiLimiter = new RateLimiter(100, 60000);
+app.use('/api/', apiLimiter.middleware());
 
 app.get('/', (req, res) => {
     res.json({ 
@@ -356,12 +374,13 @@ app.post('/api/authenticate', async (req, res) => {
                 // 🔑 CAPTURE COOKIES after successful auth
                 const cookies = await page.cookies();
                 const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-                netlineSessions.set(employeeId, {
+                sessionStore.set(employeeId, {
                   cookies: cookieString,
-                  airline: airline?.toLowerCase() || 'abx',
-                  timestamp: Date.now()
+                  airline: airline?.toLowerCase() || 'abx'
                 });
-                console.log('🍪 Stored NetLine session cookies for', employeeId);
+                logger.info('🍪 [SESSION] Stored NetLine session for', employeeId);
+                logger.debug('🍪 [SESSION] Cookie preview:', cookieString.substring(0, 100) + '...');
+                logger.info('🍪 [SESSION] Total sessions stored:', sessionStore.size());
                 
                 console.log('📅 Extracting crew schedule data...');
                 
@@ -738,56 +757,34 @@ app.post('/api/authenticate', async (req, res) => {
 });
 
 // Scrape endpoint (same functionality as authenticate for automatic scraping)
-app.post('/api/scrape', async (req, res) => {
-    console.log('🔄 AUTOMATIC SCRAPING REQUEST');
-    
-    // Use the same authentication logic
-    const { employeeId, password, airline } = req.body;
-    
-    if (!employeeId || !password) {
-        return res.status(400).json({
-            success: false,
-            error: 'Credentials required for automatic scraping'
-        });
-    }
-    
-    // Redirect to authenticate endpoint with scraping context
-    req.body.autoScrape = true;
-    
-    // Call the authenticate function
-    return app._router.handle(Object.assign(req, { url: '/api/authenticate' }), res);
+// ❌ DEPRECATED: Old Puppeteer-based scraping endpoint
+app.post('/api/scrape', (req, res) => {
+    console.warn('⚠️ DEPRECATED: /api/scrape endpoint called. Use /api/netline/roster/events instead.');
+    res.status(410).json({
+        error: 'Deprecated endpoint. Use /api/netline/roster/events',
+        message: 'This endpoint has been replaced with the NetLine API. Please update your client to use getRosterWithBackgroundSync() from netlineApiDomAdapter.',
+        migration: {
+            oldEndpoint: '/api/scrape',
+            newEndpoint: '/api/netline/roster/events',
+            adapterFunction: 'getRosterWithBackgroundSync(crewCode, onUpdate)'
+        }
+    });
 });
 
 // ========================================
 // NETLINE API PROXY (for frontend scraper)
 // ========================================
-app.get('/api/netline/roster/events', async (req, res) => {
+app.get('/api/netline/roster/events', sessionValidator(sessionStore), async (req, res) => {
+  logger.info('✅ [ROSTER API] Request received for', req.crewCode);
+  logger.debug('✅ [ROSTER API] Current sessions count:', sessionStore.size());
+  
   try {
-    const { crewCode } = req.query;
+    const { crewCode } = req;
+    const session = req.netlineSession;
     
-    if (!crewCode) {
-      return res.status(400).json({ error: 'crewCode required' });
-    }
+    logger.debug('✅ [ROSTER API] Session found for', crewCode);
     
-    // Get stored session cookies for this crew member
-    const session = netlineSessions.get(crewCode);
-    
-    if (!session) {
-      return res.status(401).json({ 
-        error: 'No authenticated session found. Please login first.',
-        requiresAuth: true
-      });
-    }
-    
-    // Check if session is expired (24 hours)
-    const SESSION_TTL = 24 * 60 * 60 * 1000;
-    if (Date.now() - session.timestamp > SESSION_TTL) {
-      netlineSessions.delete(crewCode);
-      return res.status(401).json({ 
-        error: 'Session expired. Please login again.',
-        requiresAuth: true
-      });
-    }
+    // Session validation already done by middleware
     
     const airline = session.airline || 'abx';
     const apiBase = NETLINE_API[airline];
@@ -823,22 +820,65 @@ app.get('/api/netline/roster/events', async (req, res) => {
   }
 });
 
+// ========================================
+// HEALTH & MONITORING ENDPOINTS
+// ========================================
+app.get('/api/health/detailed', (req, res) => {
+  const sessions = sessionStore.getAll();
+  const uptime = process.uptime();
+  
+  res.json({
+    success: true,
+    status: 'healthy',
+    service: 'FlightRosterIQ Backend',
+    version: '2.1.0',
+    timestamp: new Date().toISOString(),
+    uptime: {
+      seconds: uptime,
+      human: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`
+    },
+    sessions: {
+      total: sessionStore.size(),
+      active: sessions.filter(s => s.expiresIn > 3600).length,
+      expiringSoon: sessions.filter(s => s.expiresIn > 0 && s.expiresIn <= 3600).length
+    },
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+      unit: 'MB'
+    }
+  });
+});
+
+app.get('/api/health/sessions', (req, res) => {
+  res.json({
+    success: true,
+    sessions: sessionStore.getAll()
+  });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
-    console.log('🚀 FlightRosterIQ - REAL CREW PORTAL AUTHENTICATION!');
-    console.log(`🌐 Server running on port ${PORT}`);
-    console.log(`🔐 Real ABX Air & ATI crew portal authentication enabled`);
-    console.log(`📅 Automatic schedule scraping enabled`);
-    console.log(`✈️ No fake accounts accepted - real credentials only`);
-    console.log(`🌐 Access at: http://157.245.126.24:${PORT}`);
-    console.log(`🔒 Proxied through Vercel - no mixed content issues`);
+    logger.info('🚀 FlightRosterIQ - Production Ready!');
+    logger.info(`🌐 Server running on port ${PORT}`);
+    logger.info(`🔐 NetLine API authentication enabled`);
+    logger.info(`💾 Persistent session storage active`);
+    logger.info(`⚡ Rate limiting enabled (100 req/min)`);
+    logger.info(`🌐 Access at: http://157.245.126.24:${PORT}`);
 });
 
-process.on('SIGTERM', () => {
-    console.log('🛑 Shutting down FlightRosterIQ server...');
+// Graceful shutdown
+async function shutdown(signal) {
+    logger.info(`🛑 ${signal} received, shutting down gracefully...`);
+    
+    try {
+      await sessionStore.shutdown();
+      logger.info('✅ Session store closed');
+    } catch (err) {
+      logger.error('❌ Error during shutdown:', err);
+    }
+    
     process.exit(0);
-});
+}
 
-process.on('SIGINT', () => {
-    console.log('🛑 Shutting down FlightRosterIQ server...');
-    process.exit(0);
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
