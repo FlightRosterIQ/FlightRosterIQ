@@ -2957,21 +2957,16 @@ function App() {
       return
     }
     
-    console.log(`🔄 MANUAL REFRESH: Starting 3-month scrape (previous, current, next)...`)
+    console.log(`🔄 MANUAL REFRESH: Reloading schedule from crew portal...`)
     
-    // Don't clear the schedule - keep it visible during refresh
-    setLoadingMessage('Refreshing schedule data from crew portal...')
+    setLoadingMessage('Refreshing schedule data...')
     setScrapingInProgress(true)
     setError(null)
-    
-    // Keep a copy of current schedule to restore if refresh fails
-    const currentSchedule = schedule
     
     try {
       let storedUsername, storedPassword, storedAirline
       
       if (userType === 'family') {
-        // For family accounts, use pilot's credentials from code mapping
         const accessCode = await localforage.getItem('familyAccessCode')
         const codeMapping = await localforage.getItem('familyCodeMapping') || {}
         const memberInfo = codeMapping[accessCode]
@@ -2986,147 +2981,134 @@ function App() {
         storedPassword = memberInfo.password
         storedAirline = memberInfo.airline
       } else {
-        // For pilot accounts, use stored credentials
         storedUsername = await localforage.getItem('username')
         storedPassword = await localforage.getItem('tempPassword')
         storedAirline = await localforage.getItem('airline')
       }
       
       if (!storedUsername || !storedPassword) {
-        setScheduleChanges(prev => [{
-          type: 'general',
-          message: '🔄 Please log out and log back in to enable schedule refresh.',
-          date: new Date().toISOString(),
-          read: false
-        }, ...prev])
+        setError('Please log out and log back in to enable schedule refresh.')
         setScrapingInProgress(false)
         return
       }
       
-      // Calculate months to scrape - manual refresh only scrapes current and next month
-      // (unless previous month is not cached)
-      const now = new Date()
-      const currentMonthNum = now.getMonth() + 1 // JavaScript months are 0-indexed
-      const currentYearNum = now.getFullYear()
+      // Authenticate with backend first
+      console.log('🔐 Authenticating with backend...')
+      const authResponse = await apiCall('/api/authenticate', {
+        method: 'POST',
+        body: JSON.stringify({
+          employeeId: storedUsername,
+          password: storedPassword,
+          airline: storedAirline || 'abx'
+        })
+      })
       
-      let previousMonth = currentMonthNum - 1
-      let previousYear = currentYearNum
-      if (previousMonth === 0) {
-        previousMonth = 12
-        previousYear -= 1
+      const authResult = await authResponse.json()
+      
+      if (!authResult.success) {
+        console.error('❌ Authentication failed:', authResult.error)
+        setError('Failed to authenticate. Please try again.')
+        setScrapingInProgress(false)
+        return
       }
       
-      let nextMonth = currentMonthNum + 1
-      let nextYear = currentYearNum
-      if (nextMonth === 13) {
-        nextMonth = 1
-        nextYear += 1
-      }
+      console.log('✅ Authentication successful, fetching roster...')
+      setLoadingMessage('Loading your schedule...')
       
-      // Check if previous month is cached
-      const previousMonthCacheKey = `schedule_${previousYear}_${String(previousMonth).padStart(2, '0')}`
-      const previousMonthCached = await localforage.getItem(previousMonthCacheKey)
-      
-      const monthsToScrape = []
-      
-      // Only scrape previous month if it's not cached
-      if (!previousMonthCached) {
-        console.log(`📅 Previous month (${previousYear}-${String(previousMonth).padStart(2, '0')}) not cached - adding to scrape list`)
-        monthsToScrape.push({ month: previousMonth, year: previousYear, label: 'Previous Month' })
-      } else {
-        console.log(`✅ Previous month (${previousYear}-${String(previousMonth).padStart(2, '0')}) is cached - skipping`)
-      }
-      
-      // Always scrape current and next month
-      monthsToScrape.push(
-        { month: currentMonthNum, year: currentYearNum, label: 'Current Month' },
-        { month: nextMonth, year: nextYear, label: 'Next Month' }
-      )
-      
-      // Update scraping status
-      setScrapingStatus(prev => ({
-        ...prev,
-        isActive: true,
-        totalMonths: monthsToScrape.length,
-        progress: 0,
-        currentMonth: null
-      }))
-      
-      for (const { month, year, label } of monthsToScrape) {
-        try {
-          console.log(`📅 Scraping ${label}: ${year}-${String(month).padStart(2, '0')}...`)
-          setLoadingMessage(`Refreshing ${label} (${year}-${String(month).padStart(2, '0')})...`)
-          
-          // Update progress
-          const currentIndex = monthsToScrape.findIndex(m => m.label === label)
-          setScrapingStatus(prev => ({
-            ...prev,
-            currentMonth: `${year}-${String(month).padStart(2, '0')}`,
-            progress: Math.round(((currentIndex + 1) / monthsToScrape.length) * 100)
-          }))
-          
-          await handleAutomaticScraping(storedUsername, storedPassword, storedAirline, month, year)
-          
-          console.log(`✅ Successfully refreshed ${label}`)
-          
-          // Update last success
-          setScrapingStatus(prev => ({
-            ...prev,
-            lastSuccess: new Date().toISOString(),
-            lastError: null,
-            retryCount: 0
-          }))
-          
-        } catch (monthError) {
-          console.error(`❌ Failed to scrape ${label}:`, monthError)
-          setScrapingStatus(prev => ({
-            ...prev,
-            lastError: `Failed to scrape ${label}: ${monthError.message}`,
-            retryCount: (prev.retryCount || 0) + 1
-          }))
-          // Continue with other months even if one fails
+      // Use the adapter to fetch fresh roster data
+      getRosterWithBackgroundSync(storedUsername, duties => {
+        console.log('✅ Roster refresh complete:', duties.length, 'duties')
+        
+        if (!duties || duties.length === 0) {
+          console.warn('⚠️ No duties returned from refresh')
+          setError('No schedule data available')
+          setScrapingInProgress(false)
+          return
         }
-      }
-      
-      // After all scraping completes, reload the schedule for the currently viewed month
-      const viewingMonth = currentMonth.getMonth() + 1
-      const viewingYear = currentMonth.getFullYear()
-      console.log(`✅ Refresh complete. Reloading schedule for ${viewingYear}-${String(viewingMonth).padStart(2, '0')}`)
-      const monthCacheKey = `schedule_${viewingYear}_${String(viewingMonth).padStart(2, '0')}`
-      const monthSchedule = await localforage.getItem(monthCacheKey)
-      if (monthSchedule) {
-        setSchedule(monthSchedule)
-        console.log(`✅ Loaded schedule for ${viewingYear}-${String(viewingMonth).padStart(2, '0')} from cache`)
+        
+        // Transform duties to flights (same as login)
+        const flights = []
+        duties.forEach(duty => {
+          duty.legs.forEach((leg, legIndex) => {
+            const legDate = leg.departUtc ? leg.departUtc.split('T')[0] : duty.startUtc.split('T')[0]
+            flights.push({
+              id: `${duty.logicalId}_leg${legIndex}`,
+              flightNumber: leg.flightNumber || duty.pairing || 'Unknown',
+              pairingId: duty.pairing,
+              date: legDate,
+              origin: leg.from || 'Unknown',
+              destination: leg.to || 'Unknown',
+              departure: leg.departUtc || duty.startUtc,
+              arrival: leg.arriveUtc || duty.endUtc,
+              aircraft: leg.aircraft || 'Unknown',
+              aircraftType: leg.aircraft || 'Unknown',
+              tailNumber: leg.tail || '',
+              tail: leg.tail || '',
+              status: 'Confirmed',
+              rank: duty.crew.find(c => c.role === 'PIC' || c.role === 'CA') ? 'CA' : 'FO',
+              crewMembers: duty.crew,
+              hotels: duty.hotel ? [{ name: duty.hotel }] : [],
+              isCodeshare: false,
+              operatingAirline: null,
+              actualDeparture: null,
+              actualArrival: null,
+              isDeadhead: leg.deadhead || false,
+              isReserveDuty: duty.type === 'OTHER',
+              isTraining: duty.type === 'TRAINING',
+              dutyType: duty.type,
+              legNumber: legIndex + 1,
+              totalLegs: duty.legs.length
+            })
+          })
+          
+          if (!duty.legs || duty.legs.length === 0) {
+            flights.push({
+              id: duty.logicalId,
+              flightNumber: duty.pairing || 'Unknown',
+              pairingId: duty.pairing,
+              date: duty.startUtc.split('T')[0],
+              origin: 'Base',
+              destination: 'Base',
+              departure: duty.startUtc,
+              arrival: duty.endUtc,
+              aircraft: 'N/A',
+              aircraftType: 'N/A',
+              tailNumber: '',
+              tail: '',
+              status: 'Confirmed',
+              rank: 'FO',
+              crewMembers: duty.crew || [],
+              hotels: duty.hotel ? [{ name: duty.hotel }] : [],
+              isCodeshare: false,
+              operatingAirline: null,
+              actualDeparture: null,
+              actualArrival: null,
+              isDeadhead: false,
+              isReserveDuty: duty.type === 'OTHER',
+              isTraining: duty.type === 'TRAINING',
+              dutyType: duty.type
+            })
+          }
+        })
+        
+        const refreshedSchedule = {
+          flights,
+          hotelsByDate: {}
+        }
+        
+        console.log('✅ Schedule refreshed:', refreshedSchedule.flights.length, 'flights')
+        setSchedule(refreshedSchedule)
+        localforage.setItem('schedule', refreshedSchedule)
+        setScrapingInProgress(false)
+        setLoadingMessage('')
         setError(null)
-      } else {
-        console.log(`⚠️ No schedule data available for ${viewingYear}-${String(viewingMonth).padStart(2, '0')} after refresh`)
-        // Keep the current schedule visible and show error message
-        if (currentSchedule) {
-          setSchedule(currentSchedule)
-        }
-        setError(`No schedule data found for ${viewingYear}-${String(viewingMonth).padStart(2, '0')}. The crew portal may not have data for this month yet.`)
-      }
+      })
       
     } catch (error) {
-      console.error('Refresh error:', error)
-      // Restore the previous schedule on error
-      if (currentSchedule) {
-        setSchedule(currentSchedule)
-      }
-      setScheduleChanges(prev => [{
-        type: 'general',
-        message: '❌ Refresh failed: Unable to connect to crew portal. Please try again.',
-        date: new Date().toISOString(),
-        read: false
-      }, ...prev])
+      console.error('❌ Refresh error:', error)
       setError('Refresh failed. Please try again.')
-    } finally {
       setScrapingInProgress(false)
       setLoadingMessage('')
-      setScrapingStatus(prev => ({
-        ...prev,
-        isActive: false
-      }))
     }
   }
 
