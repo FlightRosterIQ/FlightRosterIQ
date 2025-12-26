@@ -4175,9 +4175,16 @@ function App() {
                 '&:hover': { boxShadow: 4 },
                 transition: 'box-shadow 0.2s'
               }}
-              onClick={() => {
-                // TODO: Add URL navigation
-                console.log('RSV View clicked')
+              onClick={async () => {
+                // Open the Will-Fly-List PDF - uses pilot's stored credentials
+                const rsvViewUrl = 'https://www.myabx.com/flightweb/Secure/Flight%20Crew%20Scheduling/Will-Fly-List.pdf'
+                try {
+                  // Open in new tab - myabx.com may prompt for login
+                  // The site should accept the same credentials
+                  window.open(rsvViewUrl, '_blank')
+                } catch (err) {
+                  console.error('Error opening RSV View:', err)
+                }
               }}
             >
               <CardContent sx={{ textAlign: 'center', py: 4 }}>
