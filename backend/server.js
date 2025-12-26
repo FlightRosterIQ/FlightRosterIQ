@@ -17,10 +17,9 @@ const CREW_PORTALS = {
 app.post('/api/authenticate', async (req, res) => {
   const { employeeId, password, airline, month, year } = req.body;
 
-  const portal =
-    airline?.toUpperCase()?.includes('ATI')
-      ? CREW_PORTALS.ATI
-      : CREW_PORTALS.ABX;
+  const portal = airline?.toUpperCase()?.includes('ATI')
+    ? CREW_PORTALS.ATI
+    : CREW_PORTALS.ABX;
 
   let browser;
 
@@ -46,11 +45,17 @@ app.post('/api/authenticate', async (req, res) => {
 
     console.log('✅ Logged in');
 
-    const duties = await scrapeMonthlyRoster(page, month, year);
+    // scrapeMonthlyRoster now returns { duties, news }
+    const result = await scrapeMonthlyRoster(page, month, year);
+
+    // Handle both old format (array) and new format (object)
+    const duties = Array.isArray(result) ? result : (result.duties || []);
+    const news = Array.isArray(result) ? [] : (result.news || []);
 
     res.json({
       success: true,
       duties,
+      news,
       count: duties.length
     });
 
