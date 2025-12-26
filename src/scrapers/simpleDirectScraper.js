@@ -1,54 +1,44 @@
-// Simple Direct Scraper - No caching, no complexity
-// Just authenticate and fetch roster directly
+// Simple Direct Scraper - Puppeteer scraping via /api/authenticate
+// The backend returns the full schedule data in the auth response
 
 import { API_BASE_URL } from '../config';
 
 /**
- * Simple scraper that authenticates and returns roster data
+ * Simple scraper that gets schedule data from Puppeteer scraping
  * @param {string} employeeId - Crew member ID
  * @param {string} password - Password
  * @param {string} airline - 'abx' or 'ati'
- * @returns {Promise<Array>} Array of duties
+ * @returns {Promise<Array>} Array of flights
  */
 export async function simpleScrape(employeeId, password, airline = 'abx') {
-  console.log('🔧 [SIMPLE SCRAPER] Starting scrape for:', employeeId);
+  console.log('🔧 [SIMPLE SCRAPER] Starting Puppeteer scrape for:', employeeId);
   
   try {
-    // Step 1: Authenticate
-    console.log('🔐 [SIMPLE SCRAPER] Authenticating...');
+    console.log('🌐 [SIMPLE SCRAPER] Calling authenticate endpoint with scraping...');
     const authUrl = `${API_BASE_URL}/api/authenticate`;
     const authResponse = await fetch(authUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId, password, airline })
+      body: JSON.stringify({ 
+        employeeId: employeeId, 
+        password: password, 
+        airline: airline 
+      })
     });
     
-    console.log('🔐 [SIMPLE SCRAPER] Auth response status:', authResponse.status);
+    console.log('🌐 [SIMPLE SCRAPER] Response status:', authResponse.status);
     const authData = await authResponse.json();
-    console.log('🔐 [SIMPLE SCRAPER] Auth result:', authData);
+    console.log('🌐 [SIMPLE SCRAPER] Response data:', authData);
     
     if (!authData.success) {
-      throw new Error(authData.error || 'Authentication failed');
+      throw new Error(authData.error || 'Authentication/scraping failed');
     }
     
-    // Step 2: Fetch roster events
-    console.log('📅 [SIMPLE SCRAPER] Fetching roster...');
-    const rosterUrl = `${API_BASE_URL}/api/netline/roster/events?crewCode=${employeeId}`;
-    const rosterResponse = await fetch(rosterUrl, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    // The backend returns flights directly in data.flights
+    const flights = authData.data?.flights || [];
     
-    console.log('📅 [SIMPLE SCRAPER] Roster response status:', rosterResponse.status);
-    const rosterData = await rosterResponse.json();
-    console.log('📅 [SIMPLE SCRAPER] Roster result:', rosterData);
-    
-    if (!rosterData.success) {
-      throw new Error(rosterData.error || 'Failed to fetch roster');
-    }
-    
-    console.log('✅ [SIMPLE SCRAPER] Success! Got', rosterData.duties?.length || 0, 'duties');
-    return rosterData.duties || [];
+    console.log('✅ [SIMPLE SCRAPER] Success! Got', flights.length, 'flights from Puppeteer scrape');
+    return flights;
     
   } catch (error) {
     console.error('❌ [SIMPLE SCRAPER] Error:', error);

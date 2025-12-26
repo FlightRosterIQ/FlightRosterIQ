@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import localforage from 'localforage'
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 import { API_BASE_URL, apiCall } from './config'
-import { simpleScrape, transformDutiesToFlights } from './scrapers/simpleDirectScraper'
+import { simpleScrape } from './scrapers/simpleDirectScraper'
 import { 
   ThemeProvider, 
   createTheme, 
@@ -1212,36 +1212,35 @@ function App() {
       // Set active tab to monthly view immediately
       setActiveTab('monthly')
       
-      // ✅ SIMPLE SCRAPER: Direct API calls, no complexity
+      // ✅ SIMPLE SCRAPER: Puppeteer HTML scraping
       if (accountType === 'pilot') {
-        console.log('✅ [LOGIN] Pilot account - starting simple scraper...')
+        console.log('✅ [LOGIN] Pilot account - starting Puppeteer scraper...')
         setScrapingInProgress(true)
         setLoadingMessage('Loading your schedule...')
         
         try {
-          const duties = await simpleScrape(
+          const flights = await simpleScrape(
             credentials.username.trim(),
             credentials.password,
             airline || 'abx'
           )
           
-          console.log('✅ [LOGIN] Received', duties.length, 'duties from scraper')
+          console.log('✅ [LOGIN] Received', flights.length, 'flights from scraper')
           
-          if (!duties || duties.length === 0) {
-            console.warn('⚠️ [LOGIN] No duties returned')
+          if (!flights || flights.length === 0) {
+            console.warn('⚠️ [LOGIN] No flights returned')
             setScrapingInProgress(false)
             setError('No schedule data found')
             return
           }
           
-          // Transform to flights
-          const flights = transformDutiesToFlights(duties)
+          // Backend returns flights directly, no transformation needed
           const transformedSchedule = {
             flights,
             hotelsByDate: {}
           }
           
-          console.log('✅ [LOGIN] Transformed to', flights.length, 'flights')
+          console.log('✅ [LOGIN] Schedule ready with', flights.length, 'flights')
           setSchedule(transformedSchedule)
           setScrapingInProgress(false)
           setLoadingMessage('')
@@ -2905,19 +2904,18 @@ function App() {
       
       // Use simple scraper
       console.log('🔄 Calling simple scraper...')
-      const duties = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx')
+      const flights = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx')
       
-      console.log('✅ Refresh complete:', duties.length, 'duties')
+      console.log('✅ Refresh complete:', flights.length, 'flights')
       
-      if (!duties || duties.length === 0) {
-        console.warn('⚠️ No duties returned from refresh')
+      if (!flights || flights.length === 0) {
+        console.warn('⚠️ No flights returned from refresh')
         setError('No schedule data available')
         setScrapingInProgress(false)
         return
       }
       
-      // Transform to flights
-      const flights = transformDutiesToFlights(duties)
+      // Backend returns flights directly
       const refreshedSchedule = {
         flights,
         hotelsByDate: {}
