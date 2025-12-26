@@ -55,7 +55,7 @@ async function fetchRosterEvents(crewCode: string): Promise<Duty[]> {
   const url = `${API_BASE_URL}/api/netline/roster/events?crewCode=${crewCode}`;
   console.log('[FRIQ][FETCH] Calling:', url);
   
-  const res = await fetch(url, { credentials: 'include' });
+  const res = await fetch(url || `/api/netline/roster/events?crewCode=${crewCode}`, { credentials: 'include' });
   
   console.log('[FRIQ][FETCH] Response status:', res.status);
   console.log('[FRIQ][FETCH] Response headers:', Object.fromEntries(res.headers.entries()));
