@@ -1342,6 +1342,23 @@ function App() {
         await localforage.setItem('userId', employeeId)
         console.log(`👤 User ID stored for roster updates: ${employeeId}`)
         
+        // Check registration status on backend
+        try {
+          const regResponse = await apiCall(`/api/check-registration/${employeeId}`)
+          const regData = await regResponse.json()
+          if (regData.success && regData.registered) {
+            setIsRegisteredUser(true)
+            await localforage.setItem('isRegisteredUser', true)
+            console.log('✅ User is registered')
+          } else {
+            setIsRegisteredUser(false)
+            await localforage.setItem('isRegisteredUser', false)
+            console.log('ℹ️ User is not registered')
+          }
+        } catch (err) {
+          console.error('Registration check failed:', err)
+        }
+        
         // Note: Roster loading moved to after login success (see below)
       }
       
@@ -1949,10 +1966,7 @@ function App() {
     
     try {
       // Call server API to search only registered users
-      const response = await apiCall('/api/search-users', {
-        method: 'POST',
-        body: JSON.stringify({ query: searchQuery.trim() })
-      })
+      const response = await apiCall(`/api/search-users?q=${encodeURIComponent(searchQuery.trim())}`)
       
       const data = await response.json()
       
