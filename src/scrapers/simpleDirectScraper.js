@@ -1,10 +1,10 @@
-// Simple Direct Scraper - Puppeteer scraping via /api/authenticate
-// The backend returns the full schedule data in the auth response
+// Simple Direct Scraper - Monthly Puppeteer scraping via /api/scrape-month
+// Backend uses Puppeteer to click through months and extract flights
 
 import { API_BASE_URL } from '../config';
 
 /**
- * Simple scraper that gets schedule data from Puppeteer scraping
+ * Simple scraper that gets schedule data from Puppeteer month navigation
  * @param {string} employeeId - Crew member ID
  * @param {string} password - Password
  * @param {string} airline - 'abx' or 'ati'
@@ -16,7 +16,7 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
   
   // Calculate months to scrape (previous, current, next)
   const now = new Date();
-  const currentMonth = now.getMonth() + 1; // 0-indexed
+  const currentMonth = now.getMonth() + 1; // 1-indexed
   const currentYear = now.getFullYear();
   
   let prevMonth = currentMonth - 1;
@@ -49,31 +49,46 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
       onProgress?.(`Scraping ${label} ${year}... (${i + 1}/${monthsToScrape.length})`, progress);
       console.log(`📅 [SIMPLE SCRAPER] Scraping ${label} ${year}...`);
       
-      const authUrl = `${API_BASE_URL}/api/authenticate`;
-      const authResponse = await fetch(authUrl, {
+      const scrapeUrl = `${API_BASE_URL}/api/scrape-month`;
+      const scrapeResponse = await fetch(scrapeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           employeeId: employeeId, 
           password: password, 
-          airline: airline,
           month: month,
           year: year
         })
       });
       
-      console.log(`📅 [SIMPLE SCRAPER] ${label} response status:`, authResponse.status);
-      const authData = await authResponse.json();
+      console.log(`📅 [SIMPLE SCRAPER] ${label} response status:`, scrapeResponse.status);
+      const scrapeData = await scrapeResponse.json();
       
-      if (!authData.success) {
-        console.error(`❌ [SIMPLE SCRAPER] ${label} failed:`, authData.error);
+      if (!scrapeData.success) {
+        console.error(`❌ [SIMPLE SCRAPER] ${label} failed:`, scrapeData.error);
         continue; // Continue with other months
       }
       
-      const flights = authData.data?.flights || [];
-      console.log(`✅ [SIMPLE SCRAPER] ${label}: Got ${flights.length} flights`);
+      const flights = scrapeData.data?.flights || [];
+      console.log(`✅ [SIMPLE SCRAPER] ${label}: Got ${flights.length} duties`);
       
-      allFlights.push(...flights);
+      // Transform duties to flight legs
+      flights.forEach((duty, dutyIndex) => {
+        if (duty.legs && duty.legs.length > 0) {
+          duty.legs.forEach((leg, legIndex) => {
+            allFlights.push({
+              id: `${year}-${month}-duty${dutyIndex}-leg${legIndex}`,
+              flightNumber: `Flight ${dutyIndex + 1}.${legIndex + 1}`,
+              date: `${year}-${String(month).padStart(2, '0')}-01`, // Default to first of month
+              origin: leg.from,
+              destination: leg.to,
+              departure: '00:00',
+              arrival: '00:00',
+              raw: duty.raw
+            });
+          });
+        }
+      });
     }
     
     console.log('✅ [SIMPLE SCRAPER] Multi-month scrape complete! Total flights:', allFlights.length);

@@ -60,6 +60,205 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// ========================================
+// MONTHLY PUPPETEER SCRAPER - SIMPLE & RELIABLE
+// ========================================
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 
+                     'July', 'August', 'September', 'October', 'November', 'December'];
+
+async function loginToCrew(page, employeeId, password) {
+  await page.goto('https://crew.abxair.com', { waitUntil: 'networkidle2', timeout: 30000 });
+  
+  await page.waitForSelector('#username', { timeout: 10000 });
+  await page.type('#username', employeeId);
+  await page.type('#password', password);
+  
+  await Promise.all([
+    page.click('button[type="submit"]'),
+    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 })
+  ]);
+  
+  console.log('✅ Logged into crew portal');
+}
+
+async function navigateToRoster(page) {
+  await page.goto(
+    'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html',
+    { waitUntil: 'networkidle2', timeout: 30000 }
+  );
+  console.log('✅ Navigated to roster page');
+  await sleep(2000);
+}
+
+async function goToMonth(page, targetYear, targetMonth) {
+  const targetMonthName = MONTH_NAMES[targetMonth - 1];
+  
+  const getDisplayedMonth = async () => {
+    return await page.evaluate(() => {
+      const selectors = [
+        '[class*="month"]',
+        '[class*="calendar-header"]',
+        '.month-label',
+        '[aria-label*="month"]',
+        'h2', 'h3'
+      ];
+      
+      for (const selector of selectors) {
+        const el = document.querySelector(selector);
+        if (el && el.innerText) {
+          return el.innerText;
+        }
+      }
+      return '';
+    });
+  };
+  
+  for (let i = 0; i < 24; i++) {
+    const label = await getDisplayedMonth();
+    console.log(`📅 Current month display: "${label}"`);
+    
+    if (label.includes(String(targetYear)) && label.includes(targetMonthName)) {
+      console.log(`✅ Reached ${targetMonthName} ${targetYear}`);
+      return;
+    }
+    
+    // Try to click next month button
+    const clicked = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
+      const nextBtn = buttons.find(b => 
+        b.innerText.toLowerCase().includes('next') ||
+        b.getAttribute('aria-label')?.toLowerCase().includes('next') ||
+        b.className.includes('next')
+      );
+      
+      if (nextBtn) {
+        nextBtn.click();
+        return true;
+      }
+      return false;
+    });
+    
+    if (!clicked) {
+      console.log('⚠️ Could not find next month button');
+      break;
+    }
+    
+    await sleep(800);
+  }
+  
+  throw new Error(`Failed to reach ${targetMonthName} ${targetYear}`);
+}
+
+async function extractFlights(page) {
+  await page.waitForFunction(() => {
+    const duties = document.querySelectorAll('[class*="duty"], [class*="pairing"], [class*="trip"], [class*="leg"]');
+    return duties.length > 0;
+  }, { timeout: 15000 }).catch(() => {
+    console.log('⚠️ No duties found in timeout period');
+  });
+  
+  await sleep(1000);
+  
+  const flights = await page.evaluate(() => {
+    const duties = [];
+    const dutyElements = document.querySelectorAll('[class*="duty"], [class*="pairing"], [class*="trip"]');
+    
+    dutyElements.forEach(el => {
+      const text = el.innerText;
+      
+      const legs = [];
+      const routeMatches = text.match(/[A-Z]{3}\s*(→|->|-|—)\s*[A-Z]{3}/g);
+      
+      if (routeMatches) {
+        routeMatches.forEach(route => {
+          const airports = route.match(/[A-Z]{3}/g);
+          if (airports && airports.length >= 2) {
+            legs.push({
+              from: airports[0],
+              to: airports[1]
+            });
+          }
+        });
+      }
+      
+      if (legs.length > 0) {
+        duties.push({
+          raw: text.substring(0, 500),
+          legs
+        });
+      }
+    });
+    
+    return duties;
+  });
+  
+  console.log(`✅ Extracted ${flights.length} duties`);
+  return flights;
+}
+
+async function scrapeMonth({ employeeId, password, month, year }) {
+  let browser;
+  
+  try {
+    console.log(`🚀 Starting Puppeteer scrape for ${MONTH_NAMES[month - 1]} ${year}`);
+    
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    });
+    
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 720 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    await loginToCrew(page, employeeId, password);
+    await navigateToRoster(page);
+    await goToMonth(page, year, month);
+    
+    const flights = await extractFlights(page);
+    
+    await browser.close();
+    
+    return {
+      month,
+      year,
+      flights,
+      success: true
+    };
+    
+  } catch (error) {
+    if (browser) await browser.close();
+    console.error('❌ Scrape error:', error.message);
+    throw error;
+  }
+}
+
+app.post('/api/scrape-month', async (req, res) => {
+  const { employeeId, password, month, year } = req.body;
+  
+  if (!employeeId || !password) {
+    return res.status(400).json({ success: false, error: 'Employee ID and password required' });
+  }
+  
+  if (!month || !year) {
+    return res.status(400).json({ success: false, error: 'Month and year required' });
+  }
+  
+  try {
+    const data = await scrapeMonth({ employeeId, password, month, year });
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Family codes endpoints (basic storage)
 const familyCodes = new Map();
 
