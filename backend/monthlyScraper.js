@@ -10,6 +10,55 @@
 export async function scrapeMonthlyRoster(page, targetMonth, targetYear) {
   console.log(`📅 Scraping ${targetYear}-${targetMonth}`);
 
+  // Wait for page to fully load after login
+  await page.waitForTimeout(5000);
+
+  // DEBUG: Dump page structure
+  const debugInfo = await page.evaluate(() => {
+    const body = document.body;
+    const allClasses = new Set();
+    const allTags = {};
+    
+    body.querySelectorAll('*').forEach(el => {
+      const tag = el.tagName.toLowerCase();
+      allTags[tag] = (allTags[tag] || 0) + 1;
+      el.classList.forEach(c => allClasses.add(c));
+    });
+
+    // Find potential duty/flight containers
+    const potentialContainers = [];
+    const keywords = ['duty', 'flight', 'pairing', 'roster', 'schedule', 'trip', 'leg', 'segment', 'row', 'card', 'item', 'entry'];
+    
+    allClasses.forEach(className => {
+      const lower = className.toLowerCase();
+      if (keywords.some(k => lower.includes(k))) {
+        const count = document.querySelectorAll('.' + CSS.escape(className)).length;
+        potentialContainers.push({ className, count });
+      }
+    });
+
+    // Get visible text snippet
+    const visibleText = body.innerText.substring(0, 2000);
+
+    return {
+      url: window.location.href,
+      title: document.title,
+      totalElements: Object.values(allTags).reduce((a, b) => a + b, 0),
+      tags: allTags,
+      classCount: allClasses.size,
+      potentialContainers: potentialContainers.slice(0, 30),
+      sampleClasses: Array.from(allClasses).slice(0, 50),
+      visibleText
+    };
+  });
+
+  console.log('🔍 DEBUG - Page URL:', debugInfo.url);
+  console.log('🔍 DEBUG - Title:', debugInfo.title);
+  console.log('🔍 DEBUG - Total elements:', debugInfo.totalElements);
+  console.log('🔍 DEBUG - Potential duty containers:', JSON.stringify(debugInfo.potentialContainers, null, 2));
+  console.log('🔍 DEBUG - Sample classes:', debugInfo.sampleClasses.join(', '));
+  console.log('🔍 DEBUG - Visible text (first 1000 chars):', debugInfo.visibleText.substring(0, 1000));
+
   await navigateToMonth(page, targetMonth, targetYear);
 
   // Give React time to render
@@ -20,6 +69,8 @@ export async function scrapeMonthlyRoster(page, targetMonth, targetYear) {
 
   const duties = await page.evaluate(() => {
     const rows = Array.from(document.querySelectorAll('[data-testid="duty-row"], .duty-row, [class*="duty"], [class*="pairing"]'));
+    
+    console.log('Found rows:', rows.length);
 
     return rows.map(row => {
       const safe = (sel) => row.querySelector(sel)?.innerText?.trim() || null;
