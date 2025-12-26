@@ -80,7 +80,7 @@ import {
 } from '@mui/icons-material'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 
 // API_BASE_URL and apiCall are now imported from config.js
 
@@ -6214,14 +6214,26 @@ function App() {
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                         <Typography>👥</Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          Crew Members
+                          Crew ({flight.crewMembers.length})
                         </Typography>
                       </Stack>
                       <Stack spacing={1}>
-                        {flight.crewMembers.map((crew, cIdx) => (
+                        {flight.crewMembers.map((crew, cIdx) => {
+                          const crewRole = crew.role || crew.rank || 'Crew';
+                          return (
                           <Stack key={cIdx} direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                            <Chip label={crew.role} size="small" color="primary" variant="outlined" />
+                            <Chip 
+                              label={crewRole} 
+                              size="small" 
+                              color={crewRole === 'CA' ? 'primary' : 'default'} 
+                              variant="outlined" 
+                            />
                             <Typography variant="body2">{crew.name}</Typography>
+                            {crew.homeBase && (
+                              <Typography variant="caption" color="text.secondary">
+                                ({crew.homeBase})
+                              </Typography>
+                            )}
                             {crew.phone && (
                               <Typography
                                 component="a"
@@ -6238,7 +6250,8 @@ function App() {
                               </Typography>
                             )}
                           </Stack>
-                        ))}
+                          );
+                        })}
                       </Stack>
                     </Box>
                   )}
@@ -7432,17 +7445,41 @@ function App() {
                   <Box>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>👥 Crew Members</Typography>
                     <List>
-                      {selectedFlight.crewMembers.map((member, idx) => (
-                        <ListItem key={idx} alignItems="flex-start">
+                      {selectedFlight.crewMembers.map((member, idx) => {
+                        // Handle both old format (role, employeeId) and new format (rank, crewId)
+                        const displayRole = member.role || member.rank || 'Crew';
+                        const displayId = member.employeeId || member.crewId || '';
+                        const displayHomeBase = member.homeBase || '';
+                        const displaySeniority = member.seniority || '';
+                        
+                        // Map rank codes to full names
+                        const rankMap = { 'CA': 'Captain', 'FO': 'First Officer', 'FA': 'Flight Attendant', 'FB': 'Flight Attendant B', 'FP': 'Purser' };
+                        const roleName = rankMap[displayRole] || displayRole;
+                        
+                        return (
+                        <ListItem key={idx} alignItems="flex-start" sx={{ py: 1.5 }}>
                           <ListItemAvatar>
-                            <Avatar>{member.name.charAt(0)}</Avatar>
+                            <Avatar sx={{ bgcolor: displayRole === 'CA' ? 'primary.main' : 'secondary.main' }}>
+                              {member.name?.charAt(0) || '?'}
+                            </Avatar>
                           </ListItemAvatar>
                           <ListItemText
-                            primary={<Typography variant="body1" sx={{ fontWeight: 600 }}>{member.name}</Typography>}
+                            primary={
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography variant="body1" sx={{ fontWeight: 600 }}>{member.name || 'Unknown'}</Typography>
+                                <Chip label={displayRole} size="small" color={displayRole === 'CA' ? 'primary' : 'default'} />
+                              </Stack>
+                            }
                             secondary={
-                              <Stack spacing={0.5}>
-                                <Typography variant="body2" color="text.secondary">{member.role}</Typography>
-                                <Typography variant="caption" color="text.secondary">ID: {member.employeeId}</Typography>
+                              <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                                <Typography variant="body2" color="text.secondary">{roleName}</Typography>
+                                {(displayId || displayHomeBase) && (
+                                  <Stack direction="row" spacing={2}>
+                                    {displayId && <Typography variant="caption" color="text.secondary">ID: {displayId}</Typography>}
+                                    {displayHomeBase && <Typography variant="caption" color="text.secondary">Base: {displayHomeBase}</Typography>}
+                                    {displaySeniority && <Typography variant="caption" color="text.secondary">Sen: #{displaySeniority}</Typography>}
+                                  </Stack>
+                                )}
                                 {member.phone && (
                                   <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                                     <Button
@@ -7469,7 +7506,8 @@ function App() {
                             }
                           />
                         </ListItem>
-                      ))}
+                        );
+                      })}
                     </List>
                   </Box>
                 ) : (

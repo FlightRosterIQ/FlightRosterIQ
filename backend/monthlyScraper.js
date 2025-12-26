@@ -430,12 +430,20 @@ async function scrapeDayByDay(page, targetYear, targetMonth) {
         const timeSpans = detailsEl.querySelectorAll('.IADP-jss158');
         let startLocation = '', startDate = '', startTime = '';
         let endLocation = '', endDate = '', endTime = '';
+        let hotelName = ''; // For HOT events, extract hotel name
         
         if (timeSpans.length >= 1) {
           const spans1 = timeSpans[0].querySelectorAll('span');
           startLocation = (spans1[0]?.innerText || '').trim();
           startDate = (spans1[1]?.innerText || '').trim();
           startTime = (spans1[2]?.innerText || '').replace(/\s*LT\s*$/i, '').trim();
+          
+          // For HOT events, the format is: <span class="IADP-jss161">SEA </span><span>Doubletree</span>
+          // So spans[1] contains the hotel name, not a date
+          if (eventType === 'HOT' && spans1.length >= 2) {
+            hotelName = (spans1[1]?.innerText || '').trim();
+            startDate = ''; // Not a date for HOT
+          }
         }
         
         if (timeSpans.length >= 2) {
@@ -502,6 +510,7 @@ async function scrapeDayByDay(page, targetYear, targetMonth) {
           toDate: normalizedEndDate,
           toTime: endTime,
           extraInfo: extraInfo,
+          hotelName: hotelName || '', // For HOT events, contains the hotel name
           eventId: row.className.match(/event-id-(\d+)/)?.[1] || '',
           // Store index for later detail fetching
           rowIndex: index
@@ -515,22 +524,76 @@ async function scrapeDayByDay(page, targetYear, targetMonth) {
     return results;
   }, targetYear, targetMonth);
   
-  console.log(`G�� Scraped ${duties.length} duties from duty list`);
+  console.log(`✈️ Scraped ${duties.length} duties from duty list`);
   
-  // Step 3: For PAR (pairing) events, click details-page-button to get hotel/crew info
-  console.log('=[LOG] Fetching hotel and crew details for pairings...');
+  // Debug: Log all unique duty types found
+  const dutyTypes = [...new Set(duties.map(d => d.type))];
+  console.log(`📊 [DEBUG] Duty types found: ${dutyTypes.join(', ')}`);
+  console.log(`📊 [DEBUG] PAR count (all): ${duties.filter(d => d.type === 'PAR').length}`);
+  console.log(`📊 [DEBUG] PAR count (non-sub): ${duties.filter(d => d.type === 'PAR' && !d.isSubEvent).length}`);
+  console.log(`📊 [DEBUG] HOT count: ${duties.filter(d => d.type === 'HOT').length}`);
+  
+  // Step 2.5: Extract hotel info from HOT sub-events and link to parent pairings
+  // HOT events are hotel layover rows - they have airport code + hotel name
+  const hotelEvents = duties.filter(d => d.type === 'HOT');
+  console.log(`🏨 Found ${hotelEvents.length} hotel events in duty list`);
+  
+  // Map hotels to their locations for easy lookup
+  const hotelsByLocation = {};
+  hotelEvents.forEach(h => {
+    const location = h.from?.trim();
+    // hotelName is now properly extracted from HOT events
+    const hotelName = h.hotelName?.trim() || h.to?.trim() || '';
+    
+    console.log(`  🏨 Hotel at ${location}: "${hotelName}", eventId=${h.eventId}`);
+    
+    if (location && hotelName) {
+      if (!hotelsByLocation[location]) hotelsByLocation[location] = [];
+      hotelsByLocation[location].push({
+        name: hotelName,
+        eventId: h.eventId,
+        date: h.fromDate || h.toDate
+      });
+    }
+  });
+  
+  // Log hotel summary
+  const allHotels = Object.values(hotelsByLocation).flat();
+  console.log(`🏨 [DEBUG] Hotels extracted: ${allHotels.map(h => h.name).join(', ') || 'none'}`);
+  
+  // Step 3: For PAR (pairing) events, try to get details OR use HOT sub-events
+  console.log('📋[LOG] Processing pairings for hotel and crew details...');
   const pairings = duties.filter(d => d.type === 'PAR' && !d.isSubEvent);
+  console.log(`📋 [DEBUG] Found ${pairings.length} pairings to process`);
+  
+  // First, try to link hotels from HOT sub-events to their parent pairings
+  // HOT events appear as sub-events under pairings in the DOM structure
+  pairings.forEach(pairing => {
+    // Check if there's a hotel in the destination location
+    const destLocation = pairing.to?.trim();
+    if (destLocation && hotelsByLocation[destLocation]) {
+      const hotels = hotelsByLocation[destLocation];
+      if (hotels.length > 0) {
+        // Use the first hotel for this location
+        pairing.hotel = hotels[0].name;
+        console.log(`  🏨 Linked hotel "${pairing.hotel}" to pairing ${pairing.flightNumber} at ${destLocation}`);
+      }
+    }
+  });
   
   for (let i = 0; i < pairings.length; i++) {
     const pairing = pairings[i];
-    console.log(`  =[LOG] Getting details for pairing ${i + 1}/${pairings.length}: ${pairing.flightNumber}`);
+    console.log(`  📋[LOG] Getting details for pairing ${i + 1}/${pairings.length}: ${pairing.flightNumber} (hotel from HOT: ${pairing.hotel || 'none'})`);
     
     try {
       // Click the details-page-button for this pairing
       const details = await getPairingDetails(page, pairing.eventId);
       
-      // Attach details to the pairing
-      pairing.hotel = details.hotel;
+      // Attach details to the pairing - prefer details from click if available
+      // But keep hotel from HOT if details didn't find one
+      if (details.hotel) {
+        pairing.hotel = details.hotel;
+      }
       pairing.hotelPhone = details.hotelPhone;
       pairing.hotelFax = details.hotelFax;
       pairing.hotelEmail = details.hotelEmail;
@@ -543,15 +606,57 @@ async function scrapeDayByDay(page, targetYear, targetMonth) {
       pairing.transportType = details.transportType;
       pairing.crew = details.crew;
       
-      console.log(`    G�� Hotel: ${details.hotel || 'N/A'}, Crew: ${details.crew?.length || 0} members`);
+      console.log(`    ✅ Hotel: ${pairing.hotel || 'N/A'}, Crew: ${details.crew?.length || 0} members`);
+      
+      // Log crew member details if found
+      if (details.crew && details.crew.length > 0) {
+        details.crew.forEach((c, idx) => {
+          console.log(`       👤 ${idx + 1}. ${c.name} (${c.rank || 'N/A'}) - HB: ${c.homeBase || 'N/A'}, ID: ${c.crewId || 'N/A'}`);
+        });
+      }
     } catch (err) {
-      console.warn(`    G��n+� Could not get details for ${pairing.flightNumber}:`, err.message);
+      console.warn(`    ⚠️ Could not get details for ${pairing.flightNumber}:`, err.message);
+      // Keep any hotel info from HOT events
     }
   }
   
+  // Step 4: Propagate crew info from pairings (PAR) to their child flight legs (LEG)
+  // Flight legs are sub-events that belong to a pairing
+  console.log('👥 [LOG] Propagating crew info to flight legs...');
+  const flightLegs = duties.filter(d => d.type === 'LEG');
+  console.log(`👥 [DEBUG] Found ${flightLegs.length} flight legs to link crew to`);
+  
+  // Create a map of pairing eventIds to their crew
+  const pairingCrewMap = {};
+  pairings.forEach(p => {
+    if (p.eventId && p.crew && p.crew.length > 0) {
+      pairingCrewMap[p.eventId] = {
+        crew: p.crew,
+        hotel: p.hotel,
+        pairingCode: p.flightNumber
+      };
+    }
+  });
+  
+  // Try to match flight legs to their parent pairing by date/time proximity
+  flightLegs.forEach(leg => {
+    // Find the pairing that contains this flight leg's date
+    const legDate = leg.fromDate;
+    const matchingPairing = pairings.find(p => {
+      if (!p.fromDate || !p.toDate) return false;
+      return legDate >= p.fromDate && legDate <= p.toDate;
+    });
+    
+    if (matchingPairing && matchingPairing.crew && matchingPairing.crew.length > 0) {
+      leg.crew = matchingPairing.crew;
+      leg.parentPairing = matchingPairing.flightNumber;
+      console.log(`   ✈️ Linked ${leg.crew.length} crew to flight ${leg.flightNumber} from pairing ${matchingPairing.flightNumber}`);
+    }
+  });
+  
   // If we got duties from the duty list, return them
   if (duties.length > 0) {
-    return duties.map(duty => ({
+    const result = duties.map(duty => ({
       flightNumber: duty.flightNumber,
       type: duty.type,
       dutyType: duty.dutyType,
@@ -569,9 +674,10 @@ async function scrapeDayByDay(page, targetYear, targetMonth) {
       title: duty.title,
       extraInfo: duty.extraInfo,
       eventId: duty.eventId,
+      parentPairing: duty.parentPairing || null,
       // Report time is the check-in time
       reportTime: duty.isCheckIn ? duty.fromTime : null,
-      // Hotel/crew info (only on pairings)
+      // Hotel/crew info (from pairings or propagated to legs)
       hotel: duty.hotel || null,
       hotelPhone: duty.hotelPhone || null,
       hotelFax: duty.hotelFax || null,
@@ -587,6 +693,12 @@ async function scrapeDayByDay(page, targetYear, targetMonth) {
       // Reserve duty flag
       isReserveDuty: duty.isReserveDuty || false
     }));
+    
+    // Log summary of crew assignments
+    const dutiesWithCrew = result.filter(d => d.crew && d.crew.length > 0);
+    console.log(`👥 [SUMMARY] ${dutiesWithCrew.length} duties have crew info attached`);
+    
+    return result;
   }
   
   // Fallback to visible content scraping
@@ -754,60 +866,122 @@ async function getPairingDetails(page, eventId) {
       }
       
       // === CREW MEMBERS EXTRACTION ===
+      console.log('[CREW DEBUG] Starting crew extraction...');
+      console.log('[CREW DEBUG] Page text length:', text.length);
       
-      // Look for "CREW MEMBERS ON THIS LEG" section and extract detailed info
-      const crewSection = text.match(/CREW\s+MEMBERS\s+ON\s+THIS\s+LEG([\s\S]{0,2000}?)(?:YOUR\s+ROLE|EVENT\s+REMARK|Hotel|$)/i);
+      // Method 1: Look for "CREW MEMBERS ON THIS LEG" section
+      const crewSection = text.match(/CREW\s+MEMBERS\s+ON\s+THIS\s+LEG([\s\S]{0,3000}?)(?:YOUR\s+ROLE|EVENT\s+REMARK|Hotel|Accommodation|Transport|$)/i);
       
       if (crewSection) {
+        console.log('[CREW DEBUG] Found CREW MEMBERS section');
         const crewText = crewSection[1];
         
-        // Extract crew member blocks (each member has: name, rank, HB, seniority, crew ID, phone)
-        // Pattern: Name, then "RANK: XX  HB: XXX  SENIORITY: NNN  CREW ID: NNNNNN  PHONE: XXX-XXX-XXXX"
-        const memberBlocks = crewText.split(/\n{2,}/).filter(b => b.trim().length > 10);
+        // Pattern 1: Look for structured format
+        // NAME
+        // RANK: CA  HB: CVG  SENIORITY: 123  CREW ID: 123456  PHONE: 555-1234
+        const structuredPattern = /([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)+)\s*\n\s*RANK:\s*([A-Z]{2,3})\s+HB:\s*([A-Z]{3})\s+SENIORITY:\s*(\d+)\s+CREW\s*ID:\s*(\d+)(?:\s+PHONE:\s*([\d\-]+))?/gi;
+        let match;
+        while ((match = structuredPattern.exec(crewText)) !== null) {
+          result.crew.push({
+            name: match[1].trim(),
+            rank: match[2],
+            homeBase: match[3],
+            seniority: match[4],
+            crewId: match[5],
+            phone: match[6] || null
+          });
+          console.log('[CREW DEBUG] Found crew member (structured):', match[1].trim());
+        }
         
-        memberBlocks.forEach(block => {
-          const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-          if (lines.length === 0) return;
-          
-          // First line is typically the name
-          const nameMatch = lines[0].match(/^([A-Z\s]+)$/);
-          const name = nameMatch ? nameMatch[1].trim() : lines[0];
-          
-          // Second line contains rank, HB, seniority, crew ID, phone
-          const detailsLine = lines[1] || lines[0];
-          
-          const rankMatch = detailsLine.match(/RANK[:\s]+([A-Z]{2,3})/i);
-          const hbMatch = detailsLine.match(/HB[:\s]+([A-Z]{3})/i);
-          const seniorityMatch = detailsLine.match(/SENIORITY[:\s]+(\d+)/i);
-          const crewIdMatch = detailsLine.match(/CREW\s+ID[:\s]+(\d+)/i);
-          const phoneMatch = detailsLine.match(/PHONE[:\s]+([\d\-]+)/i);
-          
-          if (name && name.length > 2) {
+        // Pattern 2: Single line format with all details
+        // JOHN DOE CA CVG 123 123456 555-1234
+        if (result.crew.length === 0) {
+          const singleLinePattern = /^([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)+)\s+(CA|FO|FA|FB|FP|ACM)\s+([A-Z]{3})\s+(\d{1,4})\s+(\d{5,7})/gm;
+          while ((match = singleLinePattern.exec(crewText)) !== null) {
             result.crew.push({
-              name: name,
-              rank: rankMatch ? rankMatch[1] : null,
-              homeBase: hbMatch ? hbMatch[1] : null,
-              seniority: seniorityMatch ? seniorityMatch[1] : null,
-              crewId: crewIdMatch ? crewIdMatch[1] : null,
-              phone: phoneMatch ? phoneMatch[1] : null
+              name: match[1].trim(),
+              rank: match[2],
+              homeBase: match[3],
+              seniority: match[4],
+              crewId: match[5],
+              phone: null
             });
+            console.log('[CREW DEBUG] Found crew member (single line):', match[1].trim());
           }
-        });
+        }
+        
+        // Pattern 3: Table format - look for names followed by rank
+        if (result.crew.length === 0) {
+          const tablePattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\s*(?:\||\t|,)?\s*(Captain|First\s+Officer|CA|FO|FA|Flight\s+Attendant)/gi;
+          while ((match = tablePattern.exec(crewText)) !== null) {
+            const rankMap = { 'Captain': 'CA', 'First Officer': 'FO', 'Flight Attendant': 'FA' };
+            const rank = rankMap[match[2]] || match[2].toUpperCase().replace(/\s+/g, '').substring(0,2);
+            result.crew.push({
+              name: match[1].trim(),
+              rank: rank,
+              homeBase: null,
+              seniority: null,
+              crewId: null,
+              phone: null
+            });
+            console.log('[CREW DEBUG] Found crew member (table):', match[1].trim());
+          }
+        }
       }
       
-      // Fallback: simple name extraction if structured extraction failed
+      // Method 2: Look for crew names in alternative sections
       if (result.crew.length === 0) {
+        // Try to find any section with crew-related keywords
+        const altCrewPatterns = [
+          /Assigned\s+Crew[:\s]*([\s\S]{0,1000}?)(?:Notes|Remarks|Hotel|$)/i,
+          /Crew\s+List[:\s]*([\s\S]{0,1000}?)(?:Notes|Remarks|Hotel|$)/i,
+          /Operating\s+Crew[:\s]*([\s\S]{0,1000}?)(?:Notes|Remarks|Hotel|$)/i
+        ];
+        
+        for (const pattern of altCrewPatterns) {
+          const altMatch = text.match(pattern);
+          if (altMatch) {
+            console.log('[CREW DEBUG] Found alternative crew section');
+            // Extract names from this section
+            const namePattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})/g;
+            const names = altMatch[1].match(namePattern) || [];
+            const excludeTerms = ['Crew', 'List', 'Member', 'Captain', 'Officer', 'Flight', 'Attendant', 'Assigned', 'Operating', 'Hotel', 'Phone', 'Email'];
+            
+            names.forEach(name => {
+              if (!excludeTerms.some(term => name.includes(term)) && name.length > 4) {
+                result.crew.push({
+                  name: name.trim(),
+                  rank: null,
+                  homeBase: null,
+                  seniority: null,
+                  crewId: null,
+                  phone: null
+                });
+                console.log('[CREW DEBUG] Found crew member (alt section):', name.trim());
+              }
+            });
+            if (result.crew.length > 0) break;
+          }
+        }
+      }
+      
+      // Method 3: DOM-based extraction as fallback
+      if (result.crew.length === 0) {
+        console.log('[CREW DEBUG] Trying DOM-based extraction');
         const crewElements = document.querySelectorAll('[class*="crew"] [class*="name"], [class*="crew"] td, [class*="crew"] li, [data-test-id*="crew"]');
         crewElements.forEach(el => {
           const name = el.innerText?.trim();
-          if (name && name.match(/^[A-Z][a-z]+\s+[A-Z][a-z]+/)) {
+          if (name && name.match(/^[A-Z][a-z]+\s+[A-Z][a-z]+/) && name.length < 40) {
             const excludeList = ['Crew Member', 'First Officer', 'Flight Attendant', 'More Info', 'Click Here', 'View All', 'No Crew'];
             if (!excludeList.some(ex => name.includes(ex))) {
               result.crew.push({ name: name, rank: null, homeBase: null, seniority: null, crewId: null, phone: null });
+              console.log('[CREW DEBUG] Found crew member (DOM):', name);
             }
           }
         });
       }
+      
+      console.log('[CREW DEBUG] Total crew members found:', result.crew.length);
       
       return result;
     });
