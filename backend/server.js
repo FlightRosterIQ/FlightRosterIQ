@@ -62,6 +62,32 @@ app.post('/api/authenticate', async (req, res) => {
     ]);
     console.log('✅ Logged in successfully');
 
+    // Give React time to boot
+    await page.waitForTimeout(3000);
+
+    // Try to activate roster / schedule view
+    await page.evaluate(() => {
+      const candidates = [
+        'Schedule',
+        'Roster',
+        'Pairings',
+        'Duties'
+      ];
+
+      for (const text of candidates) {
+        const el = [...document.querySelectorAll('button, a')]
+          .find(e => e.textContent?.includes(text));
+        if (el) {
+          console.log('Clicking:', text);
+          el.click();
+          return;
+        }
+      }
+    });
+
+    // Allow XHRs to fire
+    await page.waitForTimeout(5000);
+
     // Scrape duties from network responses
     const duties = await scrapeRosterFromNetwork(page);
 

@@ -1,130 +1,68 @@
 /* ============================
-   NETWORK ROSTER SCRAPER (Final Clean Version)
-   100% Network-Based - No DOM parsing for duties
+   NETWORK ROSTER SCRAPER (Final Correct Pattern)
+   - Listener attached EARLY
+   - No DOM scraping for duties
+   - Correct duty type detection
 ============================ */
 
 /* ============================
-   DUTY TYPE DETECTION (Network-Based)
+   DUTY PARSER (Correct Priority Order)
 ============================ */
-function detectDutyType(duty) {
-  if (duty.reserve === true) return 'RESERVE';
-  if (duty.iadp === true) return 'IADP';
-  if (duty.code?.includes('DH')) return 'DEADHEAD';
-  if (duty.legs?.length) return 'FLIGHT';
-  return 'OTHER';
-}
+function parseDuty(d) {
+  let type = 'FLIGHT';
 
-/* ============================
-   PARSE CREW (Fail-Safe)
-============================ */
-function parseCrew(duty) {
-  try {
-    return duty.crew?.map(c => ({
-      role: c.role || null,
-      name: c.name || null,
-      employeeId: c.employeeId || null
-    })) || [];
-  } catch {
-    return [];
-  }
-}
+  if (d.reserve || /RES/i.test(d.code)) type = 'RESERVE';
+  else if (/IADP/i.test(d.code || d.logicalId)) type = 'IADP';
+  else if (d.deadhead || d.positioning) type = 'DEADHEAD';
 
-/* ============================
-   PARSE HOTEL (Fail-Safe)
-============================ */
-function parseHotel(duty) {
-  try {
-    if (!duty.hotel) return null;
-    return {
-      name: duty.hotel.name || null,
-      city: duty.hotel.city || null,
-      checkIn: duty.hotel.checkIn || null,
-      checkOut: duty.hotel.checkOut || null
-    };
-  } catch {
-    return null;
-  }
-}
-
-/* ============================
-   PARSE AIRCRAFT (Fail-Safe)
-============================ */
-function parseAircraft(duty) {
-  try {
-    return {
-      type: duty.aircraftType || duty.aircraft || duty.legs?.[0]?.aircraftType || null,
-      tail: duty.tailNumber || duty.tail || duty.legs?.[0]?.tailNumber || null
-    };
-  } catch {
-    return { type: null, tail: null };
-  }
-}
-
-/* ============================
-   PARSE LEGS (Fail-Safe)
-============================ */
-function parseLegs(duty) {
-  try {
-    return (duty.legs || []).map(l => ({
-      from: l.departure || l.depAirport || l.origin || null,
-      to: l.arrival || l.arrAirport || l.destination || null,
-      flight: l.flightNumber || l.flightNo || null,
-      deadhead: !!l.deadhead
-    }));
-  } catch {
-    return [];
-  }
-}
-
-/* ============================
-   NORMALIZE DUTY (Full)
-============================ */
-function normalizeDuty(duty) {
   return {
-    id: duty.id || duty.logicalId || null,
-    type: detectDutyType(duty),
-    date: duty.date || duty.startDate || duty.fromDt || null,
-    pairing: duty.pairing || duty.pairingId || null,
-    
-    aircraft: parseAircraft(duty),
-    hotel: parseHotel(duty),
-    crew: parseCrew(duty),
-    legs: parseLegs(duty),
-    
-    // Keep raw for debugging
-    raw: duty
+    id: d.id || d.logicalId,
+    type,
+    start: d.startTime || d.fromDt || d.startDate,
+    end: d.endTime || d.toDt || d.endDate,
+    date: d.date || d.startDate || d.fromDt,
+    pairing: d.pairing || d.pairingId,
+    aircraft: d.aircraft?.type || d.aircraftType || null,
+    tail: d.aircraft?.registration || d.tailNumber || d.tail || null,
+    hotel: d.hotel?.name || d.layoverHotel || null,
+    crew: d.crew || [],
+    legs: (d.legs || []).map(l => ({
+      from: l.departure || l.depAirport || l.origin,
+      to: l.arrival || l.arrAirport || l.destination,
+      flight: l.flightNumber || l.flightNo,
+      deadhead: !!l.deadhead
+    })),
+    raw: d
   };
 }
 
 /* ============================
-   MAIN SCRAPER FUNCTION
+   MAIN SCRAPER - LISTENER ATTACHED EARLY
 ============================ */
 export async function scrapeRosterFromNetwork(page) {
   const duties = [];
   const seenIds = new Set();
 
-  // Set up network listener BEFORE navigation
-  page.on('response', async (response) => {
+  // ATTACH LISTENER IMMEDIATELY (before any waiting)
+  page.on('response', async response => {
     try {
       const req = response.request();
+      const type = req.resourceType();
       const url = response.url();
 
-      // Only XHR/fetch
-      if (!['xhr', 'fetch'].includes(req.resourceType())) return;
+      if (!['xhr', 'fetch'].includes(type)) return;
 
-      // Log ALL XHR for debugging
+      // Log all XHR for debugging
       console.log('[NET]', url.split('?')[0]);
 
-      // Filter for roster-related endpoints
-      if (!/roster|schedule|pairing|duty|events|iadp/i.test(url)) return;
+      if (!/roster|schedule|pair|duty|event|iadp/i.test(url)) return;
 
-      console.log('[NET] ✅ Captured roster endpoint:', url.split('?')[0].split('/').pop());
+      console.log('[NET] ✅ Roster endpoint:', url.split('?')[0].split('/').pop());
 
       const json = await response.json().catch(() => null);
       if (!json) return;
 
-      // Handle all possible JSON shapes
-      const records =
+      const items =
         json?.result ||
         json?.data ||
         json?.duties ||
@@ -132,23 +70,22 @@ export async function scrapeRosterFromNetwork(page) {
         json?.pairings ||
         [];
 
-      if (!Array.isArray(records)) return;
-
-      for (const d of records) {
-        const id = d.id || d.logicalId || JSON.stringify(d);
-        if (seenIds.has(id)) continue;
-        seenIds.add(id);
-
-        duties.push(normalizeDuty(d));
+      if (Array.isArray(items)) {
+        items.forEach(item => {
+          const id = item.id || item.logicalId || JSON.stringify(item);
+          if (seenIds.has(id)) return;
+          seenIds.add(id);
+          
+          duties.push(parseDuty(item));
+        });
+        console.log(`[NET] Total duties: ${duties.length}`);
       }
-
-      console.log(`[NET] Total duties so far: ${duties.length}`);
-    } catch (_) {}
+    } catch {}
   });
 
-  // Give React/Angular time to fire XHR requests
+  // Wait long enough for all network calls
   console.log('⏳ Waiting for network requests...');
-  await page.waitForTimeout(6000);
+  await page.waitForTimeout(8000);
 
   console.log(`📊 Final duty count: ${duties.length}`);
   return duties;
