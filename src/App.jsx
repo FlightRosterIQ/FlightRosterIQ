@@ -5648,6 +5648,10 @@ function App() {
     const firstDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay()
     const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate()
     
+    console.log(`📅 Rendering calendar for ${viewMonth.getFullYear()}-${viewMonth.getMonth() + 1}`)
+    console.log(`   First day of week: ${firstDay}, Days in month: ${daysInMonth}`)
+    console.log(`   Month data keys:`, Object.keys(monthData).filter(k => k.startsWith(`${viewMonth.getFullYear()}-${String(viewMonth.getMonth() + 1).padStart(2, '0')}`)))
+    
     const calendar = []
     let day = 1
     
