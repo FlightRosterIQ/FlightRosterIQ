@@ -375,6 +375,8 @@ function App() {
   const [weatherAirport, setWeatherAirport] = useState(null)
   const [statsPeriod, setStatsPeriod] = useState('current') // current, previous, ytd
   const [nextDutyCheckIn, setNextDutyCheckIn] = useState(null)
+  const [nextDutyFlight, setNextDutyFlight] = useState(null) // Store next duty details
+  const [countdownTime, setCountdownTime] = useState('') // Live countdown string
   const [trackedAircraft, setTrackedAircraft] = useState(null)
   const [flightTrackingData, setFlightTrackingData] = useState(null)
   const [settingsTab, setSettingsTab] = useState('pilotInfo')
@@ -916,11 +918,45 @@ function App() {
       if (ltMatch) {
         reportDateTime.setHours(parseInt(ltMatch[1]), parseInt(ltMatch[2]), 0, 0)
         setNextDutyCheckIn(reportDateTime)
+        setNextDutyFlight(nextFlight)
       }
     } else {
       setNextDutyCheckIn(null)
+      setNextDutyFlight(null)
     }
   }, [schedule])
+
+  // Live countdown timer for next duty
+  useEffect(() => {
+    if (!nextDutyCheckIn) {
+      setCountdownTime('')
+      return
+    }
+
+    const updateCountdown = () => {
+      const now = new Date()
+      const diff = nextDutyCheckIn - now
+
+      if (diff < 0) {
+        setCountdownTime('Now!')
+        return
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+
+      if (days > 0) {
+        setCountdownTime(`${days}d ${hours}h ${minutes}m`)
+      } else {
+        setCountdownTime(`${hours}h ${minutes}m`)
+      }
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 60000) // Update every minute
+    return () => clearInterval(interval)
+  }, [nextDutyCheckIn])
 
   // Poll for roster updates every 5 minutes when logged in
   useEffect(() => {
@@ -7031,6 +7067,43 @@ function App() {
           )}
         </Toolbar>
       </AppBar>
+
+      {/* Next Duty Countdown Banner */}
+      {nextDutyCheckIn && nextDutyFlight && userType === 'pilot' && activeTab === 'monthly' && (
+        <Box
+          sx={{
+            mx: 2,
+            mt: 1,
+            p: 1.5,
+            borderRadius: 2,
+            background: theme === 'dark' 
+              ? 'linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%)' 
+              : 'linear-gradient(135deg, #4C5FD5 0%, #6B7FFF 100%)',
+            color: 'white',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+          }}
+        >
+          <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Box>
+              <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 500 }}>
+                NEXT DUTY
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {nextDutyFlight.flightNumber || nextDutyFlight.dutyType || nextDutyFlight.title || 'Duty'}
+                {nextDutyFlight.from && nextDutyFlight.to && ` • ${nextDutyFlight.from}→${nextDutyFlight.to}`}
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign: 'right' }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1 }}>
+                {countdownTime}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                Report: {nextDutyCheckIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}L
+              </Typography>
+            </Box>
+          </Stack>
+        </Box>
+      )}
 
       <Box component="main" sx={{ pb: 8 }}>
         {activeTab === 'monthly' && renderMonthlyView()}
