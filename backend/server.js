@@ -18,7 +18,13 @@ sessionStore.init().catch(err => logger.error('Session store init failed:', err)
 // NetLine API base URLs
 const NETLINE_API = {
   abx: 'https://crew.abxair.com/api/netline/crew/pems/rest/pems',
-  ati: 'https://crew.atitransport.com/api/netline/crew/pems/rest/pems'
+  ati: 'https://crew.airtransport.cc/api/netline/crew/pems/rest/pems'
+};
+
+// Crew portal URLs (for Puppeteer login)
+const PORTAL_URLS = {
+  abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
+  ati: 'https://crew.airtransport.cc/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
 };
 
 app.use(express.json());
@@ -319,10 +325,10 @@ app.post('/api/family/get-codes', async (req, res) => {
     res.json({ success: true, codes });
 });
 
-// Crew portal URLs
+// Crew portal URLs (legacy - use PORTAL_URLS instead)
 const PORTALS = {
   abx: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
-  ati: 'https://crew.atitransport.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
+  ati: 'https://crew.airtransport.cc/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
 };
 
 // Parse crew portal dates (handles year rollover)
@@ -498,9 +504,8 @@ app.post('/api/authenticate', async (req, res) => {
         console.log('🔐 Logging in to crew portal...');
         
         // Determine portal URL based on airline
-        const portalUrl = airline?.toLowerCase() === 'ati' 
-            ? 'https://crew.atitransport.com' 
-            : 'https://crew.abxair.com';
+        const airlineKey = airline?.toLowerCase() === 'ati' ? 'ati' : 'abx';
+        const portalUrl = PORTAL_URLS[airlineKey];
         console.log('🌐 Portal URL:', portalUrl);
         
         await page.goto(portalUrl, { waitUntil: 'networkidle2', timeout: 30000 });
