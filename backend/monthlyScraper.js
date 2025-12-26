@@ -106,9 +106,24 @@ export async function scrapeMonthlyRoster(page, targetMonth, targetYear, options
 
   console.log(`✅ Total scraped: ${duties.length} duties, ${news.length} news items`);
   
+  // Deduplicate duties by creating a unique key
+  const uniqueDuties = [];
+  const seenKeys = new Set();
+  for (const duty of duties) {
+    const key = `${duty.flightNumber || ''}-${duty.date || duty.fromDate || ''}-${duty.from || ''}-${duty.to || ''}-${duty.departureTime || duty.fromTime || ''}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      uniqueDuties.push(duty);
+    }
+  }
+  
+  if (uniqueDuties.length !== duties.length) {
+    console.log(`🔄 Deduplicated: ${duties.length} → ${uniqueDuties.length} duties`);
+  }
+  
   // Always return what we have - never throw if we got duties
   return {
-    duties,
+    duties: uniqueDuties,
     news
   };
 }

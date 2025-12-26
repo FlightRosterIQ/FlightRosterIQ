@@ -507,7 +507,7 @@ function App() {
         }, (progressiveFlights) => {
           // Progressive update
           if (progressiveFlights && progressiveFlights.length > 0) {
-            setSchedule({ flights: progressiveFlights, hotelsByDate: buildHotelsByDate(progressiveFlights) })
+            setScheduleWithDedup({ flights: progressiveFlights })
           }
         }, existingBgFlights)
         
@@ -516,12 +516,8 @@ function App() {
         const news = Array.isArray(result) ? [] : (result.news || [])
         
         if (flights && flights.length > 0) {
-          const refreshedSchedule = {
-            flights,
-            hotelsByDate: buildHotelsByDate(flights)
-          }
-          setSchedule(refreshedSchedule)
-          await localforage.setItem('schedule', refreshedSchedule)
+          setScheduleWithDedup({ flights })
+          await localforage.setItem('schedule', { flights: deduplicateFlights(flights), hotelsByDate: buildHotelsByDate(flights) })
           console.log('✅ Background refresh complete:', flights.length, 'flights')
           
           // Add news to alerts
@@ -754,6 +750,42 @@ function App() {
 
   // Calculate next duty report time (when pilot needs to check in for duty)
   
+  // Helper function to deduplicate flights array
+  const deduplicateFlights = (flights) => {
+    if (!flights || !Array.isArray(flights)) return []
+    const uniqueFlights = []
+    const seenKeys = new Set()
+    for (const flight of flights) {
+      const key = flight.id || `${flight.date}-${flight.flightNumber}-${flight.origin}-${flight.destination}-${flight.departure}`
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key)
+        uniqueFlights.push(flight)
+      }
+    }
+    if (uniqueFlights.length !== flights.length) {
+      console.log(`🔄 Deduplicated flights: ${flights.length} → ${uniqueFlights.length}`)
+    }
+    return uniqueFlights
+  }
+  
+  // Wrapper to set schedule with automatic deduplication
+  const setScheduleWithDedup = (scheduleData) => {
+    if (!scheduleData) {
+      setSchedule(null)
+      return
+    }
+    // Handle both object { flights, hotelsByDate } and array formats
+    const flights = Array.isArray(scheduleData) 
+      ? scheduleData 
+      : (scheduleData.flights || [])
+    const dedupedFlights = deduplicateFlights(flights)
+    const finalSchedule = {
+      flights: dedupedFlights,
+      hotelsByDate: scheduleData.hotelsByDate || buildHotelsByDate(dedupedFlights)
+    }
+    setSchedule(finalSchedule)
+  }
+  
   // Helper function to build hotelsByDate from flights array
   const buildHotelsByDate = (flights) => {
     const hotelsByDate = {}
@@ -915,7 +947,7 @@ function App() {
       if (cachedToken) setToken(cachedToken)
       if (cachedSchedule) {
         console.log('✅ Setting schedule from cached data:', cachedSchedule)
-        setSchedule(cachedSchedule)
+        setScheduleWithDedup(cachedSchedule)
       }
       if (cachedFriends) setFriends(cachedFriends)
       if (cachedSettings) setSettings(cachedSettings)
@@ -1311,11 +1343,7 @@ function App() {
             // Progressive flights update callback - show flights as they come in
             (flights) => {
               console.log(`📤 [LOGIN] Progressive update: ${flights.length} flights`)
-              const progressiveSchedule = {
-                flights,
-                hotelsByDate: buildHotelsByDate(flights)
-              }
-              setSchedule(progressiveSchedule)
+              setScheduleWithDedup({ flights })
             }
           )
           
@@ -1348,19 +1376,14 @@ function App() {
             return
           }
           
-          // Backend returns flights directly, no transformation needed
-          const transformedSchedule = {
-            flights,
-            hotelsByDate: buildHotelsByDate(flights)
-          }
-          
           console.log('✅ [LOGIN] Schedule ready with', flights.length, 'flights')
-          setSchedule(transformedSchedule)
+          setScheduleWithDedup({ flights })
           setScrapingInProgress(false)
           setLoadingMessage('Schedule loaded successfully!')
           
-          // Cache the schedule
-          await localforage.setItem('schedule', transformedSchedule)
+          // Cache the schedule - save deduplicated
+          const dedupedFlights = deduplicateFlights(flights)
+          await localforage.setItem('schedule', { flights: dedupedFlights, hotelsByDate: buildHotelsByDate(dedupedFlights) })
           console.log('✅ [LOGIN] Schedule cached successfully')
           
           // Clear success message after 2 seconds
@@ -1457,14 +1480,15 @@ function App() {
             hotelsByDate: buildHotelsByDate(flights)
           }
           
-          setSchedule(transformedSchedule)
+          setScheduleWithDedup(transformedSchedule)
           setScrapingInProgress(false)
           
-          // Cache the schedule
+          // Cache the schedule - save deduplicated
           const currentMonth = new Date().getMonth() + 1
           const currentYear = new Date().getFullYear()
           const cacheKey = `schedule_${currentYear}_${String(currentMonth).padStart(2, '0')}`
-          localforage.setItem(cacheKey, transformedSchedule)
+          const dedupedFlights = deduplicateFlights(flights)
+          localforage.setItem(cacheKey, { flights: dedupedFlights, hotelsByDate: buildHotelsByDate(dedupedFlights) })
           console.log('✅ Family schedule loaded via NetLine API')
         })
       }
@@ -1491,8 +1515,9 @@ function App() {
       
       if (data.success) {
         if (data.schedule) {
-          setSchedule(data.schedule)
-          await localforage.setItem('schedule', data.schedule)
+          setScheduleWithDedup(data.schedule)
+          const dedupedFlights = deduplicateFlights(data.schedule?.flights || [])
+          await localforage.setItem('schedule', { flights: dedupedFlights, hotelsByDate: data.schedule?.hotelsByDate || buildHotelsByDate(dedupedFlights) })
         }
         // If no schedule data, just continue without setting it
         
@@ -1633,8 +1658,9 @@ function App() {
       
       if (data.success && data.roster) {
         // Update schedule with new roster data
-        setSchedule(data.roster)
-        await localforage.setItem('schedule', data.roster)
+        setScheduleWithDedup(data.roster)
+        const dedupedFlights = deduplicateFlights(data.roster?.flights || [])
+        await localforage.setItem('schedule', { flights: dedupedFlights, hotelsByDate: data.roster?.hotelsByDate || buildHotelsByDate(dedupedFlights) })
         
         // Clear update flag
         setRosterUpdateAvailable(false)
@@ -2593,7 +2619,7 @@ function App() {
           console.log(`⚡ Using cached data for ${year}-${String(month).padStart(2, '0')} (scraped ${Math.round((Date.now() - lastScraped) / 1000)}s ago)`)
           const cachedSchedule = await localforage.getItem(cacheKey)
           if (cachedSchedule) {
-            setSchedule(cachedSchedule)
+            setScheduleWithDedup(cachedSchedule)
             setLoading(false)
             setScrapingInProgress(false)
             return
@@ -2837,7 +2863,7 @@ function App() {
           console.log(`  - Hotel dates: ${Object.keys(hotelsByDate).join(', ')}`)
           console.log('  - Hotels by date:', hotelsByDate)
           
-          setSchedule(realScheduleData)
+          setScheduleWithDedup(realScheduleData)
           
           // Fetch actual times from FlightAware for past flights with tail numbers
           console.log('⏰ Fetching actual times from FlightAware for completed flights...')
@@ -2887,24 +2913,26 @@ function App() {
                 hotelsByDate
               }
               
-              setSchedule(updatedScheduleData)
-              await localforage.setItem(cacheKey, updatedScheduleData)
+              setScheduleWithDedup(updatedScheduleData)
+              const dedupedUpdated = { flights: deduplicateFlights(updatedFlights), hotelsByDate }
+              await localforage.setItem(cacheKey, dedupedUpdated)
               console.log(`✅ Updated ${Object.keys(actualTimesMap).length} flights with actual times`)
             }
           }
           
-          setSchedule(realScheduleData)
+          setScheduleWithDedup(realScheduleData)
           
-          // Cache by month so previous months persist
+          // Cache by month so previous months persist - save deduplicated data
           const cacheKey = month && year ? `schedule_${year}_${String(month).padStart(2, '0')}` : 'schedule'
-          await localforage.setItem(cacheKey, realScheduleData)
+          const dedupedSchedule = { flights: deduplicateFlights(allFlights), hotelsByDate }
+          await localforage.setItem(cacheKey, dedupedSchedule)
           
           // Store timestamp for cache validation
           await localforage.setItem(`${cacheKey}_timestamp`, Date.now())
           
           // Also update current schedule if viewing current month
           if (!month || !year || (month === new Date().getMonth() + 1 && year === new Date().getFullYear())) {
-            await localforage.setItem('schedule', realScheduleData)
+            await localforage.setItem('schedule', dedupedSchedule)
           }
           
           // Mark that we've scraped at least once
@@ -3034,7 +3062,7 @@ function App() {
       }, (progressiveFlights) => {
         // Progressive update - show flights as they come in
         if (progressiveFlights && progressiveFlights.length > 0) {
-          setSchedule({ flights: progressiveFlights, hotelsByDate: buildHotelsByDate(progressiveFlights) })
+          setScheduleWithDedup({ flights: progressiveFlights })
         }
       }, existingFlights)
       
@@ -3067,15 +3095,11 @@ function App() {
         return
       }
       
-      // Backend returns flights directly - build hotelsByDate from flights
-      const refreshedSchedule = {
-        flights,
-        hotelsByDate: buildHotelsByDate(flights)
-      }
-      
+      // Use setScheduleWithDedup for automatic deduplication
       console.log('✅ Schedule refreshed:', flights.length, 'flights')
-      setSchedule(refreshedSchedule)
-      await localforage.setItem('schedule', refreshedSchedule)
+      setScheduleWithDedup({ flights })
+      const dedupedFlights = deduplicateFlights(flights)
+      await localforage.setItem('schedule', { flights: dedupedFlights, hotelsByDate: buildHotelsByDate(dedupedFlights) })
       setScrapingInProgress(false)
       setLoadingMessage('Schedule updated successfully!')
       setError(null)
