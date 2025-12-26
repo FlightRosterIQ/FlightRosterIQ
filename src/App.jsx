@@ -3230,7 +3230,23 @@ function App() {
       }
       
       console.log('getScheduleForDate: Found', flights.length, 'flights for', dateString)
-      return flights.length > 0 ? flights : null
+      
+      // Deduplicate flights by ID
+      const uniqueFlights = []
+      const seenIds = new Set()
+      for (const flight of flights) {
+        const flightKey = flight.id || `${flight.date}-${flight.flightNumber}-${flight.origin}-${flight.destination}`
+        if (!seenIds.has(flightKey)) {
+          seenIds.add(flightKey)
+          uniqueFlights.push(flight)
+        }
+      }
+      
+      if (uniqueFlights.length !== flights.length) {
+        console.log(`🔄 Deduplicated: ${flights.length} → ${uniqueFlights.length} flights`)
+      }
+      
+      return uniqueFlights.length > 0 ? uniqueFlights : null
     } catch (error) {
       console.error('Error in getScheduleForDate:', error, error.stack)
       return null
@@ -3315,6 +3331,20 @@ function App() {
           }
         })
       }
+      
+      // Deduplicate flights for each date
+      Object.keys(monthData).forEach(dateKey => {
+        const flights = monthData[dateKey]
+        const seenIds = new Set()
+        monthData[dateKey] = flights.filter(flight => {
+          const flightKey = flight.id || `${flight.date}-${flight.flightNumber}-${flight.origin}-${flight.destination}`
+          if (seenIds.has(flightKey)) {
+            return false
+          }
+          seenIds.add(flightKey)
+          return true
+        })
+      })
       
       return monthData
     } catch (error) {
@@ -5270,7 +5300,7 @@ function App() {
           const hasDepartureFlights = hasFlights && daySchedule.some(f => !f.isArrivalDay)
           const isTraining = hasFlights && daySchedule[0]?.isTraining
           const isReserve = hasFlights && daySchedule[0]?.isReserveDuty
-          const dutyType = isTraining || isReserve ? (daySchedule[0]?.dutyType || daySchedule[0]?.pairingId) : null
+          const dutyType = isTraining || isReserve ? (daySchedule[0]?.title || daySchedule[0]?.dutyType || daySchedule[0]?.pairingId) : null
           const isToday = day === today.getDate() && 
                           viewMonth.getMonth() === today.getMonth() && 
                           viewMonth.getFullYear() === today.getFullYear()
@@ -5513,9 +5543,15 @@ function App() {
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ color: 'info.main', display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box>📅</Box>
-                  Reserve Duty: {flights[0]?.dutyType || flights[0]?.pairingId}
+                  Reserve Duty: {flights[0]?.title || flights[0]?.dutyType || 'RSV'}
                 </Typography>
                 <Stack spacing={2}>
+                  {flights[0]?.pairingId && flights[0]?.pairingId !== flights[0]?.title && (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">Pairing:</Typography>
+                      <Typography variant="body1">{flights[0]?.pairingId}</Typography>
+                    </Box>
+                  )}
                   <Box>
                     <Typography variant="body2" color="text.secondary">Start:</Typography>
                     <Typography variant="body1">{flights[0]?.departure || flights[0]?.startTime}</Typography>
