@@ -179,11 +179,21 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
       }
     }
     
-    console.log('✅ [SIMPLE SCRAPER] Multi-month scrape complete! Total flights:', allFlights.length, 'News:', allNews.length);
-    onProgress?.(`Completed! Loaded ${allFlights.length} flights`, 100);
+    // Deduplicate flights by ID
+    const uniqueFlights = [];
+    const seenIds = new Set();
+    for (const flight of allFlights) {
+      if (!seenIds.has(flight.id)) {
+        seenIds.add(flight.id);
+        uniqueFlights.push(flight);
+      }
+    }
+    
+    console.log('✅ [SIMPLE SCRAPER] Multi-month scrape complete! Total flights:', uniqueFlights.length, '(after dedup, was', allFlights.length, ') News:', allNews.length);
+    onProgress?.(`Completed! Loaded ${uniqueFlights.length} flights`, 100);
     
     // Return object with both flights and news
-    return { flights: allFlights, news: allNews };
+    return { flights: uniqueFlights, news: allNews };
     
   } catch (error) {
     console.error('❌ [SIMPLE SCRAPER] Error:', error);

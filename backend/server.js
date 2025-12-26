@@ -275,6 +275,249 @@ app.get('/api/health', (_, res) => {
   res.json({ status: 'ok', port: PORT });
 });
 
+/* ============================
+   WEATHER API ENDPOINT
+   Fetches METAR/TAF from aviationweather.gov
+============================ */
+app.post('/api/weather', async (req, res) => {
+  const { airport } = req.body;
+  
+  if (!airport) {
+    return res.status(400).json({ success: false, error: 'airport code is required' });
+  }
+  
+  console.log(`🌦️ Fetching weather for: ${airport}`);
+  
+  try {
+    // Fetch METAR from aviationweather.gov
+    const metarUrl = `https://aviationweather.gov/api/data/metar?ids=${airport}&format=raw`;
+    const tafUrl = `https://aviationweather.gov/api/data/taf?ids=${airport}&format=raw`;
+    
+    const [metarResponse, tafResponse] = await Promise.all([
+      fetch(metarUrl),
+      fetch(tafUrl)
+    ]);
+    
+    const metarText = await metarResponse.text();
+    const tafText = await tafResponse.text();
+    
+    console.log(`📡 METAR for ${airport}:`, metarText.substring(0, 100));
+    console.log(`📡 TAF for ${airport}:`, tafText.substring(0, 100));
+    
+    // Decode METAR
+    const decoded = decodeMetar(metarText.trim());
+    
+    res.json({
+      success: true,
+      metar: metarText.trim() || 'No METAR available',
+      taf: tafText.trim() || 'No TAF available',
+      decoded: decoded
+    });
+    
+  } catch (error) {
+    console.error('❌ Weather fetch error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Decode METAR string into human-readable format
+ */
+function decodeMetar(metar) {
+  if (!metar || metar === 'No METAR available') return null;
+  
+  try {
+    const parts = metar.split(' ');
+    const decoded = {
+      raw: metar,
+      station: parts[0] || '',
+      time: '',
+      wind: '',
+      visibility: '',
+      sky: '',
+      temperature: '',
+      dewpoint: '',
+      altimeter: '',
+      remarks: ''
+    };
+    
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      
+      // Time (e.g., "261856Z")
+      if (/^\d{6}Z$/.test(part)) {
+        const day = part.substring(0, 2);
+        const hour = part.substring(2, 4);
+        const min = part.substring(4, 6);
+        decoded.time = `Day ${day}, ${hour}:${min} UTC`;
+      }
+      
+      // Wind (e.g., "27008KT" or "VRB03KT")
+      if (/^\d{3}\d{2,3}(G\d{2,3})?KT$/.test(part) || /^VRB\d{2,3}KT$/.test(part)) {
+        if (part.startsWith('VRB')) {
+          const speed = part.match(/VRB(\d+)KT/)?.[1];
+          decoded.wind = `Variable at ${speed} knots`;
+        } else {
+          const dir = part.substring(0, 3);
+          const speedMatch = part.match(/\d{3}(\d{2,3})(G(\d{2,3}))?KT/);
+          if (speedMatch) {
+            const speed = speedMatch[1];
+            const gust = speedMatch[3];
+            decoded.wind = gust 
+              ? `${dir}° at ${speed} knots, gusting ${gust} knots`
+              : `${dir}° at ${speed} knots`;
+          }
+        }
+      }
+      
+      // Visibility (e.g., "10SM" or "1/2SM")
+      if (/^\d+SM$/.test(part) || /^\d+\/\d+SM$/.test(part)) {
+        const vis = part.replace('SM', '');
+        decoded.visibility = `${vis} statute miles`;
+      }
+      
+      // Sky condition (e.g., "FEW030", "SCT080", "BKN120", "OVC250")
+      if (/^(FEW|SCT|BKN|OVC|CLR|SKC|VV)\d*$/.test(part)) {
+        const conditions = {
+          'FEW': 'Few',
+          'SCT': 'Scattered',
+          'BKN': 'Broken',
+          'OVC': 'Overcast',
+          'CLR': 'Clear',
+          'SKC': 'Sky Clear',
+          'VV': 'Vertical Visibility'
+        };
+        const condition = part.substring(0, 3);
+        const altitude = part.substring(3);
+        if (altitude) {
+          decoded.sky += (decoded.sky ? ', ' : '') + `${conditions[condition] || condition} at ${parseInt(altitude) * 100} feet`;
+        } else {
+          decoded.sky = conditions[condition] || condition;
+        }
+      }
+      
+      // Temperature/Dewpoint (e.g., "18/12" or "M02/M05")
+      if (/^M?\d{2}\/M?\d{2}$/.test(part)) {
+        const [temp, dew] = part.split('/');
+        const parseTemp = (t) => {
+          if (t.startsWith('M')) {
+            return -parseInt(t.substring(1));
+          }
+          return parseInt(t);
+        };
+        const tempC = parseTemp(temp);
+        const dewC = parseTemp(dew);
+        decoded.temperature = `${tempC}°C (${Math.round(tempC * 9/5 + 32)}°F)`;
+        decoded.dewpoint = `${dewC}°C (${Math.round(dewC * 9/5 + 32)}°F)`;
+      }
+      
+      // Altimeter (e.g., "A3012" or "Q1013")
+      if (/^A\d{4}$/.test(part)) {
+        const alt = part.substring(1);
+        decoded.altimeter = `${alt.substring(0, 2)}.${alt.substring(2)} inHg`;
+      }
+      if (/^Q\d{4}$/.test(part)) {
+        const alt = part.substring(1);
+        decoded.altimeter = `${alt} hPa`;
+      }
+      
+      // Remarks
+      if (part === 'RMK') {
+        decoded.remarks = parts.slice(i + 1).join(' ');
+        break;
+      }
+    }
+    
+    return decoded;
+  } catch (error) {
+    console.error('Error decoding METAR:', error);
+    return null;
+  }
+}
+
+/* ============================
+   FLIGHTAWARE API ENDPOINT
+   Fetches actual flight times from AeroAPI
+============================ */
+app.post('/api/flightaware', async (req, res) => {
+  const { tailNumber, flightNumber, departureDate, origin, destination } = req.body;
+  
+  console.log(`✈️ FlightAware lookup: ${flightNumber} / ${tailNumber} on ${departureDate}`);
+  
+  // Note: This requires a FlightAware AeroAPI key
+  // For now, return a placeholder response indicating the feature needs API setup
+  const AEROAPI_KEY = process.env.FLIGHTAWARE_API_KEY;
+  
+  if (!AEROAPI_KEY) {
+    console.log('⚠️ FlightAware API key not configured');
+    return res.json({
+      success: false,
+      error: 'FlightAware API key not configured',
+      flightData: null
+    });
+  }
+  
+  try {
+    // AeroAPI v4 endpoint for flight information
+    const flightId = flightNumber.replace(/\s+/g, '');
+    const url = `https://aeroapi.flightaware.com/aeroapi/flights/${flightId}?start=${departureDate}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'x-apikey': AEROAPI_KEY
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`AeroAPI returned ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Find the matching flight
+    const flight = data.flights?.find(f => {
+      const matchesTail = !tailNumber || f.registration === tailNumber;
+      const matchesOrigin = !origin || f.origin?.code === origin || f.origin?.code_icao === origin;
+      const matchesDest = !destination || f.destination?.code === destination || f.destination?.code_icao === destination;
+      return matchesTail && matchesOrigin && matchesDest;
+    });
+    
+    if (flight) {
+      res.json({
+        success: true,
+        flightData: {
+          flightNumber: flight.ident,
+          tailNumber: flight.registration,
+          origin: flight.origin?.code,
+          destination: flight.destination?.code,
+          scheduledDeparture: flight.scheduled_out,
+          scheduledArrival: flight.scheduled_in,
+          actualTimes: {
+            actualDeparture: flight.actual_out || flight.estimated_out,
+            actualArrival: flight.actual_in || flight.estimated_in
+          },
+          status: flight.status,
+          aircraftType: flight.aircraft_type
+        }
+      });
+    } else {
+      res.json({
+        success: false,
+        error: 'Flight not found',
+        flightData: null
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ FlightAware error:', error.message);
+    res.json({
+      success: false,
+      error: error.message,
+      flightData: null
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Puppeteer scraper running on port ${PORT}`);
 });
