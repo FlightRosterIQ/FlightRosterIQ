@@ -148,14 +148,23 @@ export async function scrapeMonthlyRoster(page, targetMonth, targetYear, options
     }
   }
 
-  console.log(`G�� Total scraped: ${duties.length} duties, ${news.length} news items`);
+  console.log(`[OK] Total scraped: ${duties.length} duties, ${news.length} news items`);
   
-  // Mark reserve duties (CVG-CVG or same origin/dest)
+  // Mark reserve duties (SBY type or CVG-CVG with type=SBY/RSV only, not SICK/OTHER)
   for (const duty of duties) {
-    if (duty.from && duty.to && duty.from === duty.to) {
+    // Only mark as RSV if it's a standby/reserve type, NOT sick/vacation/other
+    const isSickOrVacation = duty.type === 'OTHER' && 
+      (duty.title?.toLowerCase().includes('sick') || 
+       duty.title?.toLowerCase().includes('vacation') || 
+       duty.title?.toLowerCase().includes('vac'));
+    
+    if (duty.type === 'SBY' || 
+        (duty.from && duty.to && duty.from === duty.to && !isSickOrVacation && duty.type !== 'OTHER')) {
       duty.isReserveDuty = true;
       duty.dutyType = 'RSV';
-      duty.flightNumber = 'RSV';
+      if (!duty.flightNumber || duty.flightNumber === duty.title) {
+        duty.flightNumber = 'RSV';
+      }
       console.log(`[RSV] Marked as reserve: ${duty.from}-${duty.to} on ${duty.date || duty.fromDate}`);
     }
   }
@@ -424,17 +433,23 @@ async function scrapeDayByDay(page, targetYear, targetMonth) {
         
         if (timeSpans.length >= 1) {
           const spans1 = timeSpans[0].querySelectorAll('span');
-          startLocation = spans1[0]?.innerText?.trim() || '';
-          startDate = spans1[1]?.innerText?.trim() || '';
-          startTime = spans1[2]?.innerText?.trim() || '';
+          startLocation = (spans1[0]?.innerText || '').trim();
+          startDate = (spans1[1]?.innerText || '').trim();
+          startTime = (spans1[2]?.innerText || '').replace(/\s*LT\s*$/i, '').trim();
         }
         
         if (timeSpans.length >= 2) {
           const spans2 = timeSpans[1].querySelectorAll('span');
-          endLocation = spans2[0]?.innerText?.trim() || '';
-          endDate = spans2[1]?.innerText?.trim() || '';
-          endTime = spans2[2]?.innerText?.trim() || '';
+          endLocation = (spans2[0]?.innerText || '').trim();
+          endDate = (spans2[1]?.innerText || '').trim();
+          endTime = (spans2[2]?.innerText || '').replace(/\s*LT\s*$/i, '').trim();
         }
+        
+        // Normalize dates with trimmed values
+        const normalizedStartDate = normalizeDate(startDate, targetYear, targetMonth);
+        const normalizedEndDate = normalizeDate(endDate, targetYear, targetMonth);
+        
+        console.log(`[SCRAPE] Row ${index}: type=${eventType}, title=${title}, from=${startLocation} ${startDate} -> ${normalizedStartDate}`);
         
         // Parse flight info from title
         // For flights: "GB3130    763    N1489A" 
@@ -481,10 +496,10 @@ async function scrapeDayByDay(page, targetYear, targetMonth) {
           aircraft: aircraft,
           tailNumber: tailNumber,
           from: startLocation,
-          fromDate: normalizeDate(startDate, targetYear, targetMonth),
+          fromDate: normalizedStartDate,
           fromTime: startTime,
           to: endLocation,
-          toDate: normalizeDate(endDate, targetYear, targetMonth),
+          toDate: normalizedEndDate,
           toTime: endTime,
           extraInfo: extraInfo,
           eventId: row.className.match(/event-id-(\d+)/)?.[1] || '',
