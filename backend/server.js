@@ -1,5 +1,6 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
+const { scrapeMonthlyRoster } = require('./monthlyScraper');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -474,230 +475,39 @@ app.post('/api/authenticate', async (req, res) => {
         });
     }
     
-    let browser;
     try {
-        console.log('🌐 Launching browser for real crew portal authentication...');
-        browser = await puppeteer.launch({
-            headless: 'new',
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu'
-            ]
+        console.log('🚀 Using network-based scraper (no DOM)...');
+        
+        // Call the revolutionary network-based scraper
+        const result = await scrapeMonthlyRoster({
+            employeeId,
+            password,
+            month: month || new Date().getMonth() + 1,
+            year: year || new Date().getFullYear()
         });
         
-        const page = await browser.newPage();
-        await page.setViewport({ width: 1280, height: 720 });
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+        console.log('✅ Scrape successful!');
         
-        const portalUrl = PORTALS[airline?.toLowerCase()] || PORTALS.abx;
-        console.log(`🌐 Connecting to ${airline?.toUpperCase() || 'ABX'} crew portal...`);
-        console.log(`🔗 Portal URL: ${portalUrl}`);
-        
-        await page.goto(portalUrl, { 
-            waitUntil: 'networkidle2', 
-            timeout: 30000 
+        res.json({
+            success: true,
+            authenticated: true,
+            duties: result.flights,
+            month: result.month,
+            year: result.year
         });
         
-        const pageTitle = await page.title();
-        const currentUrl = page.url();
+    } catch (error) {
+        console.error('❌ CREW PORTAL CONNECTION ERROR:', error.message);
         
-        console.log(`📄 Portal page title: "${pageTitle}"`);
-        console.log(`🔗 Current URL: ${currentUrl}`);
-        
-        // Check if we're redirected to Keycloak authentication
-        if (currentUrl.includes('auth/realms') || pageTitle.toLowerCase().includes('sign in')) {
-            console.log('🔐 Keycloak authentication required - performing real login...');
-            
-            await sleep(3000);
-            
-            try {
-                // Fill username field
-                await page.waitForSelector('#username', { timeout: 10000 });
-                await page.click('#username', { clickCount: 3 }); // Select all
-                await page.keyboard.press('Backspace'); // Clear
-                await page.type('#username', employeeId);
-                console.log(`✅ Username entered: ${employeeId}`);
-                
-                // Fill password field
-                await page.waitForSelector('#password', { timeout: 5000 });
-                await page.click('#password', { clickCount: 3 }); // Select all
-                await page.keyboard.press('Backspace'); // Clear
-                await page.type('#password', password);
-                console.log('✅ Password entered: [HIDDEN]');
-                
-                // Submit the form
-                await page.keyboard.press('Enter');
-                console.log('🔄 Submitting authentication form...');
-                
-                // Wait for navigation after login
-                await page.waitForNavigation({ 
-                    waitUntil: 'networkidle2', 
-                    timeout: 15000 
-                });
-                
-                const postLoginUrl = page.url();
-                const postLoginTitle = await page.title();
-                
-                console.log(`📍 Post-login URL: ${postLoginUrl}`);
-                console.log(`📄 Post-login title: "${postLoginTitle}"`);
-                
-                // Check if authentication was successful
-                if (postLoginUrl.includes('auth/realms') || postLoginTitle.toLowerCase().includes('sign in') || postLoginTitle.toLowerCase().includes('error')) {
-                    throw new Error('Authentication failed - Invalid credentials or login error');
-                }
-                
-                console.log('🎉 REAL CREW PORTAL AUTHENTICATION SUCCESSFUL!');
-                
-                // 🔑 CAPTURE COOKIES after successful auth
-                const cookies = await page.cookies();
-                const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-                sessionStore.set(employeeId, {
-                  cookies: cookieString,
-                  airline: airline?.toLowerCase() || 'abx'
-                });
-                logger.info('🍪 [SESSION] Stored NetLine session for', employeeId);
-                logger.debug('🍪 [SESSION] Cookie preview:', cookieString.substring(0, 100) + '...');
-                logger.info('🍪 [SESSION] Total sessions stored:', sessionStore.size());
-                
-                console.log('📅 Extracting crew schedule data...');
-                
-                // Wait for crew portal to fully load
-                await sleep(5000);
-                
-                // Navigate to requested month if specified
-                if (month && year) {
-                    try {
-                        await navigateToMonth(page, month, year);
-                    } catch (navError) {
-                        console.error('❌ Month navigation error:', navError.message);
-                        console.log('⚠️ Continuing with current month...');
-                    }
-                }
-                
-                // Expand all flight details to reveal actual times and report times
-                console.log('📂 Expanding all flight details...');
-                try {
-                    await page.evaluate(() => {
-                        // Find all expand buttons (downward chevron SVG icons)
-                        const expandButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(btn => {
-                            const svg = btn.querySelector('svg');
-                            if (!svg) return false;
-                            const path = svg.querySelector('path');
-                            // Match the downward chevron path: "M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z"
-                            return path && path.getAttribute('d')?.includes('16.59 8.59');
-                        });
-                        
-                        console.log(`Found ${expandButtons.length} flight detail expand buttons`);
-                        
-                        // Click all expand buttons to reveal details
-                        expandButtons.forEach(btn => {
-                            try {
-                                btn.click();
-                            } catch (e) {
-                                console.error('Error clicking expand button:', e);
-                            }
-                        });
-                    });
-                    
-                    // Wait for all details to expand
-                    await sleep(2000);
-                    console.log('✅ All flight details expanded');
-                } catch (expandError) {
-                    console.error('⚠️ Error expanding flight details:', expandError.message);
-                    console.log('Continuing with extraction...');
-                }
-                
-                // Step 2: Click info buttons to access crew information
-                console.log('ℹ️ Clicking info buttons to reveal crew sections...');
-                try {
-                    await page.evaluate(() => {
-                        // Find all info buttons (circle with "i" SVG icon)
-                        // Path: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-                        const infoButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(btn => {
-                            const svg = btn.querySelector('svg');
-                            if (!svg) return false;
-                            const path = svg.querySelector('path');
-                            // Match the info icon path
-                            return path && path.getAttribute('d')?.includes('M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10');
-                        });
-                        
-                        console.log(`Found ${infoButtons.length} info buttons`);
-                        
-                        // Click all info buttons
-                        infoButtons.forEach(btn => {
-                            try {
-                                btn.click();
-                            } catch (e) {
-                                console.error('Error clicking info button:', e);
-                            }
-                        });
-                    });
-                    
-                    // Wait for info sections to open
-                    await sleep(1500);
-                    console.log('✅ Info buttons clicked');
-                } catch (infoError) {
-                    console.error('⚠️ Error clicking info buttons:', infoError.message);
-                }
-                
-                // Step 3: Expand crew details dropdowns within info sections
-                console.log('👥 Expanding crew details dropdowns...');
-                try {
-                    await page.evaluate(() => {
-                        // Find all chevron buttons again (some are in the newly opened info sections)
-                        const crewExpandButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(btn => {
-                            const svg = btn.querySelector('svg');
-                            if (!svg) return false;
-                            const path = svg.querySelector('path');
-                            // Match the downward chevron path again
-                            return path && path.getAttribute('d')?.includes('16.59 8.59');
-                        });
-                        
-                        console.log(`Found ${crewExpandButtons.length} crew detail expand buttons`);
-                        
-                        // Click all crew expand buttons
-                        crewExpandButtons.forEach(btn => {
-                            try {
-                                btn.click();
-                            } catch (e) {
-                                console.error('Error clicking crew expand button:', e);
-                            }
-                        });
-                    });
-                    
-                    // Wait for crew details to expand
-                    await sleep(2000);
-                    console.log('✅ All crew details expanded');
-                } catch (crewError) {
-                    console.error('⚠️ Error expanding crew details:', crewError.message);
-                }
-                
-                // Step 4: Extract notifications from the bell icon
-                console.log('🔔 Extracting notifications...');
-                let notifications = [];
-                try {
-                    // Click the notifications bell button
-                    await page.evaluate(() => {
-                        // Find the bell icon button
-                        // Path: "M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"
-                        const bellButton = Array.from(document.querySelectorAll('button, [role="button"]')).find(btn => {
-                            const svg = btn.querySelector('svg');
-                            if (!svg) return false;
-                            const path = svg.querySelector('path');
-                            return path && path.getAttribute('d')?.includes('M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07');
-                        });
-                        
-                        if (bellButton) {
-                            console.log('Found notifications bell button');
-                            bellButton.click();
-                        } else {
-                            console.log('Notifications bell button not found');
-                        }
-                    });
-                    
-                    // Wait for notifications panel to open
+        res.status(500).json({
+            success: false,
+            authenticated: false,
+            error: 'Unable to connect to crew portal',
+            message: 'Please check your connection and try again',
+            details: error.message
+        });
+    }
+});
                     await sleep(1500);
                     
                     // Extract notification items
