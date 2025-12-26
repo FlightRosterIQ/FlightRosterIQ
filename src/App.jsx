@@ -498,10 +498,14 @@ function App() {
         }
         
         // Use simple scraper for background refresh with status
-        const flights = await simpleScrape(employeeId, password, airline || 'abx', (status, progress) => {
+        const result = await simpleScrape(employeeId, password, airline || 'abx', (status, progress) => {
           setLoadingMessage(status)
           console.log(`📊 Background: ${progress}% - ${status}`)
         })
+        
+        // Handle both old format (array) and new format (object with flights and news)
+        const flights = Array.isArray(result) ? result : (result.flights || [])
+        const news = Array.isArray(result) ? [] : (result.news || [])
         
         if (flights && flights.length > 0) {
           const refreshedSchedule = {
@@ -511,6 +515,20 @@ function App() {
           setSchedule(refreshedSchedule)
           await localforage.setItem('schedule', refreshedSchedule)
           console.log('✅ Background refresh complete:', flights.length, 'flights')
+          
+          // Add news to alerts
+          if (news.length > 0) {
+            const newsAlerts = news.map((item, idx) => ({
+              id: `news-${Date.now()}-${idx}`,
+              type: 'news',
+              title: item.title || 'Crew Portal News',
+              message: item.content || item.title || 'New update from crew portal',
+              date: item.date || new Date().toISOString(),
+              read: false,
+              source: 'crew-portal'
+            }))
+            setScheduleChanges(prev => [...newsAlerts, ...prev])
+          }
         }
       } catch (error) {
         console.error('❌ Background scraping error:', error)
@@ -1235,7 +1253,7 @@ function App() {
         setLoadingMessage('Connecting to crew portal...')
         
         try {
-          const flights = await simpleScrape(
+          const result = await simpleScrape(
             credentials.username.trim(),
             credentials.password,
             airline || 'abx',
@@ -1245,7 +1263,26 @@ function App() {
             }
           )
           
-          console.log('✅ [LOGIN] Received', flights.length, 'flights from scraper')
+          // Handle both old format (array) and new format (object with flights and news)
+          const flights = Array.isArray(result) ? result : (result.flights || [])
+          const news = Array.isArray(result) ? [] : (result.news || [])
+          
+          console.log('✅ [LOGIN] Received', flights.length, 'flights,', news.length, 'news items')
+          
+          // Add news to alerts
+          if (news.length > 0) {
+            const newsAlerts = news.map((item, idx) => ({
+              id: `news-${Date.now()}-${idx}`,
+              type: 'news',
+              title: item.title || 'Crew Portal News',
+              message: item.content || item.title || 'New update from crew portal',
+              date: item.date || new Date().toISOString(),
+              read: false,
+              source: 'crew-portal'
+            }))
+            setScheduleChanges(prev => [...newsAlerts, ...prev])
+            console.log('📰 Added', newsAlerts.length, 'news items to alerts')
+          }
           
           if (!flights || flights.length === 0) {
             console.warn('⚠️ [LOGIN] No flights returned')
@@ -2931,12 +2968,31 @@ function App() {
       // Use simple scraper with detailed status updates
       setLoadingMessage('Connecting to crew portal...')
       console.log('🔄 Calling simple scraper with multi-month support...')
-      const flights = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx', (status, progress) => {
+      const result = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx', (status, progress) => {
         setLoadingMessage(status)
         console.log(`📊 Refresh: ${progress}% - ${status}`)
       })
       
-      console.log('✅ Refresh complete:', flights.length, 'flights')
+      // Handle both old format (array) and new format (object with flights and news)
+      const flights = Array.isArray(result) ? result : (result.flights || [])
+      const news = Array.isArray(result) ? [] : (result.news || [])
+      
+      console.log('✅ Refresh complete:', flights.length, 'flights,', news.length, 'news items')
+      
+      // Add news items to alerts (scheduleChanges)
+      if (news.length > 0) {
+        const newsAlerts = news.map((item, idx) => ({
+          id: `news-${Date.now()}-${idx}`,
+          type: 'news',
+          title: item.title || 'Crew Portal News',
+          message: item.content || item.title || 'New update from crew portal',
+          date: item.date || new Date().toISOString(),
+          read: false,
+          source: 'crew-portal'
+        }))
+        setScheduleChanges(prev => [...newsAlerts, ...prev])
+        console.log('📰 Added', newsAlerts.length, 'news items to alerts')
+      }
       
       if (!flights || flights.length === 0) {
         console.warn('⚠️ No flights returned from refresh')

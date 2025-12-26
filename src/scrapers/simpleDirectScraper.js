@@ -9,7 +9,7 @@ import { API_BASE_URL } from '../config';
  * @param {string} password - Password
  * @param {string} airline - 'abx' or 'ati'
  * @param {Function} onProgress - Optional callback for status updates
- * @returns {Promise<Array>} Array of flights
+ * @returns {Promise<{flights: Array, news: Array}>} Object with flights and news arrays
  */
 export async function simpleScrape(employeeId, password, airline = 'abx', onProgress = null) {
   console.log('🔧 [SIMPLE SCRAPER] Starting multi-month Puppeteer scrape for:', employeeId);
@@ -40,6 +40,7 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
   ];
   
   const allFlights = [];
+  const allNews = [];
   
   try {
     for (let i = 0; i < monthsToScrape.length; i++) {
@@ -70,32 +71,51 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
         continue; // Continue with other months
       }
       
-      const flights = authData.data?.flights || [];
-      console.log(`✅ [SIMPLE SCRAPER] ${label}: Got ${flights.length} duties`);
+      // Backend now returns { success, duties, news, count }
+      const duties = authData.duties || [];
+      const news = authData.news || [];
       
-      // Transform duties to flight legs
-      flights.forEach((duty, dutyIndex) => {
-        if (duty.legs && duty.legs.length > 0) {
-          duty.legs.forEach((leg, legIndex) => {
-            allFlights.push({
-              id: `${year}-${month}-duty${dutyIndex}-leg${legIndex}`,
-              flightNumber: `Flight ${dutyIndex + 1}.${legIndex + 1}`,
-              date: `${year}-${String(month).padStart(2, '0')}-01`, // Default to first of month
-              origin: leg.from,
-              destination: leg.to,
-              departure: '00:00',
-              arrival: '00:00',
-              raw: duty.raw
-            });
-          });
-        }
+      console.log(`✅ [SIMPLE SCRAPER] ${label}: Got ${duties.length} duties, ${news.length} news items`);
+      
+      // Add news items (only once, from first successful response)
+      if (news.length > 0 && allNews.length === 0) {
+        allNews.push(...news);
+      }
+      
+      // Transform duties to flights
+      duties.forEach((duty, dutyIndex) => {
+        // Each duty from DOM scraper has: flightNumber, from, to, date, type, crew, hotel, aircraft, tail
+        const flightDate = duty.date || `${year}-${String(month).padStart(2, '0')}-01`;
+        
+        allFlights.push({
+          id: `${year}-${month}-${dutyIndex}-${duty.flightNumber || 'duty'}`,
+          flightNumber: duty.flightNumber || `Duty ${dutyIndex + 1}`,
+          pairingId: duty.flightNumber,
+          date: flightDate,
+          origin: duty.from || 'TBD',
+          destination: duty.to || 'TBD',
+          departure: duty.departureTime || '00:00',
+          arrival: duty.arrivalTime || '00:00',
+          aircraft: duty.aircraft || 'TBD',
+          aircraftType: duty.aircraft || 'TBD',
+          tailNumber: duty.tail || '',
+          tail: duty.tail || '',
+          status: 'Confirmed',
+          crewMembers: (duty.crew || []).map(name => ({ name, role: 'Crew' })),
+          hotels: duty.hotel ? [{ name: duty.hotel }] : [],
+          isDeadhead: duty.type === 'DEADHEAD',
+          isReserveDuty: duty.type === 'RESERVE',
+          dutyType: duty.type || 'FLIGHT',
+          rawText: duty.rawText || ''
+        });
       });
     }
     
-    console.log('✅ [SIMPLE SCRAPER] Multi-month scrape complete! Total flights:', allFlights.length);
+    console.log('✅ [SIMPLE SCRAPER] Multi-month scrape complete! Total flights:', allFlights.length, 'News:', allNews.length);
     onProgress?.(`Completed! Loaded ${allFlights.length} flights`, 100);
     
-    return allFlights;
+    // Return object with both flights and news
+    return { flights: allFlights, news: allNews };
     
   } catch (error) {
     console.error('❌ [SIMPLE SCRAPER] Error:', error);
