@@ -72,7 +72,9 @@ import {
   DarkMode as DarkModeIcon,
   LightMode as LightModeIcon,
   SettingsBrightness as SystemThemeIcon,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  SwapHoriz as SwapIcon,
+  EventAvailable as ReserveIcon
 } from '@mui/icons-material'
 
 // App Version - Update this with each build
@@ -4068,6 +4070,132 @@ function App() {
     )
   }
 
+  const renderTripTradeView = () => {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 2, mb: 2 }}>
+        <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <SwapIcon /> Trip Trade & Reserve
+        </Typography>
+        
+        <Grid container spacing={2}>
+          {/* Trip Trade Section */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <SwapIcon color="primary" /> Trip Trade
+                </Typography>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Post trips for trade or browse available trips from other crew members.
+                </Typography>
+                
+                <Button 
+                  variant="contained" 
+                  fullWidth 
+                  startIcon={<SwapIcon />}
+                  sx={{ mb: 2 }}
+                >
+                  Post Trip for Trade
+                </Button>
+                
+                <Button 
+                  variant="outlined" 
+                  fullWidth
+                  startIcon={<SwapIcon />}
+                >
+                  Browse Available Trips
+                </Button>
+                
+                <Divider sx={{ my: 2 }} />
+                
+                <Typography variant="subtitle2" gutterBottom>
+                  My Active Trade Posts
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  No active trade posts
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          {/* Reserve Section */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ReserveIcon color="primary" /> Reserve Days
+                </Typography>
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  View your reserve schedule and availability.
+                </Typography>
+                
+                <Button 
+                  variant="contained" 
+                  fullWidth 
+                  startIcon={<ReserveIcon />}
+                  sx={{ mb: 2 }}
+                >
+                  View Reserve Calendar
+                </Button>
+                
+                <Button 
+                  variant="outlined" 
+                  fullWidth
+                  startIcon={<CalendarIcon />}
+                >
+                  Set Availability Preferences
+                </Button>
+                
+                <Divider sx={{ my: 2 }} />
+                
+                <Typography variant="subtitle2" gutterBottom>
+                  Upcoming Reserve Days
+                </Typography>
+                {schedule?.flights?.filter(f => f.isReserveDuty).length > 0 ? (
+                  <List dense>
+                    {schedule.flights
+                      .filter(f => f.isReserveDuty)
+                      .slice(0, 5)
+                      .map((flight, idx) => (
+                        <ListItem key={idx}>
+                          <ListItemIcon>
+                            <ReserveIcon fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText 
+                            primary={flight.date}
+                            secondary={`${flight.departure} - ${flight.arrival}`}
+                          />
+                        </ListItem>
+                      ))
+                    }
+                  </List>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No reserve days scheduled
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          {/* Recent Trade Activity */}
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Recent Trade Activity
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  No recent trade activity
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Container>
+    )
+  }
+
   const renderStatsView = () => {
     const calculateMonthStats = (period = 'current') => {
       if (!schedule?.flights || schedule.flights.length === 0) {
@@ -6419,8 +6547,9 @@ function App() {
         {activeTab === 'notifications' && renderNotificationsView()}
         {activeTab === 'settings' && renderSettingsView()}
         {activeTab === 'stats' && renderStatsView()}
+        {activeTab === 'tripTrade' && renderTripTradeView()}
         
-        {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'friends' && activeTab !== 'notifications' && activeTab !== 'stats' && (
+        {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'friends' && activeTab !== 'notifications' && activeTab !== 'stats' && activeTab !== 'tripTrade' && (
           <Box sx={{ textAlign: 'center', py: 8, px: 2 }}>
             <Typography variant="h6" color="text.secondary" gutterBottom>
               No schedule data available
@@ -6510,6 +6639,12 @@ function App() {
               label="Stats"
               value="stats"
               icon={<StatsIcon />}
+              sx={{ minWidth: { xs: 80, sm: 'auto' } }}
+            />
+            <BottomNavigationAction
+              label="Trip Trade"
+              value="tripTrade"
+              icon={<SwapIcon />}
               sx={{ minWidth: { xs: 80, sm: 'auto' } }}
             />
             <BottomNavigationAction
@@ -7420,4 +7555,4 @@ function App() {
   )
 }
 
-export default App
+export default Appadd
