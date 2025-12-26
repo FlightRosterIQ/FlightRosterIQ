@@ -5,25 +5,24 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 
 // 🔥 Network-Response-Based Scraper (The Fix)
 
-// 🧠 Duty Type Detection (from network JSON)
+// 🧠 Duty Type Detection (from network JSON payload)
 function detectDutyType(duty) {
+  // RESERVE detection (check payload fields first)
+  if (duty.reserve || duty.code === 'RSV') return 'RESERVE';
+  
+  // IADP detection (check payload fields)
+  if (duty.iadp || duty.code === 'IADP') return 'IADP';
+  
+  // FLIGHT detection (has legs array)
+  if (duty.legs?.length) return 'FLIGHT';
+  
+  // Fallback: check logicalId string patterns
   const id = duty.logicalId || '';
   const dutyType = duty.dutyType || '';
-
-  // IADP detection
+  
   if (/IADP/i.test(id) || dutyType === 'IDP') return 'IADP';
+  if (/RSV|RES|STBY/i.test(id)) return 'RESERVE';
   
-  // RESERVE detection (no legs, has keywords)
-  if (!duty.legs || duty.legs.length === 0) {
-    if (/RSV|RES|STBY/i.test(id)) return 'RESERVE';
-  }
-  
-  // FLIGHT detection (has legs with airports)
-  if (duty.legs && duty.legs.length > 0) {
-    const hasAirports = duty.legs.some(l => l.depAirport && l.arrAirport);
-    if (hasAirports) return 'FLIGHT';
-  }
-
   return 'OTHER';
 }
 
@@ -72,39 +71,86 @@ function enrichDuty(duty) {
 async function scrapeMonthlyRoster(page, month, year) {
   console.log(`📅 Scraping ${MONTH_NAMES[month - 1]} ${year} via network interception...`);
   
-  const duties = [];
+  const collectedResponses = [];
   
-  // Attach page.on('response') to intercept NetLine API
-  page.on('response', async response => {
+  // ✅ 1. Intercept ALL XHR / fetch responses
+  page.on('response', async (response) => {
+    const req = response.request();
     const url = response.url();
 
-    // This is the key NetLine endpoint
-    if (url.includes('/idp/user/roster') && url.includes('/events')) {
+    // Only intercept XHR and fetch requests
+    if (!req.resourceType().includes('xhr') && !req.resourceType().includes('fetch')) return;
+
+    // Capture roster-related endpoints
+    if (
+      url.includes('roster') ||
+      url.includes('schedule') ||
+      url.includes('pairing') ||
+      url.includes('duty') ||
+      url.includes('bid') ||
+      url.includes('events')
+    ) {
       try {
         const json = await response.json();
-
-        if (json?.success && Array.isArray(json.result)) {
-          duties.push(...json.result);
-          console.log('[NETLINE] Captured duties:', json.result.length);
-        }
+        collectedResponses.push(json);
+        console.log('[NETLINE XHR] Captured response from:', url.split('/').pop());
       } catch (e) {
-        // Ignore non-JSON
+        // Ignore non-JSON responses
       }
     }
   });
   
-  // Navigate to roster page to trigger XHR
+  // ✅ 2. Trigger the SAME action a human does
   console.log('🗓️ Loading roster page...');
   await page.goto(
     'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html',
     { waitUntil: 'networkidle2', timeout: 30000 }
   );
   
-  // Wait for NetLine API to respond
-  console.log('⏳ Waiting for NetLine API to respond...');
+  // Wait for initial load, then trigger schedule data fetch
+  await page.waitForTimeout(2000);
+  
+  // Try to click schedule/roster tab if it exists
+  console.log('📊 Triggering roster data load...');
+  try {
+    await page.evaluate(() => {
+      // Look for schedule/roster tabs or buttons
+      const scheduleBtn = Array.from(document.querySelectorAll('button, [role="tab"], a')).find(el =>
+        /schedule|roster|calendar/i.test(el.innerText || el.getAttribute('aria-label') || '')
+      );
+      if (scheduleBtn) {
+        console.log('Clicking schedule tab...');
+        scheduleBtn.click();
+      }
+    });
+  } catch (e) {
+    console.log('⚠️ No schedule tab found, continuing...');
+  }
+  
+  // Wait for XHR requests to complete
+  console.log('⏳ Waiting for NetLine API responses...');
   await page.waitForTimeout(5000);
   
-  console.log(`📊 Total duties captured: ${duties.length}`);
+  console.log(`📊 Total responses captured: ${collectedResponses.length}`);
+  
+  // ✅ 3. Extract duties from collected responses
+  const duties = [];
+  collectedResponses.forEach(json => {
+    // NetLine typically wraps data in json.result or json.data
+    const data = json.result || json.data || json;
+    
+    if (Array.isArray(data)) {
+      duties.push(...data);
+    } else if (data.duties || data.events || data.pairings) {
+      // Handle nested structure
+      const nested = data.duties || data.events || data.pairings;
+      if (Array.isArray(nested)) {
+        duties.push(...nested);
+      }
+    }
+  });
+  
+  console.log(`📊 Total duties extracted: ${duties.length}`);
   
   // Parse and enrich duties
   const finalDuties = duties.map(d =>
