@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import localforage from 'localforage'
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 import { API_BASE_URL, apiCall } from './config'
-import { getRosterWithBackgroundSync } from './scrapers/netlineApiDomAdapter'
+import { simpleScrape, transformDutiesToFlights } from './scrapers/simpleDirectScraper'
 import { 
   ThemeProvider, 
   createTheme, 
@@ -1212,141 +1212,52 @@ function App() {
       // Set active tab to monthly view immediately
       setActiveTab('monthly')
       
-      // ✅ NEW ADAPTER: Load roster using NetLine API
+      // ✅ SIMPLE SCRAPER: Direct API calls, no complexity
       if (accountType === 'pilot') {
-        console.log('✅ [LOGIN] Pilot account detected, starting roster load...')
-        console.log('✅ [LOGIN] Employee ID:', credentials.username.trim())
+        console.log('✅ [LOGIN] Pilot account - starting simple scraper...')
         setScrapingInProgress(true)
-        
-        // First, authenticate with NetLine to create session
-        console.log('🔐 [LOGIN] Authenticating with NetLine...')
-        setLoadingMessage('Authenticating with crew portal...')
+        setLoadingMessage('Loading your schedule...')
         
         try {
-          const authResponse = await apiCall('/api/authenticate', {
-            method: 'POST',
-            body: JSON.stringify({
-              employeeId: credentials.username.trim(),
-              password: credentials.password,
-              airline: airline || 'abx'
-            })
-          })
+          const duties = await simpleScrape(
+            credentials.username.trim(),
+            credentials.password,
+            airline || 'abx'
+          )
           
-          const authResult = await authResponse.json()
+          console.log('✅ [LOGIN] Received', duties.length, 'duties from scraper')
           
-          if (!authResult.success) {
-            console.error('❌ [LOGIN] NetLine authentication failed:', authResult.error)
-            setError('Failed to authenticate with crew portal. Please check your credentials.')
+          if (!duties || duties.length === 0) {
+            console.warn('⚠️ [LOGIN] No duties returned')
             setScrapingInProgress(false)
+            setError('No schedule data found')
             return
           }
           
-          console.log('✅ [LOGIN] NetLine authentication successful')
-          setLoadingMessage('Loading your schedule...')
+          // Transform to flights
+          const flights = transformDutiesToFlights(duties)
+          const transformedSchedule = {
+            flights,
+            hotelsByDate: {}
+          }
           
-          // Now use the adapter to load roster with background sync
-          console.log('✅ [LOGIN] Calling getRosterWithBackgroundSync...')
+          console.log('✅ [LOGIN] Transformed to', flights.length, 'flights')
+          setSchedule(transformedSchedule)
+          setScrapingInProgress(false)
+          setLoadingMessage('')
           
-          getRosterWithBackgroundSync(credentials.username.trim(), duties => {
-            console.log('✅ [LOGIN] Adapter callback fired with duties:', duties.length)
-            console.log('[FRIQ] Duties received:', duties)
-            
-            if (!duties || duties.length === 0) {
-              console.warn('⚠️ [LOGIN] No duties returned from adapter')
-              setScrapingInProgress(false)
-              setError('No schedule data found. This may be your first login - schedule will load after authentication.')
-              return
-            }
-            
-            // Transform duties to the format expected by the app
-            // Each duty can have multiple legs, create a flight entry for each leg
-            const flights = []
-            duties.forEach(duty => {
-              // For each leg in the duty, create a flight entry
-              duty.legs.forEach((leg, legIndex) => {
-                const legDate = leg.departUtc ? leg.departUtc.split('T')[0] : duty.startUtc.split('T')[0]
-                flights.push({
-                  id: `${duty.logicalId}_leg${legIndex}`,
-                  flightNumber: leg.flightNumber || duty.pairing || 'Unknown',
-                  pairingId: duty.pairing,
-                  date: legDate,
-                  origin: leg.from || 'Unknown',
-                  destination: leg.to || 'Unknown',
-                  departure: leg.departUtc || duty.startUtc,
-                  arrival: leg.arriveUtc || duty.endUtc,
-                  aircraft: leg.aircraft || 'Unknown',
-                  aircraftType: leg.aircraft || 'Unknown',
-                  tailNumber: leg.tail || '',
-                  tail: leg.tail || '',
-                  status: 'Confirmed',
-                  rank: duty.crew.find(c => c.role === 'PIC' || c.role === 'CA') ? 'CA' : 'FO',
-                  crewMembers: duty.crew,
-                  hotels: duty.hotel ? [{ name: duty.hotel }] : [],
-                  isCodeshare: false,
-                  operatingAirline: null,
-                  actualDeparture: null,
-                  actualArrival: null,
-                  isDeadhead: leg.deadhead || false,
-                  isReserveDuty: duty.type === 'OTHER',
-                  isTraining: duty.type === 'TRAINING',
-                  dutyType: duty.type,
-                  legNumber: legIndex + 1,
-                  totalLegs: duty.legs.length
-                })
-              })
-              
-              // If no legs but duty exists (training/reserve), create a duty entry
-              if (!duty.legs || duty.legs.length === 0) {
-                flights.push({
-                  id: duty.logicalId,
-                  flightNumber: duty.pairing || 'Unknown',
-                  pairingId: duty.pairing,
-                  date: duty.startUtc.split('T')[0],
-                  origin: 'Base',
-                  destination: 'Base',
-                  departure: duty.startUtc,
-                  arrival: duty.endUtc,
-                  aircraft: 'N/A',
-                  aircraftType: 'N/A',
-                  tailNumber: '',
-                  tail: '',
-                  status: 'Confirmed',
-                  rank: 'FO',
-                  crewMembers: duty.crew || [],
-                  hotels: duty.hotel ? [{ name: duty.hotel }] : [],
-                  isCodeshare: false,
-                  operatingAirline: null,
-                  actualDeparture: null,
-                  actualArrival: null,
-                  isDeadhead: false,
-                  isReserveDuty: duty.type === 'OTHER',
-                  isTraining: duty.type === 'TRAINING',
-                  dutyType: duty.type
-                })
-              }
-            })
-            
-            const transformedSchedule = {
-              flights,
-              hotelsByDate: {}
-            }
-            
-            console.log('✅ [LOGIN] Transformed schedule:', transformedSchedule.flights.length, 'flights')
-            setSchedule(transformedSchedule)
-            setScrapingInProgress(false)
-            
-            // Cache the schedule
-            localforage.setItem('schedule', transformedSchedule)
-            console.log('✅ [LOGIN] Schedule set and cached successfully')
-          })
+          // Cache the schedule
+          await localforage.setItem('schedule', transformedSchedule)
+          console.log('✅ [LOGIN] Schedule cached successfully')
           
         } catch (err) {
-          console.error('❌ [LOGIN] Authentication or roster loading failed:', err)
+          console.error('❌ [LOGIN] Scraping failed:', err)
           setScrapingInProgress(false)
+          setLoadingMessage('')
           setError('Failed to load schedule: ' + err.message)
         }
       } else if (accountType === 'family' && memberInfo) {
-        // ✅ NEW ADAPTER: Load roster for family member using NetLine API
+        // ✅ SIMPLE SCRAPER: Load roster for family member
         console.log('✅ [LOGIN] Family account detected, starting roster load...')
         console.log('✅ [LOGIN] Pilot Employee ID:', memberInfo.pilotEmployeeId)
         setScrapingInProgress(true)
@@ -2957,7 +2868,7 @@ function App() {
       return
     }
     
-    console.log(`🔄 MANUAL REFRESH: Reloading schedule from crew portal...`)
+    console.log(`🔄 MANUAL REFRESH: Using simple scraper...`)
     
     setLoadingMessage('Refreshing schedule data...')
     setScrapingInProgress(true)
@@ -2992,121 +2903,36 @@ function App() {
         return
       }
       
-      // Authenticate with backend first
-      console.log('🔐 Authenticating with backend...')
-      const authResponse = await apiCall('/api/authenticate', {
-        method: 'POST',
-        body: JSON.stringify({
-          employeeId: storedUsername,
-          password: storedPassword,
-          airline: storedAirline || 'abx'
-        })
-      })
+      // Use simple scraper
+      console.log('🔄 Calling simple scraper...')
+      const duties = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx')
       
-      const authResult = await authResponse.json()
+      console.log('✅ Refresh complete:', duties.length, 'duties')
       
-      if (!authResult.success) {
-        console.error('❌ Authentication failed:', authResult.error)
-        setError('Failed to authenticate. Please try again.')
+      if (!duties || duties.length === 0) {
+        console.warn('⚠️ No duties returned from refresh')
+        setError('No schedule data available')
         setScrapingInProgress(false)
         return
       }
       
-      console.log('✅ Authentication successful, fetching roster...')
-      setLoadingMessage('Loading your schedule...')
+      // Transform to flights
+      const flights = transformDutiesToFlights(duties)
+      const refreshedSchedule = {
+        flights,
+        hotelsByDate: {}
+      }
       
-      // Use the adapter to fetch fresh roster data
-      getRosterWithBackgroundSync(storedUsername, duties => {
-        console.log('✅ Roster refresh complete:', duties.length, 'duties')
-        
-        if (!duties || duties.length === 0) {
-          console.warn('⚠️ No duties returned from refresh')
-          setError('No schedule data available')
-          setScrapingInProgress(false)
-          return
-        }
-        
-        // Transform duties to flights (same as login)
-        const flights = []
-        duties.forEach(duty => {
-          duty.legs.forEach((leg, legIndex) => {
-            const legDate = leg.departUtc ? leg.departUtc.split('T')[0] : duty.startUtc.split('T')[0]
-            flights.push({
-              id: `${duty.logicalId}_leg${legIndex}`,
-              flightNumber: leg.flightNumber || duty.pairing || 'Unknown',
-              pairingId: duty.pairing,
-              date: legDate,
-              origin: leg.from || 'Unknown',
-              destination: leg.to || 'Unknown',
-              departure: leg.departUtc || duty.startUtc,
-              arrival: leg.arriveUtc || duty.endUtc,
-              aircraft: leg.aircraft || 'Unknown',
-              aircraftType: leg.aircraft || 'Unknown',
-              tailNumber: leg.tail || '',
-              tail: leg.tail || '',
-              status: 'Confirmed',
-              rank: duty.crew.find(c => c.role === 'PIC' || c.role === 'CA') ? 'CA' : 'FO',
-              crewMembers: duty.crew,
-              hotels: duty.hotel ? [{ name: duty.hotel }] : [],
-              isCodeshare: false,
-              operatingAirline: null,
-              actualDeparture: null,
-              actualArrival: null,
-              isDeadhead: leg.deadhead || false,
-              isReserveDuty: duty.type === 'OTHER',
-              isTraining: duty.type === 'TRAINING',
-              dutyType: duty.type,
-              legNumber: legIndex + 1,
-              totalLegs: duty.legs.length
-            })
-          })
-          
-          if (!duty.legs || duty.legs.length === 0) {
-            flights.push({
-              id: duty.logicalId,
-              flightNumber: duty.pairing || 'Unknown',
-              pairingId: duty.pairing,
-              date: duty.startUtc.split('T')[0],
-              origin: 'Base',
-              destination: 'Base',
-              departure: duty.startUtc,
-              arrival: duty.endUtc,
-              aircraft: 'N/A',
-              aircraftType: 'N/A',
-              tailNumber: '',
-              tail: '',
-              status: 'Confirmed',
-              rank: 'FO',
-              crewMembers: duty.crew || [],
-              hotels: duty.hotel ? [{ name: duty.hotel }] : [],
-              isCodeshare: false,
-              operatingAirline: null,
-              actualDeparture: null,
-              actualArrival: null,
-              isDeadhead: false,
-              isReserveDuty: duty.type === 'OTHER',
-              isTraining: duty.type === 'TRAINING',
-              dutyType: duty.type
-            })
-          }
-        })
-        
-        const refreshedSchedule = {
-          flights,
-          hotelsByDate: {}
-        }
-        
-        console.log('✅ Schedule refreshed:', refreshedSchedule.flights.length, 'flights')
-        setSchedule(refreshedSchedule)
-        localforage.setItem('schedule', refreshedSchedule)
-        setScrapingInProgress(false)
-        setLoadingMessage('')
-        setError(null)
-      })
+      console.log('✅ Schedule refreshed:', flights.length, 'flights')
+      setSchedule(refreshedSchedule)
+      await localforage.setItem('schedule', refreshedSchedule)
+      setScrapingInProgress(false)
+      setLoadingMessage('')
+      setError(null)
       
     } catch (error) {
       console.error('❌ Refresh error:', error)
-      setError('Refresh failed. Please try again.')
+      setError('Refresh failed: ' + error.message)
       setScrapingInProgress(false)
       setLoadingMessage('')
     }
