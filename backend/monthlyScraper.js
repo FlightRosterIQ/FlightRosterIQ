@@ -132,8 +132,11 @@ async function navigateToMonth(page, targetMonth, targetYear) {
         const parent = todayElement.closest('[class*="header"], [class*="nav"], [class*="toolbar"], [class*="row"]') || todayElement.parentElement?.parentElement;
         
         if (parent) {
-          const buttons = parent.querySelectorAll('button, [role="button"], [class*="arrow"], [class*="icon"], svg');
-          const buttonArray = Array.from(buttons);
+          // Only get actual clickable buttons, not SVG or icon elements
+          const buttons = parent.querySelectorAll('button, [role="button"]');
+          const buttonArray = Array.from(buttons).filter(btn => 
+            typeof btn.click === 'function' && btn.tagName !== 'SVG'
+          );
           
           // prev is usually first/left, next is usually last/right
           if (dir === 'prev' && buttonArray.length > 0) {
@@ -142,18 +145,29 @@ async function navigateToMonth(page, targetMonth, targetYear) {
           } else if (dir === 'next' && buttonArray.length > 1) {
             buttonArray[buttonArray.length - 1].click();
             return 'Clicked last button (next)';
+          } else if (dir === 'next' && buttonArray.length === 1) {
+            // If there's only one button, try to find more by looking wider
+            const widerParent = parent.parentElement;
+            if (widerParent) {
+              const widerButtons = widerParent.querySelectorAll('button, [role="button"]');
+              const widerArray = Array.from(widerButtons).filter(btn => typeof btn.click === 'function');
+              if (widerArray.length > 1) {
+                widerArray[widerArray.length - 1].click();
+                return 'Clicked last button from wider parent (next)';
+              }
+            }
           }
         }
       }
 
       // Fallback: look for any prev/next buttons
       const selectors = dir === 'next' 
-        ? ['[class*="next"]', '[aria-label*="next"]', '[class*="forward"]', '[class*="right-arrow"]']
-        : ['[class*="prev"]', '[aria-label*="prev"]', '[class*="back"]', '[class*="left-arrow"]'];
+        ? ['[class*="next"]', '[aria-label*="next"]', '[class*="forward"]', '[class*="right-arrow"]', 'button[class*="Right"]']
+        : ['[class*="prev"]', '[aria-label*="prev"]', '[class*="back"]', '[class*="left-arrow"]', 'button[class*="Left"]'];
 
       for (const sel of selectors) {
         const btn = document.querySelector(sel);
-        if (btn) {
+        if (btn && typeof btn.click === 'function') {
           btn.click();
           return `Clicked ${sel}`;
         }
@@ -161,16 +175,31 @@ async function navigateToMonth(page, targetMonth, targetYear) {
 
       // Last resort: find buttons with arrow icons
       const allButtons = document.querySelectorAll('button');
+      const navButtons = [];
       for (const btn of allButtons) {
         const svg = btn.querySelector('svg');
         if (svg) {
           // Check if it's likely a nav button (small, near top)
           const rect = btn.getBoundingClientRect();
-          if (rect.top < 200) {
-            btn.click();
-            return 'Clicked header button with svg';
+          if (rect.top < 200 && rect.width < 100) {
+            navButtons.push({ btn, left: rect.left });
           }
         }
+      }
+      
+      // Sort by position and pick appropriate one
+      if (navButtons.length >= 2) {
+        navButtons.sort((a, b) => a.left - b.left);
+        if (dir === 'prev') {
+          navButtons[0].btn.click();
+          return 'Clicked leftmost nav button (prev)';
+        } else {
+          navButtons[navButtons.length - 1].btn.click();
+          return 'Clicked rightmost nav button (next)';
+        }
+      } else if (navButtons.length === 1) {
+        navButtons[0].btn.click();
+        return 'Clicked only nav button found';
       }
 
       return null;
