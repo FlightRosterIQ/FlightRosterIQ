@@ -6486,7 +6486,7 @@ function App() {
               
               {(userType === 'pilot' || userType === 'family') && (
                 <IconButton
-                  onClick={handleRefreshScraping}
+                  onClick={(e) => handleRefreshScraping(e)}
                   disabled={loading || scrapingInProgress}
                   title="Refresh Schedule from Crew Portal"
                   color="primary"
