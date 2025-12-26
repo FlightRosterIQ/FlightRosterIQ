@@ -462,9 +462,65 @@ function App() {
 
   // Trigger background scraping when coming back online
   useEffect(() => {
-    if (!token) return
-    console.log('✅ Background sync: Use refresh button to update schedule')
-    // Auto-refresh disabled - user can manually refresh with button
+    const handleBackgroundScrape = async () => {
+      if (!token) return
+      
+      // Check if user has credentials stored
+      const storedUsername = await localforage.getItem('username')
+      const storedPassword = await localforage.getItem('tempPassword')
+      const storedAirline = await localforage.getItem('airline')
+      const storedUserType = await localforage.getItem('userType')
+      
+      if (!storedUsername || !storedPassword) return
+      
+      console.log('🌐 Online status detected - starting background scraping...')
+      setScrapingInProgress(true)
+      setLoadingMessage('Refreshing schedule in background...')
+      
+      try {
+        let employeeId = storedUsername
+        let password = storedPassword
+        let airline = storedAirline
+        
+        // For family accounts, get pilot credentials
+        if (storedUserType === 'family') {
+          const accessCode = await localforage.getItem('familyAccessCode')
+          const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+          const memberInfo = codeMapping[accessCode]
+          
+          if (memberInfo) {
+            employeeId = memberInfo.pilotEmployeeId
+            password = memberInfo.password
+            airline = memberInfo.airline
+          }
+        }
+        
+        // Use simple scraper for background refresh
+        const flights = await simpleScrape(employeeId, password, airline || 'abx')
+        
+        if (flights && flights.length > 0) {
+          const refreshedSchedule = {
+            flights,
+            hotelsByDate: {}
+          }
+          setSchedule(refreshedSchedule)
+          await localforage.setItem('schedule', refreshedSchedule)
+          console.log('✅ Background refresh complete:', flights.length, 'flights')
+        }
+      } catch (error) {
+        console.error('❌ Background scraping error:', error)
+      } finally {
+        setScrapingInProgress(false)
+        setLoadingMessage('')
+      }
+    }
+    
+    // Debounce the scraping to avoid multiple triggers
+    const timeoutId = setTimeout(() => {
+      handleBackgroundScrape()
+    }, 2000)
+    
+    return () => clearTimeout(timeoutId)
   }, [token])
 
   // Handle auth session expiry
@@ -1167,11 +1223,11 @@ function App() {
       // Set active tab to monthly view immediately
       setActiveTab('monthly')
       
-      // ✅ SIMPLE SCRAPER: Puppeteer HTML scraping
+      // ✅ SIMPLE SCRAPER: Puppeteer HTML scraping with status display
       if (accountType === 'pilot') {
         console.log('✅ [LOGIN] Pilot account - starting Puppeteer scraper...')
         setScrapingInProgress(true)
-        setLoadingMessage('Loading your schedule...')
+        setLoadingMessage('Connecting to crew portal and scraping schedule...')
         
         try {
           const flights = await simpleScrape(
@@ -1185,6 +1241,7 @@ function App() {
           if (!flights || flights.length === 0) {
             console.warn('⚠️ [LOGIN] No flights returned')
             setScrapingInProgress(false)
+            setLoadingMessage('')
             setError('No schedule data found')
             return
           }
@@ -1198,11 +1255,14 @@ function App() {
           console.log('✅ [LOGIN] Schedule ready with', flights.length, 'flights')
           setSchedule(transformedSchedule)
           setScrapingInProgress(false)
-          setLoadingMessage('')
+          setLoadingMessage('Schedule loaded successfully!')
           
           // Cache the schedule
           await localforage.setItem('schedule', transformedSchedule)
           console.log('✅ [LOGIN] Schedule cached successfully')
+          
+          // Clear success message after 2 seconds
+          setTimeout(() => setLoadingMessage(''), 2000)
           
         } catch (err) {
           console.error('❌ [LOGIN] Scraping failed:', err)
@@ -2822,9 +2882,9 @@ function App() {
       return
     }
     
-    console.log(`🔄 MANUAL REFRESH: Using simple scraper...`)
+    console.log(`🔄 MANUAL REFRESH: Using Puppeteer scraper...`)
     
-    setLoadingMessage('Refreshing schedule data...')
+    setLoadingMessage('Connecting to crew portal...')
     setScrapingInProgress(true)
     setError(null)
     
@@ -2839,6 +2899,7 @@ function App() {
         if (!memberInfo) {
           setError('Family access code not found. Please log in again.')
           setScrapingInProgress(false)
+          setLoadingMessage('')
           return
         }
         
@@ -2854,19 +2915,23 @@ function App() {
       if (!storedUsername || !storedPassword) {
         setError('Please log out and log back in to enable schedule refresh.')
         setScrapingInProgress(false)
+        setLoadingMessage('')
         return
       }
       
-      // Use simple scraper
+      // Use simple scraper with status updates
+      setLoadingMessage('Scraping schedule data from crew portal...')
       console.log('🔄 Calling simple scraper...')
       const flights = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx')
       
+      setLoadingMessage('Processing schedule data...')
       console.log('✅ Refresh complete:', flights.length, 'flights')
       
       if (!flights || flights.length === 0) {
         console.warn('⚠️ No flights returned from refresh')
         setError('No schedule data available')
         setScrapingInProgress(false)
+        setLoadingMessage('')
         return
       }
       
@@ -2880,8 +2945,11 @@ function App() {
       setSchedule(refreshedSchedule)
       await localforage.setItem('schedule', refreshedSchedule)
       setScrapingInProgress(false)
-      setLoadingMessage('')
+      setLoadingMessage('Schedule updated successfully!')
       setError(null)
+      
+      // Clear success message after 2 seconds
+      setTimeout(() => setLoadingMessage(''), 2000)
       
     } catch (error) {
       console.error('❌ Refresh error:', error)
