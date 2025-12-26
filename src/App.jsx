@@ -6746,6 +6746,10 @@ function App() {
     <ThemeProvider theme={muiTheme}>
     <div 
       className={`app ${theme === 'dark' ? 'dark-theme' : ''}`}
+      style={{ 
+        minHeight: '100dvh', 
+        backgroundColor: theme === 'dark' ? '#1A1A2E' : '#E8E8EC' 
+      }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
