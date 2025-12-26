@@ -87,27 +87,59 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
       // Transform duties to flights
       duties.forEach((duty, dutyIndex) => {
         // Each duty from DOM scraper has: flightNumber, from, to, date, type, crew, hotel, aircraft, tail
-        const flightDate = duty.date || `${year}-${String(month).padStart(2, '0')}-01`;
+        // Date comes as "06Dec  " - need to convert to ISO format "2025-12-06"
+        let flightDate = `${year}-${String(month).padStart(2, '0')}-01`; // default
+        
+        if (duty.date) {
+          // Parse date like "06Dec" or "06Dec  " 
+          const dateMatch = duty.date.trim().match(/^(\d{1,2})([A-Za-z]{3})/);
+          if (dateMatch) {
+            const day = dateMatch[1].padStart(2, '0');
+            const monthAbbr = dateMatch[2];
+            const monthMap = {
+              'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+              'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+              'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+            };
+            const monthNum = monthMap[monthAbbr] || String(month).padStart(2, '0');
+            flightDate = `${year}-${monthNum}-${day}`;
+          }
+        }
+        
+        // Clean up times - remove "LT" suffix
+        const cleanTime = (time) => {
+          if (!time) return '00:00';
+          // Convert "05:00 LT" to "05:00"
+          const match = time.match(/(\d{1,2}):?(\d{2})/);
+          if (match) {
+            return `${match[1].padStart(2, '0')}:${match[2]}`;
+          }
+          return time.replace(/\s*LT\s*/i, '').trim() || '00:00';
+        };
         
         allFlights.push({
           id: `${year}-${month}-${dutyIndex}-${duty.flightNumber || 'duty'}`,
           flightNumber: duty.flightNumber || `Duty ${dutyIndex + 1}`,
           pairingId: duty.flightNumber,
           date: flightDate,
-          origin: duty.from || 'TBD',
-          destination: duty.to || 'TBD',
-          departure: duty.departureTime || '00:00',
-          arrival: duty.arrivalTime || '00:00',
+          origin: (duty.from || 'TBD').trim(),
+          destination: (duty.to || 'TBD').trim(),
+          departure: cleanTime(duty.departureTime),
+          arrival: cleanTime(duty.arrivalTime),
           aircraft: duty.aircraft || 'TBD',
           aircraftType: duty.aircraft || 'TBD',
-          tailNumber: duty.tail || '',
-          tail: duty.tail || '',
+          tailNumber: duty.tailNumber || duty.tail || '',
+          tail: duty.tailNumber || duty.tail || '',
           status: 'Confirmed',
           crewMembers: (duty.crew || []).map(name => ({ name, role: 'Crew' })),
-          hotels: duty.hotel ? [{ name: duty.hotel }] : [],
+          hotels: duty.hotel ? [{ name: duty.hotel, phone: duty.hotelPhone, address: duty.hotelAddress }] : [],
           isDeadhead: duty.type === 'DEADHEAD',
-          isReserveDuty: duty.type === 'RESERVE',
+          isReserveDuty: duty.type === 'RESERVE' || duty.type === 'OTHER',
+          isCheckIn: duty.isCheckIn || false,
+          reportTime: duty.reportTime || null,
           dutyType: duty.type || 'FLIGHT',
+          title: duty.title || '',
+          extraInfo: duty.extraInfo || '',
           rawText: duty.rawText || ''
         });
       });
