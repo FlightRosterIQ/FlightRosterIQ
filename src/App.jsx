@@ -5405,7 +5405,7 @@ function App() {
       prevDate.setDate(prevDate.getDate() - 1)
       const dateString = prevDate.toISOString().split('T')[0]
       setSelectedDate(dateString)
-      setActiveView('daily')
+      setActiveTab('daily')
     }
 
     const goToNextDay = () => {
@@ -5413,7 +5413,7 @@ function App() {
       nextDate.setDate(nextDate.getDate() + 1)
       const dateString = nextDate.toISOString().split('T')[0]
       setSelectedDate(dateString)
-      setActiveView('daily')
+      setActiveTab('daily')
     }
 
     if (!flights) {
@@ -5594,38 +5594,29 @@ function App() {
                     </Stack>
                   </Box>
 
-                  {/* Flight Times */}
+                  {/* Flight Times - Show "Actual" for past flights, "Scheduled" for future */}
                   <Stack spacing={1.5}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                        Scheduled:
-                      </Typography>
-                      <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
-                        <Typography variant="body2">
-                          {flight.departure} - {flight.arrival} LT
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {convertToUTC(flight.departure)} - {convertToUTC(flight.arrival)} UTC
-                        </Typography>
-                      </Stack>
-                    </Box>
-                    
-                    {/* Only show Actual section if we have real actual times (not just scheduled times) */}
-                    {(flight.actualDeparture || flight.actualArrival) && (
-                      <Box sx={{ bgcolor: 'success.light', p: 1, borderRadius: 1 }}>
-                        <Typography variant="caption" sx={{ fontWeight: 600, color: 'success.dark' }}>
-                          Actual:
-                        </Typography>
-                        <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
-                          <Typography variant="body2" sx={{ color: 'success.dark' }}>
-                            {flight.actualDeparture ? (flight.actualDeparture.includes('LT') ? flight.actualDeparture.split('LT')[0].trim().split(' ').pop() : flight.actualDeparture) : '--:--'} - {flight.actualArrival ? (flight.actualArrival.includes('LT') ? flight.actualArrival.split('LT')[0].trim().split(' ').pop() : flight.actualArrival) : '--:--'} LT
+                    {(() => {
+                      const flightDate = new Date(flight.date + 'T23:59:59')
+                      const today = new Date()
+                      const isPastFlight = flightDate < today
+                      
+                      return (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                            {isPastFlight ? 'Actual:' : 'Scheduled:'}
                           </Typography>
-                          <Typography variant="body2" sx={{ color: 'success.dark', opacity: 0.8 }}>
-                            {flight.actualDeparture ? (flight.actualDeparture.includes('UTC)') ? flight.actualDeparture.match(/\(([^)]+)\)/)?.[1]?.replace('UTC', '').trim() : convertToUTC(flight.actualDeparture)) : '--:--'} - {flight.actualArrival ? (flight.actualArrival.includes('UTC)') ? flight.actualArrival.match(/\(([^)]+)\)/)?.[1]?.replace('UTC', '').trim() : convertToUTC(flight.actualArrival)) : '--:--'} UTC
-                          </Typography>
-                        </Stack>
-                      </Box>
-                    )}
+                          <Stack direction="row" spacing={2} sx={{ mt: 0.5 }}>
+                            <Typography variant="body2">
+                              {flight.departure} - {flight.arrival} LT
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {convertToUTC(flight.departure)} - {convertToUTC(flight.arrival)} UTC
+                            </Typography>
+                          </Stack>
+                        </Box>
+                      )
+                    })()}
                   </Stack>
 
                   {/* Aircraft Info */}
