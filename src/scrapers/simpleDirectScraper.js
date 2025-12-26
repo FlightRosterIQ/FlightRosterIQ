@@ -114,12 +114,17 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
       
       // Transform duties to flights
       duties.forEach((duty, dutyIndex) => {
-        // Each duty from DOM scraper has: flightNumber, from, to, date, type, crew, hotel, aircraft, tail
-        // Date comes as "06Dec  " - need to convert to ISO format "2025-12-06"
+        // Backend returns: flightNumber, from, to, date (or fromDate), departureTime, arrivalTime, type, crew, hotel, aircraft, tailNumber
+        // Date can be pre-normalized as "2025-12-06" (fromDate) or raw "06Dec" (date)
         let flightDate = `${year}-${String(month).padStart(2, '0')}-01`; // default
         
-        if (duty.date) {
-          // Parse date like "06Dec" or "06Dec  " 
+        // Priority 1: Use already-normalized date from backend
+        if (duty.date && /^\d{4}-\d{2}-\d{2}$/.test(duty.date)) {
+          flightDate = duty.date;
+        } else if (duty.fromDate && /^\d{4}-\d{2}-\d{2}$/.test(duty.fromDate)) {
+          flightDate = duty.fromDate;
+        } else if (duty.date) {
+          // Priority 2: Parse date like "06Dec" or "06Dec  "
           const dateMatch = duty.date.trim().match(/^(\d{1,2})([A-Za-z]{3})/);
           if (dateMatch) {
             const day = dateMatch[1].padStart(2, '0');
@@ -133,6 +138,8 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
             flightDate = `${year}-${monthNum}-${day}`;
           }
         }
+        
+        console.log(`[SCRAPER] Duty ${dutyIndex}: ${duty.flightNumber} on ${flightDate} (raw: ${duty.date || duty.fromDate})`);
         
         // Clean up times - remove "LT" suffix
         const cleanTime = (time) => {
@@ -162,10 +169,11 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
           crewMembers: (duty.crew || []).map(name => ({ name, role: 'Crew' })),
           hotels: duty.hotel ? [{ name: duty.hotel, phone: duty.hotelPhone, address: duty.hotelAddress }] : [],
           isDeadhead: duty.type === 'DEADHEAD',
-          isReserveDuty: duty.type === 'RESERVE' || duty.type === 'OTHER',
-          isCheckIn: duty.isCheckIn || false,
+          isReserveDuty: duty.isReserveDuty || duty.type === 'SBY' || duty.dutyType === 'RSV',
+          isSick: duty.title?.toLowerCase().includes('sick') || duty.type === 'OTHER' && duty.title?.toLowerCase().includes('sick'),
+          isCheckIn: duty.isCheckIn || duty.type === 'C_I',
           reportTime: duty.reportTime || null,
-          dutyType: duty.type || 'FLIGHT',
+          dutyType: duty.dutyType || duty.type || 'FLIGHT',
           title: duty.title || '',
           extraInfo: duty.extraInfo || '',
           rawText: duty.rawText || ''
