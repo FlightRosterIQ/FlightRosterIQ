@@ -6575,7 +6575,7 @@ function App() {
         {activeTab === 'notifications' && renderNotificationsView()}
         {activeTab === 'settings' && renderSettingsView()}
         {activeTab === 'stats' && renderStatsView()}
-        {activeTab === 'tripTrade' && airline === 'abx' && renderTripTradeView()}
+        {activeTab === 'tripTrade' && airline === 'abx' && userType === 'pilot' && renderTripTradeView()}
         
         {!schedule && !loading && userType === 'pilot' && activeTab !== 'settings' && activeTab !== 'friends' && activeTab !== 'notifications' && activeTab !== 'stats' && activeTab !== 'tripTrade' && (
           <Box sx={{ textAlign: 'center', py: 8, px: 2 }}>
@@ -6669,7 +6669,7 @@ function App() {
               icon={<StatsIcon />}
               sx={{ minWidth: { xs: 80, sm: 'auto' } }}
             />
-            {airline === 'abx' && (
+            {airline === 'abx' && userType === 'pilot' && (
               <BottomNavigationAction
                 label="Trips"
                 value="tripTrade"
