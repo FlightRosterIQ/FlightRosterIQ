@@ -462,54 +462,9 @@ function App() {
 
   // Trigger background scraping when coming back online
   useEffect(() => {
-    const handleBackgroundScrape = async () => {
-      if (!token) return
-      
-      // Check if user has credentials stored
-      const storedUsername = await localforage.getItem('username')
-      const storedPassword = await localforage.getItem('tempPassword')
-      const storedAirline = await localforage.getItem('airline')
-      const storedUserType = await localforage.getItem('userType')
-      
-      if (!storedUsername || !storedPassword) return
-      
-      console.log('🌐 Online status detected - starting background scraping...')
-      setScrapingInProgress(true)
-      
-      try {
-        let employeeId = storedUsername
-        let password = storedPassword
-        let airline = storedAirline
-        
-        // For family accounts, get pilot credentials
-        if (storedUserType === 'family') {
-          const accessCode = await localforage.getItem('familyAccessCode')
-          const codeMapping = await localforage.getItem('familyCodeMapping') || {}
-          const memberInfo = codeMapping[accessCode]
-          
-          if (memberInfo) {
-            employeeId = memberInfo.pilotEmployeeId
-            password = memberInfo.password
-            airline = memberInfo.airline
-          }
-        }
-        
-        // Scrape all 3 months (previous, current, next) on every login/refresh
-// ❌ DEPRECATED: await handleMultiMonthScraping(employeeId, password, airline, true)
-        console.warn('⚠️ Background scraping disabled - use getRosterWithBackgroundSync')
-      } catch (error) {
-        console.error('Background scraping error:', error)
-      } finally {
-        setScrapingInProgress(false)
-      }
-    }
-    
-    // Debounce the scraping to avoid multiple triggers
-    const timeoutId = setTimeout(() => {
-      handleBackgroundScrape()
-    }, 2000)
-    
-    return () => clearTimeout(timeoutId)
+    if (!token) return
+    console.log('✅ Background sync: Use refresh button to update schedule')
+    // Auto-refresh disabled - user can manually refresh with button
   }, [token])
 
   // Handle auth session expiry
