@@ -29,6 +29,7 @@ export async function simpleScrape(employeeId, password, airline = 'abx') {
     console.log('🌐 [SIMPLE SCRAPER] Response status:', authResponse.status);
     const authData = await authResponse.json();
     console.log('🌐 [SIMPLE SCRAPER] Response data:', authData);
+    console.log('🌐 [SIMPLE SCRAPER] Data structure:', JSON.stringify(authData.data, null, 2));
     
     if (!authData.success) {
       throw new Error(authData.error || 'Authentication/scraping failed');
@@ -36,6 +37,8 @@ export async function simpleScrape(employeeId, password, airline = 'abx') {
     
     // The backend returns flights directly in data.flights
     const flights = authData.data?.flights || [];
+    console.log('🌐 [SIMPLE SCRAPER] Extracted flights:', flights);
+    console.log('🌐 [SIMPLE SCRAPER] flights.length:', flights.length);
     
     console.log('✅ [SIMPLE SCRAPER] Success! Got', flights.length, 'flights from Puppeteer scrape');
     return flights;
