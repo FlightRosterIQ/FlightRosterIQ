@@ -4742,15 +4742,15 @@ function App() {
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2 }}>📊 Schedule Sync Status</Typography>
                 
-                {scrapingStatus.isActive ? (
+                {(loading || scrapingInProgress) ? (
                   <Box>
                     <Alert severity="info" sx={{ mb: 2 }}>
-                      🔄 Syncing schedule data from crew portal...
+                      🔄 {loadingMessage || 'Syncing schedule data from crew portal...'}
                     </Alert>
                     <Box sx={{ mb: 2 }}>
                       <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
                         <Typography variant="body2">
-                          Current: {scrapingStatus.currentMonth || 'Starting...'}
+                          Current: {scrapingStatus.currentMonth || 'Processing...'}
                         </Typography>
                         <Typography variant="body2" fontWeight="bold">
                           {scrapingStatus.progress}%
@@ -4771,11 +4771,18 @@ function App() {
                   </Box>
                 ) : (
                   <Box>
-                    {scrapingStatus.lastSuccess ? (
+                    {schedule && schedule.length > 0 ? (
                       <Alert severity="success" sx={{ mb: 2 }}>
-                        ✅ Schedule synced successfully
+                        ✅ Schedule synced successfully ({schedule.length} flight{schedule.length !== 1 ? 's' : ''} loaded)
                         <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                          Last update: {new Date(scrapingStatus.lastSuccess).toLocaleString()}
+                          Last update: {lastFetchTime ? new Date(lastFetchTime).toLocaleString() : 'Just now'}
+                        </Typography>
+                      </Alert>
+                    ) : schedule && schedule.length === 0 ? (
+                      <Alert severity="warning" sx={{ mb: 2 }}>
+                        ⚠️ No flights found in crew portal
+                        <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                          {lastFetchTime ? `Last checked: ${new Date(lastFetchTime).toLocaleString()}` : 'Schedule may be empty or unavailable'}
                         </Typography>
                       </Alert>
                     ) : (
@@ -4784,11 +4791,11 @@ function App() {
                       </Alert>
                     )}
                     
-                    {scrapingStatus.lastError && (
-                      <Alert severity="warning" sx={{ mb: 2 }}>
-                        ⚠️ {scrapingStatus.lastError}
+                    {scrapingStatus.lastError && !scrapingInProgress && (
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        ❌ {scrapingStatus.lastError}
                         <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                          Retry attempts: {scrapingStatus.retryCount}
+                          Retry attempts: {scrapingStatus.retryCount || 0}
                         </Typography>
                       </Alert>
                     )}
@@ -4799,18 +4806,22 @@ function App() {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" color="text.secondary">Status:</Typography>
                     <Chip 
-                      label={scrapingStatus.isActive ? 'Syncing' : 'Ready'} 
-                      color={scrapingStatus.isActive ? 'primary' : 'success'} 
+                      label={(loading || scrapingInProgress) ? 'Syncing' : schedule && schedule.length > 0 ? 'Ready' : 'Waiting'} 
+                      color={(loading || scrapingInProgress) ? 'primary' : schedule && schedule.length > 0 ? 'success' : 'default'} 
                       size="small" 
                     />
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Auto-retry:</Typography>
-                    <Typography variant="body2" fontWeight="bold">Enabled (up to 3 attempts)</Typography>
+                    <Typography variant="body2" color="text.secondary">Current Message:</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                      {loadingMessage || 'Idle'}
+                    </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">Cache Duration:</Typography>
-                    <Typography variant="body2" fontWeight="bold">5 minutes</Typography>
+                    <Typography variant="body2" color="text.secondary">Flights Loaded:</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                      {schedule ? schedule.length : 0}
+                    </Typography>
                   </Box>
                 </Stack>
               </CardContent>
@@ -7557,4 +7568,4 @@ function App() {
   )
 }
 
-export default App now
+export default App
