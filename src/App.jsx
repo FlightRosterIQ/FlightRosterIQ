@@ -928,17 +928,26 @@ function App() {
       if (cachedToken && cachedUserType === 'pilot' && cachedUsername) {
         try {
           console.log('📋 Loading family codes from server...')
-          const response = await apiCall('/api/family/get-codes', {
-            method: 'POST',
-            body: JSON.stringify({ pilotEmployeeId: cachedUsername })
+          const response = await apiCall(`/api/family/get-codes/${encodeURIComponent(cachedUsername)}`, {
+            method: 'GET'
           })
           
           if (response.ok) {
             const result = await response.json()
             if (result.success && result.codes) {
-              setFamilyAccessCodes(result.codes)
-              await localforage.setItem('familyAccessCodes', result.codes)
-              console.log(`✅ Loaded ${result.codes.length} family codes from server`)
+              // Transform server format to local format
+              const transformedCodes = result.codes.map(c => ({
+                id: c.code, // Use code as id since server doesn't store id
+                name: c.familyMemberName,
+                code: c.code,
+                createdAt: c.createdAt,
+                pilotUsername: cachedUsername,
+                pilotEmployeeId: cachedUsername,
+                airline: c.airline
+              }))
+              setFamilyAccessCodes(transformedCodes)
+              await localforage.setItem('familyAccessCodes', transformedCodes)
+              console.log(`✅ Loaded ${transformedCodes.length} family codes from server`)
             }
           }
         } catch (error) {
@@ -1147,11 +1156,10 @@ function App() {
         setLoadingMessage('Validating family access code...')
         
         try {
-          const authResponse = await apiCall('/api/auth/login', {
+          const authResponse = await apiCall('/api/family/validate-code', {
             method: 'POST',
             body: JSON.stringify({
-              username: accessCode,
-              accountType: 'family'
+              code: accessCode
             })
           })
           
@@ -1165,20 +1173,19 @@ function App() {
           }
           
           // Store the validated family member info from server
-          if (authResult.pilotName && authResult.memberName) {
-            const codeMapping = await localforage.getItem('familyCodeMapping') || {}
-            codeMapping[accessCode] = {
-              name: authResult.memberName,
-              pilotName: authResult.pilotName,
-              pilot: authResult.pilotName,
-              airline: authResult.airline || 'abx',
-              pilotEmployeeId: authResult.pilotEmployeeId,
-              password: authResult.password
-            }
-            await localforage.setItem('familyCodeMapping', codeMapping)
-            
-            console.log(`✅ Family code validated - Pilot: ${authResult.pilotName}, Member: ${authResult.memberName}`)
+          // Response format: { success, pilotId, familyMemberName, airline, password }
+          const codeMapping = await localforage.getItem('familyCodeMapping') || {}
+          codeMapping[accessCode] = {
+            name: authResult.familyMemberName,
+            pilotName: authResult.pilotId,
+            pilot: authResult.pilotId,
+            airline: authResult.airline || 'abx',
+            pilotEmployeeId: authResult.pilotId,
+            password: authResult.password
           }
+          await localforage.setItem('familyCodeMapping', codeMapping)
+          
+          console.log(`✅ Family code validated - Pilot: ${authResult.pilotId}, Member: ${authResult.familyMemberName}`)
           
           console.log('✅ Family access code validated successfully')
           
@@ -2146,10 +2153,10 @@ function App() {
       const response = await apiCall('/api/family/generate-code', {
         method: 'POST',
         body: JSON.stringify({
-          pilotUsername: username,
-          memberName: newFamilyMemberName.trim(),
+          pilotId: username,
+          familyMemberName: newFamilyMemberName.trim(),
           airline: airline,
-          pilotPassword: storedPassword
+          password: storedPassword
         })
       })
 
@@ -2259,7 +2266,8 @@ function App() {
     if (confirmed) {
       try {
         const response = await apiCall(`/api/family/revoke-code/${code}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          body: JSON.stringify({ pilotId: username })
         })
 
         const data = await response.json()
