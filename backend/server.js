@@ -8,6 +8,12 @@ import {
   validateCode,
   revokeCode
 } from './familyCodesStorage.js';
+import {
+  registerUser,
+  unregisterUser,
+  searchUsers,
+  isUserRegistered
+} from './registeredUsersStorage.js';
 
 const app = express();
 const PORT = 8081;
@@ -566,6 +572,79 @@ app.post('/api/flightaware', async (req, res) => {
       error: error.message,
       flightData: null
     });
+  }
+});
+
+/* ============================
+   USER REGISTRATION ENDPOINTS
+   For cross-company pilot discovery
+============================ */
+
+// Register user endpoint
+app.post('/api/register-user', (req, res) => {
+  try {
+    const { employeeId, name, role, base, airline } = req.body;
+    
+    if (!employeeId || !name) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+    
+    const user = registerUser(employeeId, name, role, base, airline);
+    console.log(`✅ User registered: ${name} (${employeeId})`);
+    
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Unregister user endpoint
+app.post('/api/unregister-user', (req, res) => {
+  try {
+    const { employeeId } = req.body;
+    
+    if (!employeeId) {
+      return res.status(400).json({ success: false, error: 'Missing employeeId' });
+    }
+    
+    const result = unregisterUser(employeeId);
+    console.log(`❌ User unregistered: ${employeeId}`);
+    
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('Unregistration error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Search users endpoint
+app.get('/api/search-users', (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q || q.length < 2) {
+      return res.json({ success: true, users: [] });
+    }
+    
+    const users = searchUsers(q);
+    res.json({ success: true, users });
+  } catch (err) {
+    console.error('Search error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Check if user is registered
+app.get('/api/check-registration/:employeeId', (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const registered = isUserRegistered(employeeId);
+    
+    res.json({ success: true, registered });
+  } catch (err) {
+    console.error('Check registration error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
