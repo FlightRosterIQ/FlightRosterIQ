@@ -1763,6 +1763,40 @@ function App() {
     }
   }
 
+  const handleForceRefresh = async () => {
+    try {
+      console.log('🔄 Force refreshing schedule...')
+      setScraperLoading(true)
+      setScraperError(null)
+      
+      // Clear cached schedule
+      await localforage.removeItem('schedule')
+      setSchedule(null)
+      
+      // Trigger re-scrape
+      if (scraperCredentials.username && scraperCredentials.password) {
+        const result = await simpleScrape(
+          scraperCredentials.airline || 'abx',
+          scraperCredentials.username,
+          scraperCredentials.password,
+          [] // Empty array forces fresh scrape
+        )
+        
+        if (result.flights) {
+          setSchedule({ flights: result.flights, hotelsByDate: result.hotelsByDate || {} })
+          await localforage.setItem('schedule', { flights: result.flights, hotelsByDate: result.hotelsByDate || {} })
+          console.log('✅ Schedule refreshed successfully')
+        }
+      }
+      
+      setScraperLoading(false)
+    } catch (err) {
+      console.error('❌ Force refresh error:', err)
+      setScraperError(err.message)
+      setScraperLoading(false)
+    }
+  }
+
   const sendChatMessage = async (friendId, message) => {
     if (!message.trim()) return
     
@@ -4822,7 +4856,18 @@ function App() {
   const renderSettingsView = () => {
     return (
       <Box className="settings-view" sx={{ px: 2, pb: 4 }}>
-        <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>⚙️ Settings</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h5">⚙️ Settings</Typography>
+          <Button 
+            variant="outlined" 
+            color="primary"
+            onClick={handleForceRefresh}
+            disabled={scraperLoading}
+            startIcon={scraperLoading ? <CircularProgress size={20} /> : null}
+          >
+            {scraperLoading ? 'Refreshing...' : '🔄 Refresh Schedule'}
+          </Button>
+        </Box>
         
         <Tabs 
           value={settingsTab} 
