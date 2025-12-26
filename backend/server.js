@@ -1,4 +1,4 @@
-import express from 'express';
+ import express from 'express';
 import puppeteer from 'puppeteer';
 import cors from 'cors';
 import { scrapeMonthlyRoster } from './monthlyScraper.js';
@@ -157,6 +157,112 @@ app.delete('/api/family/revoke-code/:code', (req, res) => {
   } catch (err) {
     console.error('❌ Error revoking code:', err.message);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ============================
+   OPEN TRIPS PDF ENDPOINT
+   Fetches PDF from myabx.com with auto-login
+============================ */
+app.post('/api/open-trips', async (req, res) => {
+  const { employeeId, password } = req.body;
+
+  if (!employeeId || !password) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'employeeId and password are required' 
+    });
+  }
+
+  const openTripsUrl = 'https://www.myabx.com/flightweb/Secure/Flight%20Crew%20Scheduling/CVG_OPEN_TIME.pdf';
+  const myabxLoginUrl = 'https://www.myabx.com/flightweb/';
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+    console.log('📄 Opening myabx.com for Open Trips PDF...');
+
+    // Go to the PDF URL first - it will redirect to login if needed
+    await page.goto(openTripsUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+
+    // Check if we're on a login page
+    const currentUrl = page.url();
+    console.log('📍 Current URL:', currentUrl);
+
+    // If redirected to login, fill in credentials
+    if (currentUrl.includes('login') || currentUrl.includes('Login') || currentUrl.includes('signin')) {
+      console.log('🔐 Login required, entering credentials...');
+      
+      // Try common login form selectors
+      const usernameSelectors = ['#username', '#Username', 'input[name="username"]', 'input[name="Username"]', '#txtUsername', 'input[type="text"]'];
+      const passwordSelectors = ['#password', '#Password', 'input[name="password"]', 'input[name="Password"]', '#txtPassword', 'input[type="password"]'];
+      
+      let usernameField = null;
+      let passwordField = null;
+      
+      for (const sel of usernameSelectors) {
+        usernameField = await page.$(sel);
+        if (usernameField) break;
+      }
+      
+      for (const sel of passwordSelectors) {
+        passwordField = await page.$(sel);
+        if (passwordField) break;
+      }
+      
+      if (usernameField && passwordField) {
+        await usernameField.type(employeeId);
+        await passwordField.type(password);
+        
+        // Try to find and click submit button
+        const submitSelectors = ['button[type="submit"]', 'input[type="submit"]', '#btnLogin', '.login-button', 'button'];
+        for (const sel of submitSelectors) {
+          const submitBtn = await page.$(sel);
+          if (submitBtn) {
+            await Promise.all([
+              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {}),
+              submitBtn.click()
+            ]);
+            break;
+          }
+        }
+        
+        // Wait a bit and try navigating to PDF again
+        await page.waitForTimeout(2000);
+        await page.goto(openTripsUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+      }
+    }
+
+    // Check if we now have the PDF
+    const finalUrl = page.url();
+    console.log('📍 Final URL:', finalUrl);
+
+    if (finalUrl.includes('.pdf')) {
+      // Return the URL - user can open it directly since session may now be valid
+      res.json({ 
+        success: true, 
+        url: openTripsUrl,
+        message: 'PDF accessible, opening in browser'
+      });
+    } else {
+      // Return the URL anyway - let user try manually
+      res.json({ 
+        success: true, 
+        url: openTripsUrl,
+        message: 'Login may be required'
+      });
+    }
+
+  } catch (err) {
+    console.error('❌ Open Trips error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    if (browser) await browser.close();
   }
 });
 

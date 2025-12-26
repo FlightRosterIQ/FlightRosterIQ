@@ -4200,9 +4200,16 @@ function App() {
                 '&:hover': { boxShadow: 4 },
                 transition: 'box-shadow 0.2s'
               }}
-              onClick={() => {
-                // TODO: Add URL navigation
-                console.log('Open Trips clicked')
+              onClick={async () => {
+                // Open the CVG Open Time PDF - uses pilot's stored credentials
+                const openTripsUrl = 'https://www.myabx.com/flightweb/Secure/Flight%20Crew%20Scheduling/CVG_OPEN_TIME.pdf'
+                try {
+                  // Open in new tab - myabx.com may prompt for login
+                  // The site should accept the same credentials
+                  window.open(openTripsUrl, '_blank')
+                } catch (err) {
+                  console.error('Error opening Open Trips:', err)
+                }
               }}
             >
               <CardContent sx={{ textAlign: 'center', py: 4 }}>

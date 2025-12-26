@@ -47,8 +47,8 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
       const { month, year, label } = monthsToScrape[i];
       const progress = Math.round(((i + 1) / monthsToScrape.length) * 100);
       
-      onProgress?.(`Scraping ${label} ${year}... (${i + 1}/${monthsToScrape.length})`, progress);
-      console.log(`📅 [SIMPLE SCRAPER] Scraping ${label} ${year}...`);
+      onProgress?.(`Loading ${label} ${year}... (${i + 1}/${monthsToScrape.length})`, progress);
+      console.log(`📅 [SIMPLE SCRAPER] Loading ${label} ${year}...`);
       
       const authUrl = `${API_BASE_URL}/api/authenticate`;
       const authResponse = await fetch(authUrl, {
