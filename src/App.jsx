@@ -5677,7 +5677,8 @@ function App() {
           const isTraining = hasFlights && daySchedule[0]?.isTraining
           const isReserve = hasFlights && (daySchedule[0]?.isReserveDuty || daySchedule[0]?.dutyType === 'RSV' || daySchedule[0]?.flightNumber?.match(/^R\d/))
           const isFLX = hasFlights && (daySchedule[0]?.dutyType === 'FLX' || daySchedule[0]?.flightNumber?.includes('FLX'))
-          const dutyType = isTraining || isReserve || isFLX ? (daySchedule[0]?.title || daySchedule[0]?.dutyType || daySchedule[0]?.pairingId || 'RSV') : null
+          const isOther = hasFlights && (daySchedule[0]?.type === 'OTHER' || daySchedule[0]?.dutyType === 'OTHER')
+          const dutyType = isTraining || isReserve || isFLX || isOther ? (daySchedule[0]?.title || daySchedule[0]?.dutyType || daySchedule[0]?.pairingId || 'RSV') : null
           const isToday = day === today.getDate() && 
                           viewMonth.getMonth() === today.getMonth() && 
                           viewMonth.getFullYear() === today.getFullYear()
@@ -5693,17 +5694,21 @@ function App() {
           
           if (hasFlights) {
             if (isTraining) {
-              // Cyan for Training
-              bgColor = '#00BCD4'
-              dayColor = 'white'
+              // Soft cyan for Training
+              bgColor = '#B3E5FC'
+              dayColor = '#01579B'
             } else if (isReserve || isFLX) {
-              // Light Orange for Reserve/FLX
-              bgColor = '#FF9800'
-              dayColor = 'white'
+              // Soft orange for Reserve/FLX
+              bgColor = '#FFE0B2'
+              dayColor = '#E65100'
+            } else if (isOther) {
+              // Soft purple for Other (sick/vacation)
+              bgColor = '#E1BEE7'
+              dayColor = '#4A148C'
             } else {
-              // Light Green for Flights
-              bgColor = '#4CAF50'
-              dayColor = 'white'
+              // Soft green for Flights
+              bgColor = '#C8E6C9'
+              dayColor = '#1B5E20'
             }
           }
           
@@ -5829,16 +5834,20 @@ function App() {
         {/* Color Legend */}
         <Box sx={{ mt: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'center' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 20, height: 20, bgcolor: '#4CAF50', borderRadius: 1 }} />
+            <Box sx={{ width: 20, height: 20, bgcolor: '#C8E6C9', borderRadius: 1 }} />
             <Typography variant="caption">Flight</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 20, height: 20, bgcolor: '#FF9800', borderRadius: 1 }} />
+            <Box sx={{ width: 20, height: 20, bgcolor: '#FFE0B2', borderRadius: 1 }} />
             <Typography variant="caption">Reserve/FLX</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 20, height: 20, bgcolor: '#00BCD4', borderRadius: 1 }} />
+            <Box sx={{ width: 20, height: 20, bgcolor: '#B3E5FC', borderRadius: 1 }} />
             <Typography variant="caption">Training</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ width: 20, height: 20, bgcolor: '#E1BEE7', borderRadius: 1 }} />
+            <Typography variant="caption">Other</Typography>
           </Box>
         </Box>
       </Box>
