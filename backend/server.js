@@ -239,26 +239,6 @@ async function scrapeMonth({ employeeId, password, month, year }) {
   }
 }
 
-app.post('/api/scrape-month', async (req, res) => {
-  const { employeeId, password, month, year } = req.body;
-  
-  if (!employeeId || !password) {
-    return res.status(400).json({ success: false, error: 'Employee ID and password required' });
-  }
-  
-  if (!month || !year) {
-    return res.status(400).json({ success: false, error: 'Month and year required' });
-  }
-  
-  try {
-    const data = await scrapeMonth({ employeeId, password, month, year });
-    res.json({ success: true, data });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // Family codes endpoints (basic storage)
 const familyCodes = new Map();
 

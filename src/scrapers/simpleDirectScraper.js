@@ -1,4 +1,4 @@
-// Simple Direct Scraper - Monthly Puppeteer scraping via /api/scrape-month
+// Simple Direct Scraper - Monthly Puppeteer scraping via /api/authenticate
 // Backend uses Puppeteer to click through months and extract flights
 
 import { API_BASE_URL } from '../config';
