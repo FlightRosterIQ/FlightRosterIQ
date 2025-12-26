@@ -662,6 +662,41 @@ app.post('/api/authenticate', async (req, res) => {
                     scheduleData = { flights: [], note: 'Real authentication successful - portal accessed' };
                 }
                 
+                // Debug: Capture page HTML and take screenshot for diagnosis
+                try {
+                    const pageHTML = await page.content();
+                    const pageText = await page.evaluate(() => document.body.innerText);
+                    
+                    // Log first 2000 chars of visible text
+                    console.log('📄 === PORTAL PAGE TEXT (first 2000 chars) ===');
+                    console.log(pageText.substring(0, 2000));
+                    console.log('📄 === END PORTAL TEXT ===');
+                    
+                    // Save full HTML to file for inspection
+                    const fs = require('fs');
+                    const path = require('path');
+                    const debugDir = path.join(__dirname, 'debug');
+                    if (!fs.existsSync(debugDir)) {
+                        fs.mkdirSync(debugDir, { recursive: true });
+                    }
+                    
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const htmlFile = path.join(debugDir, `portal-${airline || 'abx'}-${timestamp}.html`);
+                    const textFile = path.join(debugDir, `portal-${airline || 'abx'}-${timestamp}.txt`);
+                    
+                    fs.writeFileSync(htmlFile, pageHTML);
+                    fs.writeFileSync(textFile, pageText);
+                    console.log(`💾 Saved portal HTML to: ${htmlFile}`);
+                    console.log(`💾 Saved portal text to: ${textFile}`);
+                    
+                    // Take screenshot
+                    const screenshotFile = path.join(debugDir, `portal-${airline || 'abx'}-${timestamp}.png`);
+                    await page.screenshot({ path: screenshotFile, fullPage: true });
+                    console.log(`📸 Saved screenshot to: ${screenshotFile}`);
+                } catch (debugErr) {
+                    console.log('⚠️ Debug capture error:', debugErr.message);
+                }
+                
                 await browser.close();
                 
                 // Format flights data for frontend compatibility
