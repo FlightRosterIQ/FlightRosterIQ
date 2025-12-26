@@ -124,48 +124,113 @@ async function scrapeMonthlyRoster({ employeeId, password, month, year }) {
     
     await sleep(1000);
     
-    // 5️⃣ SCRAPE FLIGHTS
+    // 5️⃣ SCRAPE FLIGHTS WITH ENRICHMENT
     console.log('📊 Extracting flight data...');
-    const flights = await page.evaluate(() => {
-      const results = [];
-      
-      document
-        .querySelectorAll('[class*="duty"], [class*="pairing"], [class*="trip"]')
-        .forEach(el => {
-          const text = el.innerText;
-          
-          // Must contain airport codes
-          if (!/[A-Z]{3}\s*(→|->|-|—)\s*[A-Z]{3}/.test(text)) return;
-          
-          const legs = [];
-          const routes = text.match(/[A-Z]{3}\s*(→|->|-|—)\s*[A-Z]{3}/g) || [];
-          
-          routes.forEach(route => {
-            const airports = route.match(/[A-Z]{3}/g);
-            if (airports && airports.length >= 2) {
-              legs.push({
-                from: airports[0],
-                to: airports[1]
-              });
-            }
-          });
-          
-          if (legs.length > 0) {
-            results.push({
-              raw: text.substring(0, 500),
-              pairing: text.match(/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/)?.[0],
-              legs: legs,
-              aircraft: text.match(/B\d{3}/)?.[0],
-              tail: text.match(/N\d+[A-Z]*/)?.[0],
-              hotel: text.match(/Hotel[^\n]+/)?.[0]
+    
+    // Get all duty elements
+    const dutyElements = await page.$$('[class*="duty"], [class*="pairing"], [class*="trip"]');
+    console.log(`Found ${dutyElements.length} duty elements`);
+    
+    const flights = [];
+    
+    for (const dutyEl of dutyElements) {
+      try {
+        const text = await dutyEl.evaluate(el => el.innerText);
+        
+        // Must contain airport codes
+        if (!/[A-Z]{3}\s*(→|->|-|—)\s*[A-Z]{3}/.test(text)) continue;
+        
+        // Extract basic flight info
+        const legs = [];
+        const routes = text.match(/[A-Z]{3}\s*(→|->|-|—)\s*[A-Z]{3}/g) || [];
+        
+        routes.forEach(route => {
+          const airports = route.match(/[A-Z]{3}/g);
+          if (airports && airports.length >= 2) {
+            legs.push({
+              from: airports[0],
+              to: airports[1]
             });
           }
         });
-      
-      return results;
-    });
+        
+        if (legs.length === 0) continue;
+        
+        // Extract pairing
+        const pairing = text.match(/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/)?.[0] || null;
+        
+        // ENRICHMENT: Extract crew info (fail-safe)
+        let crew = [];
+        try {
+          crew = await dutyEl.evaluate(el => {
+            const results = [];
+            const text = el.innerText;
+            const crewLines = text.match(/(CAPT|FO|FE|SO)[^\n]+/gi) || [];
+            
+            crewLines.forEach(line => {
+              const role = line.match(/CAPT|FO|FE|SO/)?.[0] || null;
+              const name = line.replace(role, '').trim() || null;
+              const id = line.match(/\b\d{5,7}\b/)?.[0] || null;
+              const phone = line.match(/\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/)?.[0] || null;
+              
+              results.push({ role, name, id, phone });
+            });
+            
+            return results;
+          });
+        } catch (err) {
+          console.warn('[ENRICHMENT] Crew extraction failed for duty');
+        }
+        
+        // ENRICHMENT: Extract hotel info (fail-safe)
+        let hotel = null;
+        try {
+          hotel = await dutyEl.evaluate(el => {
+            const text = el.innerText;
+            return text.match(/Hotel[:\s]+([A-Za-z0-9\s\-]+)/i)?.[1] ||
+                   text.match(/Layover[:\s]+([A-Za-z0-9\s\-]+)/i)?.[1] ||
+                   null;
+          });
+        } catch (err) {
+          console.warn('[ENRICHMENT] Hotel extraction failed for duty');
+        }
+        
+        // ENRICHMENT: Extract aircraft and tail (fail-safe)
+        let aircraft = null;
+        let tail = null;
+        try {
+          const aircraftInfo = await dutyEl.evaluate(el => {
+            const text = el.innerText;
+            return {
+              aircraft: text.match(/\b(B7\d{2}|B7\d{2}F|A\d{3})\b/)?.[0] || null,
+              tail: text.match(/\bN\d{3,5}[A-Z]{0,2}\b/)?.[0] || null
+            };
+          });
+          aircraft = aircraftInfo.aircraft;
+          tail = aircraftInfo.tail;
+        } catch (err) {
+          console.warn('[ENRICHMENT] Aircraft extraction failed for duty');
+        }
+        
+        flights.push({
+          raw: text.substring(0, 500),
+          pairing,
+          legs,
+          crew,
+          hotel,
+          aircraft,
+          tail
+        });
+        
+      } catch (err) {
+        console.warn('[ENRICHMENT] Failed for one duty, continuing:', err.message);
+      }
+    }
     
     console.log(`✅ Extracted ${flights.length} duties with ${flights.reduce((sum, f) => sum + f.legs.length, 0)} legs`);
+    console.log(`👥 ${flights.filter(f => f.crew && f.crew.length > 0).length} duties have crew info`);
+    console.log(`🏨 ${flights.filter(f => f.hotel).length} duties have hotel info`);
+    console.log(`✈️ ${flights.filter(f => f.aircraft).length} duties have aircraft info`);
     
     await browser.close();
     
