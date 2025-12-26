@@ -5676,13 +5676,14 @@ function App() {
           const hasArrivalFlights = hasFlights && daySchedule.some(f => f.isArrivalDay)
           const hasDepartureFlights = hasFlights && daySchedule.some(f => !f.isArrivalDay)
           const isTraining = hasFlights && daySchedule[0]?.isTraining
-          const isReserve = hasFlights && daySchedule[0]?.isReserveDuty
-          const dutyType = isTraining || isReserve ? (daySchedule[0]?.title || daySchedule[0]?.dutyType || daySchedule[0]?.pairingId) : null
+          const isReserve = hasFlights && (daySchedule[0]?.isReserveDuty || daySchedule[0]?.dutyType === 'RSV' || daySchedule[0]?.flightNumber?.match(/^R\d/))
+          const isFLX = hasFlights && (daySchedule[0]?.dutyType === 'FLX' || daySchedule[0]?.flightNumber?.includes('FLX'))
+          const dutyType = isTraining || isReserve || isFLX ? (daySchedule[0]?.title || daySchedule[0]?.dutyType || daySchedule[0]?.pairingId || 'RSV') : null
           const isToday = day === today.getDate() && 
                           viewMonth.getMonth() === today.getMonth() && 
                           viewMonth.getFullYear() === today.getFullYear()
           
-          // Determine colors and styles matching the legend
+          // Determine colors and styles
           let bgColor = 'background.paper'
           let borderColor = 'divider'
           let dayColor = 'text.primary'
@@ -5696,13 +5697,13 @@ function App() {
               // Cyan for Training
               bgColor = '#00BCD4'
               dayColor = 'white'
-            } else if (isReserve) {
-              // Orange for Reserve
+            } else if (isReserve || isFLX) {
+              // Light Orange for Reserve/FLX
               bgColor = '#FF9800'
               dayColor = 'white'
             } else {
-              // Blue for Flights
-              bgColor = '#5C6BC0'
+              // Light Green for Flights
+              bgColor = '#4CAF50'
               dayColor = 'white'
             }
           }
@@ -5749,7 +5750,8 @@ function App() {
                     fontWeight: 500
                   }}
                 >
-                  {(isTraining || isReserve) ? dutyType : 
+                  {(isReserve || isFLX) ? (dutyType || 'RSV') :
+                   isTraining ? dutyType : 
                    hasArrivalFlights && !hasDepartureFlights ? `${daySchedule.length} arrival${daySchedule.length > 1 ? 's' : ''}` :
                    `${daySchedule.length} flight${daySchedule.length > 1 ? 's' : ''}`}
                 </Typography>
@@ -5824,6 +5826,22 @@ function App() {
           ))}
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>{calendar}</Box>
+        
+        {/* Color Legend */}
+        <Box sx={{ mt: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ width: 20, height: 20, bgcolor: '#4CAF50', borderRadius: 1 }} />
+            <Typography variant="caption">Flight</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ width: 20, height: 20, bgcolor: '#FF9800', borderRadius: 1 }} />
+            <Typography variant="caption">Reserve/FLX</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ width: 20, height: 20, bgcolor: '#00BCD4', borderRadius: 1 }} />
+            <Typography variant="caption">Training</Typography>
+          </Box>
+        </Box>
       </Box>
     )
   }
