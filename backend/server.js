@@ -496,37 +496,102 @@ app.post('/api/authenticate', async (req, res) => {
         
         // Login to crew portal
         console.log('🔐 Logging in to crew portal...');
-        await page.goto('https://crew.abxair.com', { waitUntil: 'networkidle2', timeout: 30000 });
+        
+        // Determine portal URL based on airline
+        const portalUrl = airline?.toLowerCase() === 'ati' 
+            ? 'https://crew.atitransport.com' 
+            : 'https://crew.abxair.com';
+        console.log('🌐 Portal URL:', portalUrl);
+        
+        await page.goto(portalUrl, { waitUntil: 'networkidle2', timeout: 30000 });
         
         // Wait for page to load and check what we got
         const currentUrl = page.url();
         console.log('📍 Current URL after goto:', currentUrl);
         
-        // Check if we're on the SSO/Keycloak login page
-        const hasUsernameField = await page.$('#username');
-        const hasKcForm = await page.$('#kc-form-login');
-        console.log('🔍 Has #username:', !!hasUsernameField, '| Has #kc-form-login:', !!hasKcForm);
+        // Capture page HTML for debugging
+        const pageHtml = await page.content();
+        console.log('📄 Page HTML snippet (first 1000 chars):', pageHtml.substring(0, 1000));
         
-        if (!hasUsernameField) {
-            // Try waiting a bit longer and check for any login form
-            console.log('⏳ Waiting for login form to appear...');
-            await sleep(3000);
+        // Look for any form or input elements
+        const formInfo = await page.evaluate(() => {
+            const forms = document.querySelectorAll('form');
+            const inputs = document.querySelectorAll('input');
+            const buttons = document.querySelectorAll('button');
             
-            // Try alternative selectors
-            const loginSelectors = ['#username', 'input[name="username"]', 'input[type="text"]', '#kc-form-login input'];
-            for (const sel of loginSelectors) {
-                const el = await page.$(sel);
-                if (el) {
-                    console.log('✅ Found login element with selector:', sel);
+            return {
+                formCount: forms.length,
+                formIds: Array.from(forms).map(f => f.id || f.className || 'no-id'),
+                inputCount: inputs.length,
+                inputDetails: Array.from(inputs).slice(0, 5).map(i => ({
+                    id: i.id,
+                    name: i.name,
+                    type: i.type,
+                    class: i.className
+                })),
+                buttonCount: buttons.length,
+                buttonTexts: Array.from(buttons).slice(0, 3).map(b => b.textContent?.trim())
+            };
+        });
+        console.log('🔍 Form info:', JSON.stringify(formInfo, null, 2));
+        
+        // Try multiple selectors for username field
+        const usernameSelectors = [
+            '#username',
+            'input[name="username"]',
+            'input[name="user"]',
+            'input[type="text"]',
+            'input[type="email"]',
+            '#kc-form-login input[name="username"]',
+            'input[autocomplete="username"]',
+            'input:first-of-type'
+        ];
+        
+        let usernameField = null;
+        for (const sel of usernameSelectors) {
+            usernameField = await page.$(sel);
+            if (usernameField) {
+                console.log('✅ Found username field with selector:', sel);
+                break;
+            }
+        }
+        
+        if (!usernameField) {
+            // Wait and try again
+            console.log('⏳ Waiting 5s for login form to appear...');
+            await sleep(5000);
+            
+            for (const sel of usernameSelectors) {
+                usernameField = await page.$(sel);
+                if (usernameField) {
+                    console.log('✅ Found username field with selector:', sel);
                     break;
                 }
             }
         }
         
-        await page.waitForSelector('#username', { timeout: 15000 });
-        await page.type('#username', employeeId);
-        await page.type('#password', password);
-        await page.click('button[type="submit"]');
+        if (!usernameField) {
+            throw new Error('Could not find username input field on login page');
+        }
+        
+        // Type credentials
+        await usernameField.type(employeeId);
+        
+        // Find password field
+        const passwordField = await page.$('#password') || await page.$('input[type="password"]') || await page.$('input[name="password"]');
+        if (passwordField) {
+            await passwordField.type(password);
+        } else {
+            throw new Error('Could not find password input field');
+        }
+        
+        // Find and click submit button
+        const submitBtn = await page.$('button[type="submit"]') || await page.$('input[type="submit"]') || await page.$('#kc-login');
+        if (submitBtn) {
+            await submitBtn.click();
+        } else {
+            throw new Error('Could not find submit button');
+        }
         
         await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
         console.log('✅ Logged in successfully');
