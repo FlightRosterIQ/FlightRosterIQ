@@ -20,6 +20,25 @@ const CREW_PORTALS = {
 };
 
 /* ============================
+   RESOLVE PORTAL URL (Normalize airline)
+============================ */
+function resolvePortalUrl(airline) {
+  if (!airline) return null;
+
+  const key = airline.toUpperCase();
+
+  if (key.includes('ABX')) {
+    return CREW_PORTALS.ABX;
+  }
+
+  if (key.includes('ATI')) {
+    return CREW_PORTALS.ATI;
+  }
+
+  return null;
+}
+
+/* ============================
    SIMPLE IN-MEMORY CACHE
    (Swap with Redis later)
 ============================ */
@@ -80,15 +99,34 @@ async function scrapeMonthlyRoster({ employeeId, password, airline, month, year 
   });
 
   /* ============================
-     LOGIN
+     LOGIN (with airline guard)
   ============================ */
-  await page.goto(CREW_PORTALS[airline], { waitUntil: 'networkidle2' });
+  const portalUrl = resolvePortalUrl(airline);
+
+  if (!portalUrl) {
+    await browser.close();
+    throw new Error(`Invalid airline provided: "${airline}"`);
+  }
+
+  console.log(`🌐 Navigating to: ${portalUrl}`);
+  await page.goto(portalUrl, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000
+  });
+
+  // Wait for React to boot
+  await page.waitForTimeout(3000);
+
+  // Wait for login form
+  await page.waitForSelector('#username', { timeout: 15000 });
+  console.log('✅ Login form found');
 
   await page.type('#username', employeeId);
   await page.type('#password', password);
   await page.click('button[type="submit"]');
 
-  await page.waitForNavigation({ waitUntil: 'networkidle2' });
+  await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+  console.log('✅ Logged in successfully');
 
   /* ============================
      MONTH NAVIGATION
