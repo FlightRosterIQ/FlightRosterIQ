@@ -1,6 +1,6 @@
 {
-  "version": "1.0.4",
-  "buildDate": "2025-12-26T22:30:00Z",
+  "version": "1.0.5",
+  "buildDate": "2025-12-26T23:30:00Z",
   "features": [
     "✅ Real crew portal authentication enabled",
     "📅 Automatic schedule scraping with Puppeteer",

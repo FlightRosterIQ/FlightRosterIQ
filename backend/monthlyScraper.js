@@ -216,118 +216,217 @@ async function navigateToMonth(page, targetMonth, targetYear) {
 
   console.log(`=[LOG] Current: ${currentYear}-${currentMonth}, Target: ${targetYear}-${targetMonth}, Diff: ${diff} months`);
 
-  if (diff === 0) {
-    console.log('G�� Already on target month');
-    return;
-  }
+  // Navigate by clicking arrows multiple times to get to the start of the target month
+  // We need to navigate far enough to ensure the start of the month is visible
+  
+  // First, navigate to the target month
+  if (diff !== 0) {
+    const direction = diff > 0 ? 'next' : 'prev';
+    // Navigate extra clicks to ensure we're at the START of the month, not just any part of it
+    const daysToFirstOfMonth = new Date().getDate() - 1; // days from 1st of current month
+    const extraClicks = Math.ceil(daysToFirstOfMonth / 7); // roughly one week per click
+    const baseClicks = Math.abs(diff) * 4; // ~4 clicks per month (assuming weekly view)
+    const clicks = baseClicks + (diff < 0 ? extraClicks : 0);
 
-  // Find navigation arrows - to the right of "today"
-  const direction = diff > 0 ? 'next' : 'prev';
-  const clicks = Math.abs(diff);
+    console.log(`=[LOG] Clicking ${direction} arrow ${clicks} time(s) to reach start of ${targetYear}-${targetMonth}...`);
 
-  console.log(`=[LOG] Clicking ${direction} arrow ${clicks} time(s)...`);
+    for (let i = 0; i < clicks; i++) {
+      const clicked = await page.evaluate((dir) => {
+        // Look for arrows near "today" text
+        const todayElement = Array.from(document.querySelectorAll('*')).find(el => 
+          el.innerText?.trim()?.toLowerCase() === 'today'
+        );
 
-  for (let i = 0; i < clicks; i++) {
-    const clicked = await page.evaluate((dir) => {
-      // Look for arrows near "today" text
-      const todayElement = Array.from(document.querySelectorAll('*')).find(el => 
-        el.innerText?.trim()?.toLowerCase() === 'today'
-      );
-
-      if (todayElement) {
-        // Look for arrow buttons in the same row/parent
-        const parent = todayElement.closest('[class*="header"], [class*="nav"], [class*="toolbar"], [class*="row"]') || todayElement.parentElement?.parentElement;
-        
-        if (parent) {
-          // Only get actual clickable buttons, not SVG or icon elements
-          const buttons = parent.querySelectorAll('button, [role="button"]');
-          const buttonArray = Array.from(buttons).filter(btn => 
-            typeof btn.click === 'function' && btn.tagName !== 'SVG'
-          );
+        if (todayElement) {
+          // Look for arrow buttons in the same row/parent
+          const parent = todayElement.closest('[class*="header"], [class*="nav"], [class*="toolbar"], [class*="row"]') || todayElement.parentElement?.parentElement;
           
-          // prev is usually first/left, next is usually last/right
-          if (dir === 'prev' && buttonArray.length > 0) {
-            buttonArray[0].click();
-            return 'Clicked first button (prev)';
-          } else if (dir === 'next' && buttonArray.length > 1) {
-            buttonArray[buttonArray.length - 1].click();
-            return 'Clicked last button (next)';
-          } else if (dir === 'next' && buttonArray.length === 1) {
-            // If there's only one button, try to find more by looking wider
-            const widerParent = parent.parentElement;
-            if (widerParent) {
-              const widerButtons = widerParent.querySelectorAll('button, [role="button"]');
-              const widerArray = Array.from(widerButtons).filter(btn => typeof btn.click === 'function');
-              if (widerArray.length > 1) {
-                widerArray[widerArray.length - 1].click();
-                return 'Clicked last button from wider parent (next)';
+          if (parent) {
+            // Only get actual clickable buttons, not SVG or icon elements
+            const buttons = parent.querySelectorAll('button, [role="button"]');
+            const buttonArray = Array.from(buttons).filter(btn => 
+              typeof btn.click === 'function' && btn.tagName !== 'SVG'
+            );
+            
+            // prev is usually first/left, next is usually last/right
+            if (dir === 'prev' && buttonArray.length > 0) {
+              buttonArray[0].click();
+              return 'Clicked first button (prev)';
+            } else if (dir === 'next' && buttonArray.length > 1) {
+              buttonArray[buttonArray.length - 1].click();
+              return 'Clicked last button (next)';
+            } else if (dir === 'next' && buttonArray.length === 1) {
+              // If there's only one button, try to find more by looking wider
+              const widerParent = parent.parentElement;
+              if (widerParent) {
+                const widerButtons = widerParent.querySelectorAll('button, [role="button"]');
+                const widerArray = Array.from(widerButtons).filter(btn => typeof btn.click === 'function');
+                if (widerArray.length > 1) {
+                  widerArray[widerArray.length - 1].click();
+                  return 'Clicked last button from wider parent (next)';
+                }
               }
             }
           }
         }
-      }
 
-      // Fallback: look for any prev/next buttons
-      const selectors = dir === 'next' 
-        ? ['[class*="next"]', '[aria-label*="next"]', '[class*="forward"]', '[class*="right-arrow"]', 'button[class*="Right"]']
-        : ['[class*="prev"]', '[aria-label*="prev"]', '[class*="back"]', '[class*="left-arrow"]', 'button[class*="Left"]'];
+        // Fallback: look for any prev/next buttons
+        const selectors = dir === 'next' 
+          ? ['[class*="next"]', '[aria-label*="next"]', '[class*="forward"]', '[class*="right-arrow"]', 'button[class*="Right"]']
+          : ['[class*="prev"]', '[aria-label*="prev"]', '[class*="back"]', '[class*="left-arrow"]', 'button[class*="Left"]'];
 
-      for (const sel of selectors) {
-        const btn = document.querySelector(sel);
-        if (btn && typeof btn.click === 'function') {
-          btn.click();
-          return `Clicked ${sel}`;
-        }
-      }
-
-      // Last resort: find buttons with arrow icons
-      const allButtons = document.querySelectorAll('button');
-      const navButtons = [];
-      for (const btn of allButtons) {
-        const svg = btn.querySelector('svg');
-        if (svg) {
-          // Check if it's likely a nav button (small, near top)
-          const rect = btn.getBoundingClientRect();
-          if (rect.top < 200 && rect.width < 100) {
-            navButtons.push({ btn, left: rect.left });
+        for (const sel of selectors) {
+          const btn = document.querySelector(sel);
+          if (btn && typeof btn.click === 'function') {
+            btn.click();
+            return `Clicked ${sel}`;
           }
         }
-      }
-      
-      // Sort by position and pick appropriate one
-      if (navButtons.length >= 2) {
-        navButtons.sort((a, b) => a.left - b.left);
-        if (dir === 'prev') {
-          navButtons[0].btn.click();
-          return 'Clicked leftmost nav button (prev)';
-        } else {
-          navButtons[navButtons.length - 1].btn.click();
-          return 'Clicked rightmost nav button (next)';
+
+        // Last resort: find buttons with arrow icons
+        const allButtons = document.querySelectorAll('button');
+        const navButtons = [];
+        for (const btn of allButtons) {
+          const svg = btn.querySelector('svg');
+          if (svg) {
+            // Check if it's likely a nav button (small, near top)
+            const rect = btn.getBoundingClientRect();
+            if (rect.top < 200 && rect.width < 100) {
+              navButtons.push({ btn, left: rect.left });
+            }
+          }
         }
-      } else if (navButtons.length === 1) {
-        navButtons[0].btn.click();
-        return 'Clicked only nav button found';
+        
+        // Sort by position and pick appropriate one
+        if (navButtons.length >= 2) {
+          navButtons.sort((a, b) => a.left - b.left);
+          if (dir === 'prev') {
+            navButtons[0].btn.click();
+            return 'Clicked leftmost nav button (prev)';
+          } else {
+            navButtons[navButtons.length - 1].btn.click();
+            return 'Clicked rightmost nav button (next)';
+          }
+        } else if (navButtons.length === 1) {
+          navButtons[0].btn.click();
+          return 'Clicked only nav button found';
+        }
+
+        return null;
+      }, direction);
+
+      if (i % 5 === 0) {
+        console.log(`  Click ${i + 1}/${clicks}: ${clicked || 'No button found'}`);
       }
-
-      return null;
-    }, direction);
-
-    console.log(`  Click ${i + 1}: ${clicked || 'No button found'}`);
-    await page.waitForTimeout(1500);
-    
-    if (!clicked) {
-      console.warn(`G��n+� Could not find navigation button for click ${i + 1}, stopping navigation`);
-      break;
+      await page.waitForTimeout(800); // Faster navigation
+      
+      if (!clicked) {
+        console.warn(`⚠️ Could not find navigation button for click ${i + 1}, stopping navigation`);
+        break;
+      }
     }
   }
 
-  console.log('G�� Month navigation complete');
+  // After navigating, scroll horizontally to ensure all days of the month are loaded
+  console.log('=[LOG] Scrolling to load full month view...');
+  await page.evaluate(async (targetYear, targetMonth) => {
+    // Find the scrollable timeline container
+    const scrollContainers = document.querySelectorAll('[class*="scroll"], [class*="gantt"], [class*="timeline"], [class*="roster"]');
+    
+    let container = null;
+    for (const c of scrollContainers) {
+      if (c.scrollWidth > c.clientWidth + 100) { // Has significant horizontal scroll
+        container = c;
+        break;
+      }
+    }
+    
+    if (container) {
+      console.log(`[SCROLL] Found scrollable container, width: ${container.scrollWidth}, scrolling to load all days...`);
+      
+      // Scroll all the way to the left first (start of visible range)
+      container.scrollLeft = 0;
+      await new Promise(r => setTimeout(r, 500));
+      
+      // Then scroll in chunks to the right to load all content
+      const scrollStep = 300;
+      let currentScroll = 0;
+      while (currentScroll < container.scrollWidth) {
+        container.scrollLeft = currentScroll;
+        currentScroll += scrollStep;
+        await new Promise(r => setTimeout(r, 150));
+      }
+      
+      // Scroll back to beginning for consistent scraping
+      container.scrollLeft = 0;
+    }
+  }, targetYear, targetMonth);
+  
+  await page.waitForTimeout(1000);
+  console.log('✓ Month navigation complete');
 }
 
 /* ===== DAY SCRAPING ===== */
 
 async function scrapeDayByDay(page, targetYear, targetMonth) {
   console.log('=[LOG] Scraping duty rows from page...');
+  
+  // Step 0: Scroll horizontally to load all days (virtual scrolling workaround)
+  console.log('=[LOG] Scrolling to load all days of the month...');
+  const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+  console.log(`=[LOG] Target month has ${daysInMonth} days`);
+  
+  // Find the scrollable container and scroll to load all content
+  await page.evaluate(async (daysInMonth) => {
+    // Try to find the main scrollable container (usually the gantt/timeline area)
+    const scrollContainers = document.querySelectorAll('[class*="scroll"], [class*="gantt"], [class*="timeline"], [class*="roster"], [style*="overflow"]');
+    
+    // Also check for the main content area
+    const mainContent = document.querySelector('main, [class*="content"], [class*="main"]');
+    
+    let container = null;
+    for (const c of scrollContainers) {
+      if (c.scrollWidth > c.clientWidth) {
+        container = c;
+        break;
+      }
+    }
+    
+    if (!container && mainContent && mainContent.scrollWidth > mainContent.clientWidth) {
+      container = mainContent;
+    }
+    
+    // If no horizontal scrollable container found, try the body/window
+    if (!container) {
+      container = document.scrollingElement || document.documentElement;
+    }
+    
+    console.log(`[SCROLL] Found container: ${container?.tagName || 'none'}, scrollWidth: ${container?.scrollWidth || 0}, clientWidth: ${container?.clientWidth || 0}`);
+    
+    if (container) {
+      // Scroll in increments to trigger lazy loading
+      const scrollIncrement = 500;
+      const maxScroll = container.scrollWidth;
+      let currentScroll = 0;
+      
+      while (currentScroll < maxScroll) {
+        container.scrollLeft = currentScroll;
+        currentScroll += scrollIncrement;
+        await new Promise(r => setTimeout(r, 200)); // Wait for content to load
+      }
+      
+      // Scroll back to beginning
+      container.scrollLeft = 0;
+      console.log(`[SCROLL] Scrolled to max ${maxScroll}px and back`);
+    }
+    
+    // Also scroll the window to ensure all content is loaded
+    window.scrollTo(0, document.body.scrollHeight);
+    await new Promise(r => setTimeout(r, 500));
+    window.scrollTo(0, 0);
+  }, daysInMonth);
+  
+  await page.waitForTimeout(2000); // Wait for any lazy-loaded content
   
   // Step 1: Expand all pairings by clicking toggle-sublist-button on PAR type events
   console.log('=[LOG] Expanding all pairings to show sub-events...');

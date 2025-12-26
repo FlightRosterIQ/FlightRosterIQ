@@ -32,6 +32,7 @@ app.post('/api/authenticate', async (req, res) => {
   try {
     browser = await puppeteer.launch({
       headless: 'new',
+      protocolTimeout: 180000, // 3 minutes timeout for long-running operations
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 

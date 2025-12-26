@@ -80,7 +80,7 @@ import {
 } from '@mui/icons-material'
 
 // App Version - Update this with each build
-const APP_VERSION = '1.0.4';
+const APP_VERSION = '1.0.5';
 
 // API_BASE_URL and apiCall are now imported from config.js
 
@@ -369,6 +369,8 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [oldVersion, setOldVersion] = useState('')
+  const [updateDismissed, setUpdateDismissed] = useState(false)
+  const [availableVersion, setAvailableVersion] = useState('')
   const [selectedFlight, setSelectedFlight] = useState(null)
   const [flightDetailTab, setFlightDetailTab] = useState('flight') // 'flight', 'weather', 'crew'
   const [contactMenuOpen, setContactMenuOpen] = useState(null)
@@ -465,7 +467,14 @@ function App() {
           if (data.version && data.version !== APP_VERSION) {
             console.log(`🔄 New version available: ${data.version} (current: ${APP_VERSION})`)
             setOldVersion(APP_VERSION)
-            setShowUpdateModal(true)
+            setAvailableVersion(data.version)
+            // Only show modal if not previously dismissed for this version
+            const dismissedVersion = await localforage.getItem('dismissedUpdateVersion')
+            if (dismissedVersion !== data.version) {
+              setShowUpdateModal(true)
+            } else {
+              setUpdateDismissed(true)
+            }
           }
         }
       } catch (error) {
@@ -5706,6 +5715,40 @@ function App() {
           </Box>
         )}
 
+        {/* Update Available Section - shown when update was dismissed */}
+        {(updateDismissed || availableVersion) && availableVersion !== APP_VERSION && (
+          <Card elevation={2} sx={{ mb: 3, borderRadius: 3, border: 2, borderColor: 'primary.main' }}>
+            <CardContent>
+              <Stack spacing={2}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Box sx={{ fontSize: 28 }}>🎉</Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle1" fontWeight="bold" color="primary">
+                      Update Available!
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Version {availableVersion} is ready to install (current: {APP_VERSION})
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Button 
+                  variant="contained" 
+                  fullWidth
+                  onClick={handleUpdateApp}
+                  sx={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #5568d3 0%, #6b4193 100%)',
+                    }
+                  }}
+                >
+                  Update Now
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+
         <Box className="settings-footer" sx={{ mt: 4, pt: 3, borderTop: 1, borderColor: 'divider' }}>
           <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
             Made with ❤️ for airline crew members
@@ -8073,9 +8116,24 @@ function App() {
           open={showUpdateModal}
           maxWidth="xs"
           fullWidth
-          disableEscapeKeyDown
+          onClose={async () => {
+            setShowUpdateModal(false)
+            setUpdateDismissed(true)
+            await localforage.setItem('dismissedUpdateVersion', availableVersion || APP_VERSION)
+          }}
         >
-          <Card sx={{ maxWidth: 400, margin: 'auto', mt: 10 }}>
+          <Card sx={{ maxWidth: 400, margin: 'auto', mt: 10, position: 'relative' }}>
+            {/* Close button */}
+            <IconButton
+              onClick={async () => {
+                setShowUpdateModal(false)
+                setUpdateDismissed(true)
+                await localforage.setItem('dismissedUpdateVersion', availableVersion || APP_VERSION)
+              }}
+              sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}
+            >
+              <CloseIcon />
+            </IconButton>
             <CardContent>
               <Box sx={{ textAlign: 'center', mb: 3 }}>
                 <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: 'primary.main' }}>
