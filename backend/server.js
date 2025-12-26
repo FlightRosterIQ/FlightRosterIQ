@@ -498,7 +498,32 @@ app.post('/api/authenticate', async (req, res) => {
         console.log('🔐 Logging in to crew portal...');
         await page.goto('https://crew.abxair.com', { waitUntil: 'networkidle2', timeout: 30000 });
         
-        await page.waitForSelector('#username', { timeout: 10000 });
+        // Wait for page to load and check what we got
+        const currentUrl = page.url();
+        console.log('📍 Current URL after goto:', currentUrl);
+        
+        // Check if we're on the SSO/Keycloak login page
+        const hasUsernameField = await page.$('#username');
+        const hasKcForm = await page.$('#kc-form-login');
+        console.log('🔍 Has #username:', !!hasUsernameField, '| Has #kc-form-login:', !!hasKcForm);
+        
+        if (!hasUsernameField) {
+            // Try waiting a bit longer and check for any login form
+            console.log('⏳ Waiting for login form to appear...');
+            await sleep(3000);
+            
+            // Try alternative selectors
+            const loginSelectors = ['#username', 'input[name="username"]', 'input[type="text"]', '#kc-form-login input'];
+            for (const sel of loginSelectors) {
+                const el = await page.$(sel);
+                if (el) {
+                    console.log('✅ Found login element with selector:', sel);
+                    break;
+                }
+            }
+        }
+        
+        await page.waitForSelector('#username', { timeout: 15000 });
         await page.type('#username', employeeId);
         await page.type('#password', password);
         await page.click('button[type="submit"]');
@@ -527,7 +552,32 @@ app.post('/api/authenticate', async (req, res) => {
     } catch (error) {
         console.error('❌ CREW PORTAL CONNECTION ERROR:', error.message);
         
+        // Try to capture debug info
         if (browser) {
+            try {
+                const pages = await browser.pages();
+                if (pages.length > 0) {
+                    const currentPage = pages[pages.length - 1];
+                    const url = currentPage.url();
+                    console.log('📍 Error occurred at URL:', url);
+                    
+                    // Take screenshot for debugging
+                    const fs = require('fs');
+                    const path = require('path');
+                    const debugDir = path.join(__dirname, 'debug');
+                    if (!fs.existsSync(debugDir)) {
+                        fs.mkdirSync(debugDir, { recursive: true });
+                    }
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    await currentPage.screenshot({ 
+                        path: path.join(debugDir, `error-${timestamp}.png`),
+                        fullPage: true 
+                    });
+                    console.log('📸 Error screenshot saved');
+                }
+            } catch (debugErr) {
+                console.log('⚠️ Could not capture debug info:', debugErr.message);
+            }
             await browser.close();
         }
         
