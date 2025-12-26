@@ -507,7 +507,7 @@ function App() {
         }, (progressiveFlights) => {
           // Progressive update
           if (progressiveFlights && progressiveFlights.length > 0) {
-            setSchedule({ flights: progressiveFlights, hotelsByDate: {} })
+            setSchedule({ flights: progressiveFlights, hotelsByDate: buildHotelsByDate(progressiveFlights) })
           }
         }, existingBgFlights)
         
@@ -518,7 +518,7 @@ function App() {
         if (flights && flights.length > 0) {
           const refreshedSchedule = {
             flights,
-            hotelsByDate: {}
+            hotelsByDate: buildHotelsByDate(flights)
           }
           setSchedule(refreshedSchedule)
           await localforage.setItem('schedule', refreshedSchedule)
@@ -753,6 +753,37 @@ function App() {
   }, [token, trialStartDate, subscriptionStatus, subscriptionExpiry, userType])
 
   // Calculate next duty report time (when pilot needs to check in for duty)
+  
+  // Helper function to build hotelsByDate from flights array
+  const buildHotelsByDate = (flights) => {
+    const hotelsByDate = {}
+    if (!flights || !Array.isArray(flights)) return hotelsByDate
+    
+    flights.forEach(flight => {
+      if (flight.hotels && flight.hotels.length > 0) {
+        const date = flight.date
+        if (!hotelsByDate[date]) {
+          hotelsByDate[date] = []
+        }
+        flight.hotels.forEach(hotel => {
+          // Avoid duplicates
+          const exists = hotelsByDate[date].some(h => h.name === hotel.name)
+          if (!exists) {
+            hotelsByDate[date].push({
+              name: hotel.name || 'Unknown Hotel',
+              phone: hotel.phone || null,
+              address: hotel.address || null,
+              location: hotel.address || hotel.location || flight.destination || ''
+            })
+          }
+        })
+      }
+    })
+    
+    console.log('🏨 Built hotelsByDate:', Object.keys(hotelsByDate).length, 'dates with hotels')
+    return hotelsByDate
+  }
+  
   useEffect(() => {
     if (!schedule?.flights || schedule.flights.length === 0) {
       setNextDutyCheckIn(null)
@@ -1282,7 +1313,7 @@ function App() {
               console.log(`📤 [LOGIN] Progressive update: ${flights.length} flights`)
               const progressiveSchedule = {
                 flights,
-                hotelsByDate: {}
+                hotelsByDate: buildHotelsByDate(flights)
               }
               setSchedule(progressiveSchedule)
             }
@@ -1320,7 +1351,7 @@ function App() {
           // Backend returns flights directly, no transformation needed
           const transformedSchedule = {
             flights,
-            hotelsByDate: {}
+            hotelsByDate: buildHotelsByDate(flights)
           }
           
           console.log('✅ [LOGIN] Schedule ready with', flights.length, 'flights')
@@ -1423,7 +1454,7 @@ function App() {
           
           const transformedSchedule = {
             flights,
-            hotelsByDate: {}
+            hotelsByDate: buildHotelsByDate(flights)
           }
           
           setSchedule(transformedSchedule)
@@ -3003,7 +3034,7 @@ function App() {
       }, (progressiveFlights) => {
         // Progressive update - show flights as they come in
         if (progressiveFlights && progressiveFlights.length > 0) {
-          setSchedule({ flights: progressiveFlights, hotelsByDate: {} })
+          setSchedule({ flights: progressiveFlights, hotelsByDate: buildHotelsByDate(progressiveFlights) })
         }
       }, existingFlights)
       
@@ -3036,10 +3067,10 @@ function App() {
         return
       }
       
-      // Backend returns flights directly
+      // Backend returns flights directly - build hotelsByDate from flights
       const refreshedSchedule = {
         flights,
-        hotelsByDate: {}
+        hotelsByDate: buildHotelsByDate(flights)
       }
       
       console.log('✅ Schedule refreshed:', flights.length, 'flights')
