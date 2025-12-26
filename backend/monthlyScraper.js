@@ -14,6 +14,8 @@
    10. At bottom: click "NEWS" tab → scrape each entry
 ============================ */
 
+import fs from 'fs';
+
 export async function scrapeMonthlyRoster(page, targetMonth, targetYear) {
   console.log(`📅 Scraping ${targetYear}-${targetMonth}`);
 
@@ -76,6 +78,16 @@ export async function scrapeMonthlyRoster(page, targetMonth, targetYear) {
     await navigateToMonth(page, targetMonth, targetYear);
   } catch (navErr) {
     console.warn('⚠️ Month navigation failed, continuing with current view:', navErr.message);
+  }
+
+  // 📄 DEBUG: Save full HTML snapshot for analysis
+  try {
+    const html = await page.content();
+    const filename = `/tmp/netline-${targetYear}-${targetMonth}-${Date.now()}.html`;
+    fs.writeFileSync(filename, html);
+    console.log(`📄 DOM snapshot saved: ${filename}`);
+  } catch (snapshotErr) {
+    console.warn('⚠️ Could not save HTML snapshot:', snapshotErr.message);
   }
 
   // Step 4: Scrape all days
