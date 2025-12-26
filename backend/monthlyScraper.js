@@ -245,92 +245,117 @@ async function navigateToMonth(page, targetMonth, targetYear) {
 /* ===== DAY SCRAPING ===== */
 
 async function scrapeDayByDay(page) {
-  const allDuties = [];
-
-  // Find day cells
-  const daySelectors = [
-    '[class*="day-cell"]',
-    '[class*="DayCell"]', 
-    '[class*="calendar-day"]',
-    '[class*="gantt-day"]',
-    '[class*="slot"]',
-    'td[class*="day"]',
-    '[role="gridcell"]',
-    '[data-day]',
-    '[data-date]'
-  ];
-
-  let usedSelector = '';
-  let dayCount = 0;
-
-  for (const selector of daySelectors) {
-    const count = await page.$$eval(selector, els => els.length);
-    if (count > 0) {
-      console.log(`✅ Found ${count} day cells with: ${selector}`);
-      usedSelector = selector;
-      dayCount = count;
-      break;
-    }
-  }
-
-  if (dayCount === 0) {
-    console.log('⚠️ No day cells found, trying visible text scrape...');
-    return await scrapeVisibleContent(page);
-  }
-
-  // Click each day
-  const daysToProcess = Math.min(dayCount, 31);
-  console.log(`📆 Processing ${daysToProcess} days...`);
-
-  for (let dayIndex = 0; dayIndex < daysToProcess; dayIndex++) {
-    try {
-      // Get current day cells (DOM may have changed)
-      const dayCells = await page.$$(usedSelector);
-      if (dayIndex >= dayCells.length) break;
-
-      const dayCell = dayCells[dayIndex];
-      console.log(`📅 Day ${dayIndex + 1}/${daysToProcess}`);
-
-      // Click on day - keep clicking to get all flights
-      let clickCount = 0;
-      let lastFlightCount = 0;
-      let noNewFlightsCount = 0;
-
-      while (noNewFlightsCount < 2 && clickCount < 5) {
-        await dayCell.click();
-        await page.waitForTimeout(800);
-        clickCount++;
-
-        // Get flights from current view
-        const flights = await getFlightsFromView(page);
+  console.log('📋 Scraping duty rows from page...');
+  
+  // NetLine uses data-test-id="duty-row" for each duty entry
+  const duties = await page.evaluate(() => {
+    const results = [];
+    
+    // Find all duty rows
+    const dutyRows = document.querySelectorAll('[data-test-id="duty-row"]');
+    console.log(`Found ${dutyRows.length} duty rows`);
+    
+    dutyRows.forEach((row, index) => {
+      try {
+        // Get the event type (PAR = pairing/flight, OTHER = sick/vacation, etc)
+        const eventTypeEl = row.querySelector('[data-event-type]');
+        const eventType = eventTypeEl?.getAttribute('data-event-type') || 'UNKNOWN';
         
-        if (flights.length === lastFlightCount) {
-          noNewFlightsCount++;
-        } else {
-          noNewFlightsCount = 0;
-          lastFlightCount = flights.length;
+        // Get the icon text (shows duty type like "OTHER" or has flight icon)
+        const iconEl = row.querySelector('[data-test-id="duty-row-icon"]');
+        const iconText = iconEl?.innerText?.trim() || '';
+        
+        // Get the details section
+        const detailsEl = row.querySelector('[data-test-id="duty-row-details"]');
+        if (!detailsEl) return;
+        
+        // First line is usually the title/flight number
+        const titleEl = detailsEl.querySelector('.IADP-jss155');
+        const title = titleEl?.innerText?.trim() || '';
+        
+        // Get all the date/time spans
+        const timeSpans = detailsEl.querySelectorAll('.IADP-jss158');
+        let startLocation = '', startDate = '', startTime = '';
+        let endLocation = '', endDate = '', endTime = '';
+        
+        if (timeSpans.length >= 1) {
+          const spans1 = timeSpans[0].querySelectorAll('span');
+          startLocation = spans1[0]?.innerText?.trim() || '';
+          startDate = spans1[1]?.innerText?.trim() || '';
+          startTime = spans1[2]?.innerText?.trim() || '';
         }
-
-        // Process new flights
-        for (const flight of flights) {
-          if (!allDuties.some(d => d.flightNumber === flight.flightNumber && d.date === flight.date)) {
-            // Get full details by clicking on flight
-            const details = await getFlightDetails(page, flight);
-            allDuties.push({ ...flight, ...details });
-          }
+        
+        if (timeSpans.length >= 2) {
+          const spans2 = timeSpans[1].querySelectorAll('span');
+          endLocation = spans2[0]?.innerText?.trim() || '';
+          endDate = spans2[1]?.innerText?.trim() || '';
+          endTime = spans2[2]?.innerText?.trim() || '';
         }
+        
+        // Parse flight number from title (e.g., "C6208/06Dec    Rank: FO")
+        let flightNumber = '';
+        let rank = '';
+        const flightMatch = title.match(/([A-Z]\d{3,4})/);
+        if (flightMatch) {
+          flightNumber = flightMatch[1];
+        }
+        const rankMatch = title.match(/Rank:\s*(\w+)/);
+        if (rankMatch) {
+          rank = rankMatch[1];
+        }
+        
+        // Extract additional info lines
+        const allInfoLines = Array.from(detailsEl.querySelectorAll('.IADP-jss155')).map(el => el.innerText.trim());
+        const extraInfo = allInfoLines.slice(1).join(' | ');
+        
+        results.push({
+          type: eventType,
+          dutyType: iconText || eventType,
+          title: title,
+          flightNumber: flightNumber || title.split('/')[0] || title,
+          rank: rank,
+          from: startLocation,
+          fromDate: startDate,
+          fromTime: startTime,
+          to: endLocation,
+          toDate: endDate,
+          toTime: endTime,
+          extraInfo: extraInfo,
+          eventId: row.className.match(/event-id-(\d+)/)?.[1] || ''
+        });
+        
+      } catch (err) {
+        console.log(`Error parsing duty row ${index}:`, err.message);
       }
-
-      // Close any popup before next day
-      await closePopup(page);
-      await page.waitForTimeout(300);
-
-    } catch (err) {
-      console.log(`⚠️ Error on day ${dayIndex + 1}:`, err.message);
-    }
+    });
+    
+    return results;
+  });
+  
+  console.log(`✅ Scraped ${duties.length} duties from duty list`);
+  
+  // If we got duties from the duty list, return them
+  if (duties.length > 0) {
+    return duties.map(duty => ({
+      flightNumber: duty.flightNumber,
+      type: duty.type,
+      dutyType: duty.dutyType,
+      from: duty.from,
+      to: duty.to,
+      date: duty.fromDate,
+      departureTime: duty.fromTime,
+      arrivalTime: duty.toTime,
+      arrivalDate: duty.toDate,
+      rank: duty.rank,
+      title: duty.title,
+      extraInfo: duty.extraInfo,
+      eventId: duty.eventId
+    }));
   }
-
-  return allDuties;
+  
+  // Fallback to visible content scraping
+  console.log('⚠️ No duty rows found, trying visible text scrape...');
+  return await scrapeVisibleContent(page);
 }
 
 async function getFlightsFromView(page) {
