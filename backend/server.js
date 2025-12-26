@@ -1,119 +1,67 @@
 import express from 'express';
 import puppeteer from 'puppeteer';
 import cors from 'cors';
-import { scrapeRosterFromNetwork } from './networkRosterScraper.js';
+import { scrapeMonthlyRoster } from './monthlyScraper.js';
 
 const app = express();
 const PORT = 8081;
 
-/* ============================
-   BASIC APP SETUP
-============================ */
 app.use(cors());
 app.use(express.json());
 
-/* ============================
-   CREW PORTAL MAP
-============================ */
 const CREW_PORTALS = {
   ABX: 'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
   ATI: 'https://crew.airtransport.cc/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp'
 };
 
-/* ============================
-   AUTHENTICATE & SCRAPE
-============================ */
 app.post('/api/authenticate', async (req, res) => {
-  const { employeeId, password, airline } = req.body;
-
-  console.log(`🔐 Auth request: ${airline} pilot ${employeeId}`);
-
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-
-  const page = await browser.newPage();
+  const { employeeId, password, airline, month, year } = req.body;
 
   const portal =
     airline?.toUpperCase()?.includes('ATI')
       ? CREW_PORTALS.ATI
       : CREW_PORTALS.ABX;
 
-  console.log(`🌐 Portal: ${portal}`);
+  let browser;
 
   try {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+
+    console.log(`🔐 Logging in ${employeeId}`);
     await page.goto(portal, { waitUntil: 'networkidle2', timeout: 60000 });
 
-    // Wait for login form
-    await page.waitForSelector('#username', { timeout: 15000 });
-    console.log('✅ Login form found');
-
+    await page.waitForSelector('#username', { timeout: 20000 });
     await page.type('#username', employeeId);
     await page.type('#password', password);
 
-    // Submit form and wait for navigation together
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
-      page.evaluate(() => {
-        const form = document.querySelector('form');
-        if (form) form.submit();
-      })
+      page.evaluate(() => document.querySelector('form')?.submit())
     ]);
-    console.log('✅ Logged in successfully');
 
-    // Give React time to boot
-    await page.waitForTimeout(3000);
+    console.log('✅ Logged in');
 
-    // Try to activate roster / schedule view
-    await page.evaluate(() => {
-      const candidates = [
-        'Schedule',
-        'Roster',
-        'Pairings',
-        'Duties'
-      ];
-
-      for (const text of candidates) {
-        const el = [...document.querySelectorAll('button, a')]
-          .find(e => e.textContent?.includes(text));
-        if (el) {
-          console.log('Clicking:', text);
-          el.click();
-          return;
-        }
-      }
-    });
-
-    // Allow XHRs to fire
-    await page.waitForTimeout(5000);
-
-    // Scrape duties from network responses
-    const duties = await scrapeRosterFromNetwork(page);
-
-    console.log(`📊 Scraped ${duties.length} duties`);
+    const duties = await scrapeMonthlyRoster(page, month, year);
 
     res.json({
       success: true,
       duties,
-      summary: {
-        flights: duties.filter(d => d.type === 'FLIGHT').length,
-        reserve: duties.filter(d => d.type === 'RESERVE').length,
-        iadp: duties.filter(d => d.type === 'IADP').length
-      }
+      count: duties.length
     });
 
   } catch (err) {
-    console.error('❌ Scrape error:', err.message);
+    console.error('❌ Scraper error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    await browser.close();
+    if (browser) await browser.close();
   }
 });
 
-/* ============================
-   HEALTH CHECK
-============================ */
 app.get('/health', (_, res) => {
   res.json({ status: 'ok', port: PORT });
 });
@@ -122,9 +70,6 @@ app.get('/api/health', (_, res) => {
   res.json({ status: 'ok', port: PORT });
 });
 
-/* ============================
-   START SERVER
-============================ */
 app.listen(PORT, () => {
-  console.log(`🚀 Crew scraper running on port ${PORT}`);
+  console.log(`🚀 Puppeteer scraper running on port ${PORT}`);
 });
