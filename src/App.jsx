@@ -1773,19 +1773,21 @@ function App() {
       await localforage.removeItem('schedule')
       setSchedule(null)
       
-      // Trigger re-scrape
+      // Trigger re-scrape with correct parameter order
       if (scraperCredentials.username && scraperCredentials.password) {
         const result = await simpleScrape(
-          scraperCredentials.airline || 'abx',
           scraperCredentials.username,
           scraperCredentials.password,
-          [] // Empty array forces fresh scrape
+          scraperCredentials.airline || 'abx',
+          null, // onProgress callback
+          null, // onFlightsUpdate callback
+          [] // Empty existingFlights array forces fresh scrape of all months
         )
         
         if (result.flights) {
           setSchedule({ flights: result.flights, hotelsByDate: result.hotelsByDate || {} })
           await localforage.setItem('schedule', { flights: result.flights, hotelsByDate: result.hotelsByDate || {} })
-          console.log('✅ Schedule refreshed successfully')
+          console.log('✅ Schedule refreshed successfully with', result.flights.length, 'flights')
         }
       }
       
@@ -7060,8 +7062,7 @@ function App() {
               width: '100%',
               overflowX: 'auto',
               overflowY: 'hidden',
-              pl: 2,
-              pr: 1,
+              px: 0.5,
               scrollSnapType: 'x mandatory',
               borderBottomLeftRadius: '20px',
               borderBottomRightRadius: '20px',
