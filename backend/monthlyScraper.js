@@ -342,8 +342,37 @@ async function scrapeDayByDay(page) {
   await page.waitForTimeout(3000);
   
   // Step 5: Scrape all duty rows including sub-events (C_I = Check-in, flights, etc.)
-  const duties = await page.evaluate(() => {
+  const duties = await page.evaluate((targetYear, targetMonth) => {
     const results = [];
+    
+    // Helper: Convert "01Dec" or "26Nov" format to "YYYY-MM-DD" (in browser context)
+    const normalizeDate = (dateStr, targetYear, targetMonth) => {
+      if (!dateStr || typeof dateStr !== 'string') return dateStr;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+      
+      const monthMap = {
+        'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+        'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+      };
+      
+      const match = dateStr.match(/^(\d{1,2})([A-Za-z]{3})$/);
+      if (!match) return dateStr;
+      
+      const day = match[1].padStart(2, '0');
+      const monthAbbr = match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase();
+      const parsedMonth = monthMap[monthAbbr];
+      
+      if (!parsedMonth) return dateStr;
+      
+      let yearToUse = targetYear;
+      if (parsedMonth < targetMonth && targetMonth === 12) {
+        yearToUse = targetYear + 1;
+      } else if (parsedMonth > targetMonth && targetMonth === 1) {
+        yearToUse = targetYear - 1;
+      }
+      
+      return `${yearToUse}-${String(parsedMonth).padStart(2, '0')}-${day}`;
+    };
     
     // Find all duty rows (including sub-events after expansion)
     const dutyRows = document.querySelectorAll('[data-test-id="duty-row"]');
@@ -451,7 +480,7 @@ async function scrapeDayByDay(page) {
     });
     
     return results;
-  });
+  }, targetYear, targetMonth);
   
   console.log(`✅ Scraped ${duties.length} duties from duty list`);
   

@@ -3517,8 +3517,7 @@ function App() {
         <Tabs 
           value={friendsSubTab} 
           onChange={(e, newValue) => setFriendsSubTab(newValue)}
-          variant="scrollable"
-          scrollButtons="auto"
+          variant="fullWidth"
           sx={{ mb: 3 }}
         >
           <Tab label="💬 Chats" value="chats" />
