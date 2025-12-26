@@ -475,17 +475,45 @@ app.post('/api/authenticate', async (req, res) => {
         });
     }
     
+    let browser;
     try {
-        console.log('🚀 Using network-based scraper (no DOM)...');
+        console.log('🚀 Launching Puppeteer...');
         
-        // Call the revolutionary network-based scraper
-        const result = await scrapeMonthlyRoster({
-            employeeId,
-            password,
-            month: month || new Date().getMonth() + 1,
-            year: year || new Date().getFullYear()
+        // Launch Puppeteer
+        browser = await puppeteer.launch({
+            headless: 'new',
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu'
+            ]
         });
         
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1400, height: 900 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        
+        // Login to crew portal
+        console.log('🔐 Logging in to crew portal...');
+        await page.goto('https://crew.abxair.com', { waitUntil: 'networkidle2', timeout: 30000 });
+        
+        await page.waitForSelector('#username', { timeout: 10000 });
+        await page.type('#username', employeeId);
+        await page.type('#password', password);
+        await page.click('button[type="submit"]');
+        
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+        console.log('✅ Logged in successfully');
+        
+        // Call scrapeMonthlyRoster(page, month, year)
+        const result = await scrapeMonthlyRoster(
+            page,
+            month || new Date().getMonth() + 1,
+            year || new Date().getFullYear()
+        );
+        
+        await browser.close();
         console.log('✅ Scrape successful!');
         
         res.json({
@@ -498,6 +526,10 @@ app.post('/api/authenticate', async (req, res) => {
         
     } catch (error) {
         console.error('❌ CREW PORTAL CONNECTION ERROR:', error.message);
+        
+        if (browser) {
+            await browser.close();
+        }
         
         res.status(500).json({
             success: false,
