@@ -49,27 +49,28 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
       onProgress?.(`Scraping ${label} ${year}... (${i + 1}/${monthsToScrape.length})`, progress);
       console.log(`📅 [SIMPLE SCRAPER] Scraping ${label} ${year}...`);
       
-      const scrapeUrl = `${API_BASE_URL}/api/scrape-month`;
-      const scrapeResponse = await fetch(scrapeUrl, {
+      const authUrl = `${API_BASE_URL}/api/authenticate`;
+      const authResponse = await fetch(authUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           employeeId: employeeId, 
-          password: password, 
+          password: password,
+          airline: airline,
           month: month,
           year: year
         })
       });
       
-      console.log(`📅 [SIMPLE SCRAPER] ${label} response status:`, scrapeResponse.status);
-      const scrapeData = await scrapeResponse.json();
+      console.log(`📅 [SIMPLE SCRAPER] ${label} response status:`, authResponse.status);
+      const authData = await authResponse.json();
       
-      if (!scrapeData.success) {
-        console.error(`❌ [SIMPLE SCRAPER] ${label} failed:`, scrapeData.error);
+      if (!authData.success) {
+        console.error(`❌ [SIMPLE SCRAPER] ${label} failed:`, authData.error);
         continue; // Continue with other months
       }
       
-      const flights = scrapeData.data?.flights || [];
+      const flights = authData.data?.flights || [];
       console.log(`✅ [SIMPLE SCRAPER] ${label}: Got ${flights.length} duties`);
       
       // Transform duties to flight legs
