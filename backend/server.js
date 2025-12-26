@@ -1,4 +1,4 @@
- import express from 'express';
+ iadmport express from 'express';
 import puppeteer from 'puppeteer';
 import cors from 'cors';
 import { scrapeMonthlyRoster } from './monthlyScraper.js';
@@ -21,7 +21,7 @@ const CREW_PORTALS = {
 };
 
 app.post('/api/authenticate', async (req, res) => {
-  const { employeeId, password, airline, month, year } = req.body;
+  const { employeeId, password, airline, month, year, scrapeNews } = req.body;
 
   const portal = airline?.toUpperCase()?.includes('ATI')
     ? CREW_PORTALS.ATI
@@ -52,7 +52,8 @@ app.post('/api/authenticate', async (req, res) => {
     console.log('✅ Logged in');
 
     // scrapeMonthlyRoster now returns { duties, news }
-    const result = await scrapeMonthlyRoster(page, month, year);
+    // Only scrape news if requested (typically on last month only)
+    const result = await scrapeMonthlyRoster(page, month, year, { scrapeNewsSection: !!scrapeNews });
 
     // Handle both old format (array) and new format (object)
     const duties = Array.isArray(result) ? result : (result.duties || []);

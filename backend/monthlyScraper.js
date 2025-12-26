@@ -16,8 +16,9 @@
 
 import fs from 'fs';
 
-export async function scrapeMonthlyRoster(page, targetMonth, targetYear) {
-  console.log(`📅 Scraping ${targetYear}-${targetMonth}`);
+export async function scrapeMonthlyRoster(page, targetMonth, targetYear, options = {}) {
+  const { scrapeNewsSection = false } = options; // Only scrape news when explicitly requested
+  console.log(`📅 Scraping ${targetYear}-${targetMonth}${scrapeNewsSection ? ' (with news)' : ''}`);
 
   // Wait for page to load after login
   await page.waitForTimeout(3000);
@@ -93,12 +94,14 @@ export async function scrapeMonthlyRoster(page, targetMonth, targetYear) {
   // Step 4: Scrape all days
   const duties = await scrapeDayByDay(page);
 
-  // Step 5: Scrape News section (wrapped in try-catch - don't let news fail the whole scrape)
+  // Step 5: Scrape News section (only if requested - typically only on last month)
   let news = [];
-  try {
-    news = await scrapeNews(page);
-  } catch (newsErr) {
-    console.warn('⚠️ News scraping failed, continuing:', newsErr.message);
+  if (scrapeNewsSection) {
+    try {
+      news = await scrapeNews(page);
+    } catch (newsErr) {
+      console.warn('⚠️ News scraping failed, continuing:', newsErr.message);
+    }
   }
 
   console.log(`✅ Total scraped: ${duties.length} duties, ${news.length} news items`);

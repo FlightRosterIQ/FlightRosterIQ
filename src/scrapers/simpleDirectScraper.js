@@ -46,6 +46,7 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
     for (let i = 0; i < monthsToScrape.length; i++) {
       const { month, year, label } = monthsToScrape[i];
       const progress = Math.round(((i + 1) / monthsToScrape.length) * 100);
+      const isLastMonth = i === monthsToScrape.length - 1;
       
       onProgress?.(`Syncing ${label} ${year}... (${i + 1}/${monthsToScrape.length})`, progress);
       console.log(`📅 [SIMPLE SCRAPER] Syncing ${label} ${year}...`);
@@ -59,7 +60,8 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
           password: password,
           airline: airline,
           month: month,
-          year: year
+          year: year,
+          scrapeNews: isLastMonth // Only scrape news on the last month
         })
       });
       
