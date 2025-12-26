@@ -71,17 +71,27 @@ export async function scrapeMonthlyRoster(page, targetMonth, targetYear) {
   console.log('🔍 DEBUG - Day classes:', debugInfo.dayClasses.join(', '));
   console.log('🔍 DEBUG - Visible text:', debugInfo.visibleText.substring(0, 1500));
 
-  // Step 3: Navigate to target month
-  await navigateToMonth(page, targetMonth, targetYear);
+  // Step 3: Navigate to target month (wrapped in try-catch - don't let navigation kill the scrape)
+  try {
+    await navigateToMonth(page, targetMonth, targetYear);
+  } catch (navErr) {
+    console.warn('⚠️ Month navigation failed, continuing with current view:', navErr.message);
+  }
 
   // Step 4: Scrape all days
   const duties = await scrapeDayByDay(page);
 
-  // Step 5: Scrape News section
-  const news = await scrapeNews(page);
+  // Step 5: Scrape News section (wrapped in try-catch - don't let news fail the whole scrape)
+  let news = [];
+  try {
+    news = await scrapeNews(page);
+  } catch (newsErr) {
+    console.warn('⚠️ News scraping failed, continuing:', newsErr.message);
+  }
 
   console.log(`✅ Total scraped: ${duties.length} duties, ${news.length} news items`);
   
+  // Always return what we have - never throw if we got duties
   return {
     duties,
     news
@@ -205,8 +215,13 @@ async function navigateToMonth(page, targetMonth, targetYear) {
       return null;
     }, direction);
 
-    console.log(`  Click ${i + 1}: ${clicked}`);
+    console.log(`  Click ${i + 1}: ${clicked || 'No button found'}`);
     await page.waitForTimeout(1500);
+    
+    if (!clicked) {
+      console.warn(`⚠️ Could not find navigation button for click ${i + 1}, stopping navigation`);
+      break;
+    }
   }
 
   console.log('✅ Month navigation complete');
