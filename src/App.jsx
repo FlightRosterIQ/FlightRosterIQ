@@ -744,7 +744,7 @@ function App() {
     checkTrialStatus()
   }, [token, trialStartDate, subscriptionStatus, subscriptionExpiry, userType])
 
-  // Calculate next duty check-in time
+  // Calculate next duty report time (when pilot needs to check in for duty)
   useEffect(() => {
     if (!schedule?.flights || schedule.flights.length === 0) {
       setNextDutyCheckIn(null)
@@ -1529,7 +1529,7 @@ function App() {
           // Show notification if enabled
           if (settings.notifications && 'Notification' in window && Notification.permission === 'granted') {
             new Notification('Schedule Update Available', {
-              body: hasRosterUpdate ? 'Your flight schedule has been updated' : 'New check-in information available',
+              body: hasRosterUpdate ? 'Your flight schedule has been updated' : 'New report time information available',
               icon: '/icons/android/android-launchericon-192-192.png',
               badge: '/icons/android/android-launchericon-96-96.png'
             })
@@ -1538,7 +1538,7 @@ function App() {
           // Add to schedule changes
           const changeMessage = hasRosterUpdate 
             ? `Roster updated on ${new Date(lastChange).toLocaleString()}`
-            : `New check-in information (${hasCheckIns} items)`
+            : `New report time information (${hasCheckIns} items)`
           
           setScheduleChanges(prev => [{
             type: 'schedule',
@@ -6478,7 +6478,7 @@ function App() {
                 </Typography>
                 {nextDutyCheckIn && userType === 'pilot' && (
                   <Typography variant="caption" color="primary" sx={{ display: 'block' }}>
-                    Next Check-in: {(() => {
+                    Next Report: {(() => {
                       const now = new Date()
                       const diff = nextDutyCheckIn - now
                       

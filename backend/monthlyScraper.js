@@ -247,19 +247,30 @@ async function navigateToMonth(page, targetMonth, targetYear) {
 async function scrapeDayByDay(page) {
   console.log('📋 Scraping duty rows from page...');
   
-  // NetLine uses data-test-id="duty-row" for each duty entry
+  // Step 1: Expand all pairings by clicking toggle-sublist-button on PAR type events
+  console.log('🔽 Expanding all pairings to show sub-events...');
+  await page.evaluate(() => {
+    const toggleButtons = document.querySelectorAll('[data-test-id="toggle-sublist-button"]');
+    toggleButtons.forEach(btn => btn.click());
+  });
+  await page.waitForTimeout(2000);
+  
+  // Step 2: Scrape all duty rows including sub-events (C_I = Check-in, flights, etc.)
   const duties = await page.evaluate(() => {
     const results = [];
     
-    // Find all duty rows
+    // Find all duty rows (including sub-events after expansion)
     const dutyRows = document.querySelectorAll('[data-test-id="duty-row"]');
     console.log(`Found ${dutyRows.length} duty rows`);
     
     dutyRows.forEach((row, index) => {
       try {
-        // Get the event type (PAR = pairing/flight, OTHER = sick/vacation, etc)
+        // Get the event type (PAR = pairing/flight, OTHER = sick/vacation, C_I = check-in, etc)
         const eventTypeEl = row.querySelector('[data-event-type]');
         const eventType = eventTypeEl?.getAttribute('data-event-type') || 'UNKNOWN';
+        
+        // Check if this is a sub-event (check-in, flight leg, etc.)
+        const isSubEvent = row.querySelector('[data-test-id="duty-row-subevent"]') !== null;
         
         // Get the icon text (shows duty type like "OTHER" or has flight icon)
         const iconEl = row.querySelector('[data-test-id="duty-row-icon"]');
@@ -292,28 +303,50 @@ async function scrapeDayByDay(page) {
           endTime = spans2[2]?.innerText?.trim() || '';
         }
         
-        // Parse flight number from title (e.g., "C6208/06Dec    Rank: FO")
+        // Parse flight info from title
+        // For flights: "GB3130    763    N1489A" 
+        // For pairings: "C6208/06Dec    Rank: FO"
+        // For check-in: "Check-in"
         let flightNumber = '';
         let rank = '';
-        const flightMatch = title.match(/([A-Z]\d{3,4})/);
-        if (flightMatch) {
-          flightNumber = flightMatch[1];
-        }
-        const rankMatch = title.match(/Rank:\s*(\w+)/);
-        if (rankMatch) {
-          rank = rankMatch[1];
+        let aircraft = '';
+        let tailNumber = '';
+        
+        // Check if this is a flight leg (has aircraft type and tail)
+        const flightLegMatch = title.match(/^([A-Z]{2}\d{3,4})\s+(\d{3})\s+(N\d{3,5}[A-Z]*)/);
+        if (flightLegMatch) {
+          flightNumber = flightLegMatch[1];
+          aircraft = flightLegMatch[2];
+          tailNumber = flightLegMatch[3];
+        } else {
+          // Pairing format
+          const pairingMatch = title.match(/([A-Z]\d{3,4})/);
+          if (pairingMatch) {
+            flightNumber = pairingMatch[1];
+          }
+          const rankMatch = title.match(/Rank:\s*(\w+)/);
+          if (rankMatch) {
+            rank = rankMatch[1];
+          }
         }
         
-        // Extract additional info lines
+        // Extract additional info lines (layovers, premium, take-off/landing)
         const allInfoLines = Array.from(detailsEl.querySelectorAll('.IADP-jss155')).map(el => el.innerText.trim());
         const extraInfo = allInfoLines.slice(1).join(' | ');
+        
+        // Determine if this is a check-in (report time)
+        const isCheckIn = eventType === 'C_I' || title.toLowerCase().includes('check-in');
         
         results.push({
           type: eventType,
           dutyType: iconText || eventType,
+          isSubEvent: isSubEvent,
+          isCheckIn: isCheckIn,
           title: title,
           flightNumber: flightNumber || title.split('/')[0] || title,
           rank: rank,
+          aircraft: aircraft,
+          tailNumber: tailNumber,
           from: startLocation,
           fromDate: startDate,
           fromTime: startTime,
@@ -321,7 +354,9 @@ async function scrapeDayByDay(page) {
           toDate: endDate,
           toTime: endTime,
           extraInfo: extraInfo,
-          eventId: row.className.match(/event-id-(\d+)/)?.[1] || ''
+          eventId: row.className.match(/event-id-(\d+)/)?.[1] || '',
+          // Store index for later detail fetching
+          rowIndex: index
         });
         
       } catch (err) {
@@ -334,12 +369,38 @@ async function scrapeDayByDay(page) {
   
   console.log(`✅ Scraped ${duties.length} duties from duty list`);
   
+  // Step 3: For PAR (pairing) events, click details-page-button to get hotel/crew info
+  console.log('🏨 Fetching hotel and crew details for pairings...');
+  const pairings = duties.filter(d => d.type === 'PAR' && !d.isSubEvent);
+  
+  for (let i = 0; i < pairings.length; i++) {
+    const pairing = pairings[i];
+    console.log(`  📋 Getting details for pairing ${i + 1}/${pairings.length}: ${pairing.flightNumber}`);
+    
+    try {
+      // Click the details-page-button for this pairing
+      const details = await getPairingDetails(page, pairing.eventId);
+      
+      // Attach details to the pairing
+      pairing.hotel = details.hotel;
+      pairing.crew = details.crew;
+      pairing.hotelPhone = details.hotelPhone;
+      pairing.hotelAddress = details.hotelAddress;
+      
+      console.log(`    ✅ Hotel: ${details.hotel || 'N/A'}, Crew: ${details.crew?.length || 0} members`);
+    } catch (err) {
+      console.warn(`    ⚠️ Could not get details for ${pairing.flightNumber}:`, err.message);
+    }
+  }
+  
   // If we got duties from the duty list, return them
   if (duties.length > 0) {
     return duties.map(duty => ({
       flightNumber: duty.flightNumber,
       type: duty.type,
       dutyType: duty.dutyType,
+      isSubEvent: duty.isSubEvent,
+      isCheckIn: duty.isCheckIn,
       from: duty.from,
       to: duty.to,
       date: duty.fromDate,
@@ -347,15 +408,173 @@ async function scrapeDayByDay(page) {
       arrivalTime: duty.toTime,
       arrivalDate: duty.toDate,
       rank: duty.rank,
+      aircraft: duty.aircraft,
+      tailNumber: duty.tailNumber,
       title: duty.title,
       extraInfo: duty.extraInfo,
-      eventId: duty.eventId
+      eventId: duty.eventId,
+      // Report time is the check-in time
+      reportTime: duty.isCheckIn ? duty.fromTime : null,
+      // Hotel/crew info (only on pairings)
+      hotel: duty.hotel || null,
+      hotelPhone: duty.hotelPhone || null,
+      hotelAddress: duty.hotelAddress || null,
+      crew: duty.crew || []
     }));
   }
   
   // Fallback to visible content scraping
   console.log('⚠️ No duty rows found, trying visible text scrape...');
   return await scrapeVisibleContent(page);
+}
+
+/* ===== PAIRING DETAILS (Hotel/Crew) ===== */
+
+async function getPairingDetails(page, eventId) {
+  const details = { hotel: null, hotelPhone: null, hotelAddress: null, crew: [] };
+  
+  try {
+    // Find and click the details-page-button for this specific pairing
+    const clicked = await page.evaluate((evtId) => {
+      // Find the duty row with this event ID
+      const row = document.querySelector(`.event-id-${evtId}[data-test-id="duty-row"]`);
+      if (!row) return false;
+      
+      // Find the details button within this row
+      const detailsBtn = row.querySelector('[data-test-id="details-page-button"]');
+      if (detailsBtn) {
+        detailsBtn.click();
+        return true;
+      }
+      return false;
+    }, eventId);
+    
+    if (!clicked) {
+      console.log(`    ⚠️ Details button not found for event ${eventId}`);
+      return details;
+    }
+    
+    // Wait for details panel to load
+    await page.waitForTimeout(2000);
+    
+    // Look for "Hotel" section and expand if collapsed
+    await page.evaluate(() => {
+      // Find and click on hotel-related expandable sections
+      const elements = document.querySelectorAll('*');
+      for (const el of elements) {
+        const text = el.innerText?.toLowerCase() || '';
+        if ((text.includes('hotel') || text.includes('accommodation')) && text.length < 50) {
+          // Look for expand button nearby
+          const parent = el.closest('[class*="accordion"], [class*="section"], [class*="expandable"]') || el.parentElement;
+          const expandBtn = parent?.querySelector('[class*="expand"], [class*="toggle"], svg, button');
+          if (expandBtn) {
+            expandBtn.click();
+          }
+        }
+      }
+    });
+    await page.waitForTimeout(500);
+    
+    // Look for "Crew" section and expand if collapsed
+    await page.evaluate(() => {
+      const elements = document.querySelectorAll('*');
+      for (const el of elements) {
+        const text = el.innerText?.toLowerCase() || '';
+        if ((text.includes('crew') && text.includes('member')) || text.includes('crew on this')) {
+          const parent = el.closest('[class*="accordion"], [class*="section"], [class*="expandable"]') || el.parentElement;
+          const expandBtn = parent?.querySelector('[class*="expand"], [class*="toggle"], svg, button');
+          if (expandBtn) {
+            expandBtn.click();
+          }
+        }
+      }
+    });
+    await page.waitForTimeout(500);
+    
+    // Extract hotel and crew information
+    const extracted = await page.evaluate(() => {
+      const result = { hotel: null, hotelPhone: null, hotelAddress: null, crew: [] };
+      const text = document.body.innerText;
+      
+      // Extract hotel name (common hotel chains)
+      const hotelPatterns = [
+        /((?:Hilton|Marriott|Holiday Inn|Hampton|Courtyard|Sheraton|Westin|Hyatt|Radisson|Best Western|Comfort|Days Inn|La Quinta|Embassy|Doubletree|Residence Inn|Fairfield|Four Points|Crowne Plaza|InterContinental|Renaissance|Aloft|Element|Home2|Tru by Hilton|AC Hotels?|Moxy|SpringHill|TownePlace)[^\n]{0,50})/i,
+        /Hotel[:\s]+([^\n]{5,60})/i,
+        /Accommodation[:\s]+([^\n]{5,60})/i,
+        /Layover[:\s]+([^\n]{5,60})/i
+      ];
+      
+      for (const pattern of hotelPatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          result.hotel = match[1]?.trim();
+          break;
+        }
+      }
+      
+      // Extract hotel phone
+      const phoneMatch = text.match(/(?:Hotel|Accommodation)\s*(?:Phone|Tel|Contact)?[:\s]*(\+?[\d\-\(\)\s]{10,20})/i);
+      if (phoneMatch) {
+        result.hotelPhone = phoneMatch[1]?.trim();
+      }
+      
+      // Extract crew members
+      // Look for names in specific sections or patterns
+      const crewSection = text.match(/Crew(?:\s+Members?)?(?:\s+on\s+this\s+(?:leg|flight))?[:\s]*([\s\S]{0,500}?)(?:Hotel|Accommodation|Notes|$)/i);
+      if (crewSection) {
+        // Extract names (First Last pattern)
+        const namePattern = /([A-Z][a-z]+)\s+([A-Z][a-z]+)/g;
+        const matches = [...crewSection[1].matchAll(namePattern)];
+        const names = matches.map(m => `${m[1]} ${m[2]}`);
+        
+        // Filter out common non-name phrases
+        const excludeList = ['Crew Member', 'First Officer', 'Flight Attendant', 'More Info', 'Click Here', 'View All', 'No Crew'];
+        result.crew = names.filter(n => !excludeList.includes(n)).slice(0, 10);
+      }
+      
+      // Alternative: look for crew in table rows or list items
+      if (result.crew.length === 0) {
+        const crewElements = document.querySelectorAll('[class*="crew"] [class*="name"], [class*="crew"] td, [class*="crew"] li');
+        crewElements.forEach(el => {
+          const name = el.innerText?.trim();
+          if (name && name.match(/^[A-Z][a-z]+ [A-Z][a-z]+$/)) {
+            result.crew.push(name);
+          }
+        });
+      }
+      
+      return result;
+    });
+    
+    Object.assign(details, extracted);
+    
+    // Close the details panel
+    await page.evaluate(() => {
+      // Try various close methods
+      const closeSelectors = [
+        '[class*="close"]', 
+        '[aria-label*="close"]', 
+        '[aria-label*="Close"]',
+        '[data-test-id*="close"]',
+        'button[class*="back"]'
+      ];
+      for (const sel of closeSelectors) {
+        const btn = document.querySelector(sel);
+        if (btn) {
+          btn.click();
+          return;
+        }
+      }
+      // Try Escape key
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await page.waitForTimeout(500);
+    
+  } catch (err) {
+    console.log(`    ⚠️ Error getting pairing details:`, err.message);
+  }
+  
+  return details;
 }
 
 async function getFlightsFromView(page) {

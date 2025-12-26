@@ -51,6 +51,6 @@ pm2 startup
 
 echo ""
 echo "✅ Deployment complete!"
-echo "🌐 Backend running on port 8080"
+echo "🌐 Backend running on port 8081"
 echo "📊 Check status: pm2 status"
 echo "📋 View logs: pm2 logs flightroster-backend"
