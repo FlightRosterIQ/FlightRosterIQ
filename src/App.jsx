@@ -3303,76 +3303,20 @@ function App() {
     earliestDate.setMonth(earliestDate.getMonth() - 1)
     earliestDate.setDate(1) // First day of previous month
     
-    // Allow navigating to previous month (don't block if data not cached yet)
+    // Prevent going too far back
+    if (newDate < earliestDate) {
+      console.log('⚠️ Cannot navigate beyond previous month')
+      setError('Schedule data only available for previous, current, and next month.')
+      setTimeout(() => setError(null), 3000)
+      return
+    }
+    
     console.log(`📅 Navigating to ${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`)
     
-    // Try to load cached data for this month
-    const month = newDate.getMonth() + 1
-    const year = newDate.getFullYear()
-    const cacheKey = `schedule_${year}_${String(month).padStart(2, '0')}`
-    
-    const cachedData = await localforage.getItem(cacheKey)
-    if (cachedData) {
-      console.log(`📦 Loaded cached schedule for ${year}-${String(month).padStart(2, '0')}`)
-      setSchedule(cachedData)
-      setError(null)
-      setCurrentMonth(newDate)
-    } else {
-      console.log(`⚠️ No cached data for ${year}-${String(month).padStart(2, '0')} - fetching from crew portal`)
-      
-      // Update month first to show loading on correct month
-      setCurrentMonth(newDate)
-      setLoading(true)
-      setLoadingMessage(`Loading schedule for ${year}-${String(month).padStart(2, '0')} from crew portal...`)
-      setError(null)
-      
-      try {
-        let storedUsername, storedPassword, storedAirline
-        
-        if (userType === 'family') {
-          const accessCode = await localforage.getItem('familyAccessCode')
-          const codeMapping = await localforage.getItem('familyCodeMapping') || {}
-          const memberInfo = codeMapping[accessCode]
-          
-          if (!memberInfo) {
-            setError('Family access code not found. Please log in again.')
-            setLoading(false)
-            return
-          }
-          
-          storedUsername = memberInfo.pilotEmployeeId
-          storedPassword = memberInfo.password
-          storedAirline = memberInfo.airline
-        } else {
-          storedUsername = await localforage.getItem('username')
-          storedPassword = await localforage.getItem('tempPassword')
-          storedAirline = await localforage.getItem('airline')
-        }
-        
-        if (!storedUsername || !storedPassword) {
-          setError('Please log out and log back in to load schedule data.')
-          setLoading(false)
-          return
-        }
-        
-        // Fetch from crew portal
-        await handleAutomaticScraping(storedUsername, storedPassword, storedAirline, month, year)
-        
-        // Load the newly fetched data
-        const freshData = await localforage.getItem(cacheKey)
-        if (freshData) {
-          setSchedule(freshData)
-          console.log(`✅ Loaded schedule for ${year}-${String(month).padStart(2, '0')} from crew portal`)
-        } else {
-          setError(`No schedule data available for ${year}-${String(month).padStart(2, '0')}. The crew portal may not have data for this month yet.`)
-        }
-      } catch (error) {
-        console.error('Error loading previous month:', error)
-        setError(`Failed to load schedule for ${year}-${String(month).padStart(2, '0')}. Please try again.`)
-      } finally {
-        setLoading(false)
-      }
-    }
+    // The schedule already contains all 3 months of data
+    // Just change the view month - no need to reload
+    setCurrentMonth(newDate)
+    setError(null)
   }
 
   const goToNextMonth = async () => {
@@ -3395,73 +3339,12 @@ function App() {
       return
     }
     
-    // Try to load cached data for this month
-    const month = newDate.getMonth() + 1
-    const year = newDate.getFullYear()
-    const cacheKey = `schedule_${year}_${String(month).padStart(2, '0')}`
+    console.log(`📅 Navigating to ${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`)
     
-    const cachedData = await localforage.getItem(cacheKey)
-    if (cachedData) {
-      console.log(`📦 Loaded cached schedule for ${year}-${String(month).padStart(2, '0')}`)
-      setSchedule(cachedData)
-      setError(null)
-      setCurrentMonth(newDate)
-    } else {
-      console.log(`⚠️ No cached data for ${year}-${String(month).padStart(2, '0')} - fetching from crew portal`)
-      
-      // Update month first to show loading on correct month
-      setCurrentMonth(newDate)
-      setLoading(true)
-      setLoadingMessage(`Loading schedule for ${year}-${String(month).padStart(2, '0')} from crew portal...`)
-      setError(null)
-      
-      try {
-        let storedUsername, storedPassword, storedAirline
-        
-        if (userType === 'family') {
-          const accessCode = await localforage.getItem('familyAccessCode')
-          const codeMapping = await localforage.getItem('familyCodeMapping') || {}
-          const memberInfo = codeMapping[accessCode]
-          
-          if (!memberInfo) {
-            setError('Family access code not found. Please log in again.')
-            setLoading(false)
-            return
-          }
-          
-          storedUsername = memberInfo.pilotEmployeeId
-          storedPassword = memberInfo.password
-          storedAirline = memberInfo.airline
-        } else {
-          storedUsername = await localforage.getItem('username')
-          storedPassword = await localforage.getItem('tempPassword')
-          storedAirline = await localforage.getItem('airline')
-        }
-        
-        if (!storedUsername || !storedPassword) {
-          setError('Please log out and log back in to load schedule data.')
-          setLoading(false)
-          return
-        }
-        
-        // Fetch from crew portal
-        await handleAutomaticScraping(storedUsername, storedPassword, storedAirline, month, year)
-        
-        // Load the newly fetched data
-        const freshData = await localforage.getItem(cacheKey)
-        if (freshData) {
-          setSchedule(freshData)
-          console.log(`✅ Loaded schedule for ${year}-${String(month).padStart(2, '0')} from crew portal`)
-        } else {
-          setError(`No schedule data available for ${year}-${String(month).padStart(2, '0')}. The crew portal may not have data for this month yet.`)
-        }
-      } catch (error) {
-        console.error('Error loading next month:', error)
-        setError(`Failed to load schedule for ${year}-${String(month).padStart(2, '0')}. Please try again.`)
-      } finally {
-        setLoading(false)
-      }
-    }
+    // The schedule already contains all 3 months of data
+    // Just change the view month - no need to reload
+    setCurrentMonth(newDate)
+    setError(null)
   }
 
   const renderFriendsView = () => {
