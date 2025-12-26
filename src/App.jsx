@@ -498,10 +498,18 @@ function App() {
         }
         
         // Use simple scraper for background refresh with status
+        // Pass existing flights so we skip re-scraping months that already have data
+        const existingBgFlights = schedule?.flights || []
+        console.log(`📊 Background: Passing ${existingBgFlights.length} existing flights to skip cached months`)
         const result = await simpleScrape(employeeId, password, airline || 'abx', (status, progress) => {
           setLoadingMessage(status)
           console.log(`📊 Background: ${progress}% - ${status}`)
-        })
+        }, (progressiveFlights) => {
+          // Progressive update
+          if (progressiveFlights && progressiveFlights.length > 0) {
+            setSchedule({ flights: progressiveFlights, hotelsByDate: {} })
+          }
+        }, existingBgFlights)
         
         // Handle both old format (array) and new format (object with flights and news)
         const flights = Array.isArray(result) ? result : (result.flights || [])
@@ -2984,12 +2992,20 @@ function App() {
       }
       
       // Use simple scraper with detailed status updates
+      // Pass existing flights so we skip re-scraping months that already have data
       setLoadingMessage('Connecting to crew portal...')
       console.log('🔄 Calling simple scraper with multi-month support...')
+      const existingFlights = schedule?.flights || []
+      console.log(`📊 Passing ${existingFlights.length} existing flights to skip cached months`)
       const result = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx', (status, progress) => {
         setLoadingMessage(status)
         console.log(`📊 Refresh: ${progress}% - ${status}`)
-      })
+      }, (progressiveFlights) => {
+        // Progressive update - show flights as they come in
+        if (progressiveFlights && progressiveFlights.length > 0) {
+          setSchedule({ flights: progressiveFlights, hotelsByDate: {} })
+        }
+      }, existingFlights)
       
       // Handle both old format (array) and new format (object with flights and news)
       const flights = Array.isArray(result) ? result : (result.flights || [])

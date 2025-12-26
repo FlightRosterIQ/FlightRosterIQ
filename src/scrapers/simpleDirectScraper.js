@@ -10,9 +10,10 @@ import { API_BASE_URL } from '../config';
  * @param {string} airline - 'abx' or 'ati'
  * @param {Function} onProgress - Optional callback for status updates (status, progress%)
  * @param {Function} onFlightsUpdate - Optional callback for progressive flight updates (flights[])
+ * @param {Array} existingFlights - Optional array of existing flights to skip re-scraping months that have data
  * @returns {Promise<{flights: Array, news: Array}>} Object with flights and news arrays
  */
-export async function simpleScrape(employeeId, password, airline = 'abx', onProgress = null, onFlightsUpdate = null) {
+export async function simpleScrape(employeeId, password, airline = 'abx', onProgress = null, onFlightsUpdate = null, existingFlights = []) {
   console.log('🔧 [SIMPLE SCRAPER] Starting multi-month Puppeteer scrape for:', employeeId);
   
   // Calculate months to scrape (previous, current, next)
@@ -35,19 +36,45 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
   }
   
   const monthsToScrape = [
-    { month: prevMonth, year: prevYear, label: getMonthName(prevMonth) },
-    { month: currentMonth, year: currentYear, label: getMonthName(currentMonth) },
-    { month: nextMonth, year: nextYear, label: getMonthName(nextMonth) }
+    { month: prevMonth, year: prevYear, label: getMonthName(prevMonth), isPreviousMonth: true },
+    { month: currentMonth, year: currentYear, label: getMonthName(currentMonth), isPreviousMonth: false },
+    { month: nextMonth, year: nextYear, label: getMonthName(nextMonth), isPreviousMonth: false }
   ];
+  
+  // Helper to check if a month already has flights in existing data
+  const getExistingFlightsForMonth = (year, month) => {
+    if (!existingFlights || existingFlights.length === 0) return [];
+    const monthStr = String(month).padStart(2, '0');
+    const prefix = `${year}-${monthStr}-`;
+    return existingFlights.filter(f => f.date && f.date.startsWith(prefix));
+  };
   
   const allFlights = [];
   const allNews = [];
   
   try {
     for (let i = 0; i < monthsToScrape.length; i++) {
-      const { month, year, label } = monthsToScrape[i];
+      const { month, year, label, isPreviousMonth } = monthsToScrape[i];
       const progress = Math.round(((i + 1) / monthsToScrape.length) * 100);
       const isLastMonth = i === monthsToScrape.length - 1;
+      
+      // Only skip re-scraping for PREVIOUS month if it already has flights
+      // Current and next month should always be scraped fresh
+      if (isPreviousMonth) {
+        const existingMonthFlights = getExistingFlightsForMonth(year, month);
+        if (existingMonthFlights.length > 0) {
+          console.log(`⏭️ [SIMPLE SCRAPER] Skipping ${label} ${year} - already has ${existingMonthFlights.length} flights`);
+          onProgress?.(`Using cached ${label} ${year} (${existingMonthFlights.length} flights)`, progress);
+          allFlights.push(...existingMonthFlights);
+          
+          // Progressive update with existing data
+          if (onFlightsUpdate && allFlights.length > 0) {
+            console.log(`📤 [SIMPLE SCRAPER] Sending ${allFlights.length} flights to UI (from cache)`);
+            onFlightsUpdate([...allFlights]);
+          }
+          continue;
+        }
+      }
       
       onProgress?.(`Syncing ${label} ${year}... (${i + 1}/${monthsToScrape.length})`, progress);
       console.log(`📅 [SIMPLE SCRAPER] Syncing ${label} ${year}...`);
