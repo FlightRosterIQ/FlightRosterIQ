@@ -46,7 +46,8 @@ import {
   DialogActions,
   Stack,
   Grid,
-  Tooltip
+  Tooltip,
+  Menu
 } from '@mui/material'
 import {
   Flight as FlightIcon,
@@ -114,6 +115,16 @@ function App() {
   const [viewCrewLoading, setViewCrewLoading] = useState(false)
   const [viewCrewError, setViewCrewError] = useState('')
   const [viewCrewName, setViewCrewName] = useState('')
+  
+  // Friend schedule dialog state
+  const [friendMenuAnchor, setFriendMenuAnchor] = useState(null)
+  const [selectedFriendForMenu, setSelectedFriendForMenu] = useState(null)
+  const [friendScheduleDialogOpen, setFriendScheduleDialogOpen] = useState(false)
+  const [friendScheduleData, setFriendScheduleData] = useState(null)
+  const [friendSchedulePassword, setFriendSchedulePassword] = useState('')
+  const [friendScheduleLoading, setFriendScheduleLoading] = useState(false)
+  const [friendScheduleError, setFriendScheduleError] = useState('')
+  const [friendScheduleMonth, setFriendScheduleMonth] = useState(new Date())
   
   const [scheduleChanges, setScheduleChanges] = useState([])
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -3606,49 +3617,82 @@ function App() {
                     </Typography>
                   </Box>
                 ) : (
-                  <List>
-                    {friends.map((friend, idx) => (
-                      <ListItem 
-                        key={idx}
-                        button
-                        selected={selectedChatsToDelete.includes(friend.id)}
-                        onClick={() => {
-                          if (chatEditMode) {
-                            toggleChatSelection(friend.id)
-                          } else {
-                            setSelectedChat(friend)
-                          }
-                        }}
-                      >
-                        {chatEditMode && (
-                          <ListItemIcon>
-                            <input 
-                              type="checkbox" 
-                              checked={selectedChatsToDelete.includes(friend.id)}
-                              onChange={() => toggleChatSelection(friend.id)}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </ListItemIcon>
-                        )}
-                        <ListItemAvatar>
-                          <Avatar>
-                            {(friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId).charAt(0)}
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId}
-                          secondary={
-                            chatMessages[friend.id]?.length > 0 
-                              ? chatMessages[friend.id][chatMessages[friend.id].length - 1].text 
-                              : 'Start a conversation'
-                          }
-                        />
-                        {!chatEditMode && chatMessages[friend.id]?.length > 0 && (
-                          <Chip label={chatMessages[friend.id].length} size="small" color="primary" />
-                        )}
-                      </ListItem>
-                    ))}
-                  </List>
+                  <Box>
+                    <List>
+                      {friends.map((friend, idx) => (
+                        <ListItem 
+                          key={idx}
+                          button
+                          selected={selectedChatsToDelete.includes(friend.id)}
+                          onClick={(e) => {
+                            if (chatEditMode) {
+                              toggleChatSelection(friend.id)
+                            } else {
+                              // Show menu with options
+                              setSelectedFriendForMenu(friend)
+                              setFriendMenuAnchor(e.currentTarget)
+                            }
+                          }}
+                        >
+                          {chatEditMode && (
+                            <ListItemIcon>
+                              <input 
+                                type="checkbox" 
+                                checked={selectedChatsToDelete.includes(friend.id)}
+                                onChange={() => toggleChatSelection(friend.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </ListItemIcon>
+                          )}
+                          <ListItemAvatar>
+                            <Avatar>
+                              {(friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId).charAt(0)}
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={friend.name && friend.name.trim() !== '' ? friend.name : friend.employeeId}
+                            secondary={
+                              chatMessages[friend.id]?.length > 0 
+                                ? chatMessages[friend.id][chatMessages[friend.id].length - 1].text 
+                                : 'Start a conversation'
+                            }
+                          />
+                          {!chatEditMode && chatMessages[friend.id]?.length > 0 && (
+                            <Chip label={chatMessages[friend.id].length} size="small" color="primary" />
+                          )}
+                        </ListItem>
+                      ))}
+                    </List>
+                    
+                    {/* Friend Options Menu */}
+                    <Menu
+                      anchorEl={friendMenuAnchor}
+                      open={Boolean(friendMenuAnchor)}
+                      onClose={() => {
+                        setFriendMenuAnchor(null)
+                        setSelectedFriendForMenu(null)
+                      }}
+                    >
+                      <MenuItem onClick={() => {
+                        setSelectedChat(selectedFriendForMenu)
+                        setFriendMenuAnchor(null)
+                        setSelectedFriendForMenu(null)
+                      }}>
+                        <ListItemIcon>💬</ListItemIcon>
+                        <ListItemText>Chat</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={() => {
+                        setFriendScheduleDialogOpen(true)
+                        setFriendSchedulePassword('')
+                        setFriendScheduleData(null)
+                        setFriendScheduleError('')
+                        setFriendMenuAnchor(null)
+                      }}>
+                        <ListItemIcon>📅</ListItemIcon>
+                        <ListItemText>View Schedule</ListItemText>
+                      </MenuItem>
+                    </Menu>
+                  </Box>
                 )}
               </Box>
             )}
@@ -4121,6 +4165,285 @@ function App() {
             )}
           </Box>
         )}
+        
+        {/* Friend Schedule Dialog */}
+        <Dialog 
+          open={friendScheduleDialogOpen} 
+          onClose={() => {
+            setFriendScheduleDialogOpen(false)
+            setSelectedFriendForMenu(null)
+            setFriendScheduleData(null)
+            setFriendSchedulePassword('')
+            setFriendScheduleError('')
+          }}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="h6">
+                📅 {selectedFriendForMenu?.name || selectedFriendForMenu?.employeeId || 'Friend'}'s Schedule
+              </Typography>
+              <IconButton onClick={() => {
+                setFriendScheduleDialogOpen(false)
+                setSelectedFriendForMenu(null)
+                setFriendScheduleData(null)
+              }}>
+                ✕
+              </IconButton>
+            </Stack>
+          </DialogTitle>
+          <DialogContent>
+            {!friendScheduleData ? (
+              <Box sx={{ py: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Enter {selectedFriendForMenu?.name || 'your friend'}'s crew portal password to view their schedule
+                </Typography>
+                
+                <Stack spacing={2}>
+                  <TextField
+                    fullWidth
+                    label="Employee ID"
+                    value={selectedFriendForMenu?.employeeId || ''}
+                    disabled
+                    size="small"
+                  />
+                  
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="Password"
+                    placeholder="Enter their crew portal password..."
+                    value={friendSchedulePassword}
+                    onChange={(e) => setFriendSchedulePassword(e.target.value)}
+                    size="small"
+                    autoFocus
+                  />
+                  
+                  {friendScheduleError && (
+                    <Alert severity="error" onClose={() => setFriendScheduleError('')}>
+                      {friendScheduleError}
+                    </Alert>
+                  )}
+                  
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    disabled={!friendSchedulePassword || friendScheduleLoading}
+                    onClick={async () => {
+                      setFriendScheduleLoading(true)
+                      setFriendScheduleError('')
+                      try {
+                        const friendAirline = selectedFriendForMenu?.airline || airline || 'abx'
+                        const result = await simpleScrape(
+                          selectedFriendForMenu?.employeeId,
+                          friendSchedulePassword,
+                          friendAirline,
+                          (status, progress) => {
+                            console.log(`📊 Friend Schedule: ${progress}% - ${status}`)
+                          },
+                          null
+                        )
+                        
+                        const flights = Array.isArray(result) ? result : (result.flights || [])
+                        
+                        if (!flights || flights.length === 0) {
+                          setFriendScheduleError('No schedule data found. Check the password and try again.')
+                          setFriendScheduleLoading(false)
+                          return
+                        }
+                        
+                        setFriendScheduleData({
+                          flights,
+                          name: selectedFriendForMenu?.name || selectedFriendForMenu?.employeeId,
+                          employeeId: selectedFriendForMenu?.employeeId,
+                          fetchedAt: new Date().toISOString()
+                        })
+                        setFriendScheduleLoading(false)
+                      } catch (err) {
+                        console.error('Friend schedule error:', err)
+                        setFriendScheduleError(err.message || 'Failed to fetch schedule. Check the password.')
+                        setFriendScheduleLoading(false)
+                      }
+                    }}
+                  >
+                    {friendScheduleLoading ? (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <CircularProgress size={20} color="inherit" />
+                        <span>Loading Schedule...</span>
+                      </Stack>
+                    ) : (
+                      '📅 View Schedule'
+                    )}
+                  </Button>
+                </Stack>
+              </Box>
+            ) : (
+              <Box sx={{ py: 2 }}>
+                {/* Month Navigation */}
+                <Stack direction="row" alignItems="center" justifyContent="center" spacing={2} sx={{ mb: 2 }}>
+                  <IconButton onClick={() => {
+                    const newDate = new Date(friendScheduleMonth)
+                    newDate.setMonth(newDate.getMonth() - 1)
+                    setFriendScheduleMonth(newDate)
+                  }}>
+                    ◀
+                  </IconButton>
+                  <Typography variant="h6">
+                    {friendScheduleMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                  </Typography>
+                  <IconButton onClick={() => {
+                    const newDate = new Date(friendScheduleMonth)
+                    newDate.setMonth(newDate.getMonth() + 1)
+                    setFriendScheduleMonth(newDate)
+                  }}>
+                    ▶
+                  </IconButton>
+                </Stack>
+                
+                {/* Calendar Grid */}
+                {(() => {
+                  const year = friendScheduleMonth.getFullYear()
+                  const month = friendScheduleMonth.getMonth()
+                  const daysInMonth = new Date(year, month + 1, 0).getDate()
+                  const firstDayOfWeek = new Date(year, month, 1).getDay()
+                  const today = new Date()
+                  
+                  const days = []
+                  for (let i = 0; i < firstDayOfWeek; i++) {
+                    days.push(<Box key={`empty-${i}`} sx={{ p: 1 }} />)
+                  }
+                  
+                  for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                    const dayFlights = friendScheduleData.flights.filter(f => f.date === dateStr)
+                    const hasFlights = dayFlights.length > 0
+                    const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear()
+                    
+                    const isOff = dayFlights.some(f => f.dutyType === 'OFF' || f.flightNumber?.includes('OFF'))
+                    const isReserve = dayFlights.some(f => f.isReserveDuty || f.dutyType === 'RSV' || f.flightNumber?.match(/^R\d/))
+                    const isTraining = dayFlights.some(f => f.isTraining || f.dutyType === 'TRN')
+                    const isVacation = dayFlights.some(f => f.dutyType === 'VAC' || f.flightNumber?.includes('VAC'))
+                    
+                    let bgColor = 'background.paper'
+                    if (isOff) bgColor = 'grey.200'
+                    else if (isVacation) bgColor = 'success.light'
+                    else if (isReserve) bgColor = 'warning.light'
+                    else if (isTraining) bgColor = 'info.light'
+                    else if (hasFlights) bgColor = 'primary.light'
+                    
+                    days.push(
+                      <Tooltip
+                        key={day}
+                        title={
+                          hasFlights 
+                            ? dayFlights.map(f => `${f.flightNumber || f.dutyType}: ${f.from || ''}→${f.to || ''} ${f.departureTime || ''}`).join('\n')
+                            : 'No activity'
+                        }
+                      >
+                        <Box
+                          sx={{
+                            p: 1,
+                            textAlign: 'center',
+                            borderRadius: 1,
+                            bgcolor: bgColor,
+                            border: isToday ? 2 : 0,
+                            borderColor: 'primary.main',
+                            minHeight: 60,
+                            cursor: hasFlights ? 'pointer' : 'default'
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ fontWeight: isToday ? 'bold' : 'normal' }}>
+                            {day}
+                          </Typography>
+                          {hasFlights && (
+                            <Box>
+                              {dayFlights.slice(0, 2).map((f, i) => (
+                                <Typography key={i} variant="caption" sx={{ display: 'block', fontSize: '0.6rem', lineHeight: 1.2 }}>
+                                  {f.flightNumber?.substring(0, 7) || f.dutyType}
+                                </Typography>
+                              ))}
+                              {dayFlights.length > 2 && (
+                                <Typography variant="caption" sx={{ fontSize: '0.6rem' }}>
+                                  +{dayFlights.length - 2} more
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+                        </Box>
+                      </Tooltip>
+                    )
+                  }
+                  
+                  return (
+                    <Box>
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5, mb: 2 }}>
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
+                          <Typography key={i} variant="caption" align="center" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+                            {d}
+                          </Typography>
+                        ))}
+                        {days}
+                      </Box>
+                    </Box>
+                  )
+                })()}
+                
+                {/* Legend */}
+                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2, justifyContent: 'center' }}>
+                  <Chip size="small" label="Flight" sx={{ bgcolor: 'primary.light' }} />
+                  <Chip size="small" label="Reserve" sx={{ bgcolor: 'warning.light' }} />
+                  <Chip size="small" label="Training" sx={{ bgcolor: 'info.light' }} />
+                  <Chip size="small" label="Vacation" sx={{ bgcolor: 'success.light' }} />
+                  <Chip size="small" label="Off" sx={{ bgcolor: 'grey.200' }} />
+                </Stack>
+                
+                {/* Flights for selected month */}
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Duties for {friendScheduleMonth.toLocaleString('default', { month: 'long' })}
+                </Typography>
+                <List dense sx={{ maxHeight: 200, overflowY: 'auto' }}>
+                  {friendScheduleData.flights
+                    .filter(f => {
+                      const flightDate = new Date(f.date)
+                      return flightDate.getMonth() === friendScheduleMonth.getMonth() && 
+                             flightDate.getFullYear() === friendScheduleMonth.getFullYear()
+                    })
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .map((flight, idx) => (
+                      <ListItem key={idx} dense sx={{ py: 0.5 }}>
+                        <ListItemText
+                          primary={
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Chip size="small" label={flight.date?.substring(5)} sx={{ fontSize: '0.7rem' }} />
+                              <Typography variant="body2" fontWeight="bold">
+                                {flight.flightNumber || flight.dutyType || 'Duty'}
+                              </Typography>
+                            </Stack>
+                          }
+                          secondary={
+                            flight.from && flight.to 
+                              ? `${flight.from} → ${flight.to} | ${flight.departureTime || ''}`
+                              : flight.extraInfo || ''
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                  {friendScheduleData.flights.filter(f => {
+                    const flightDate = new Date(f.date)
+                    return flightDate.getMonth() === friendScheduleMonth.getMonth() && 
+                           flightDate.getFullYear() === friendScheduleMonth.getFullYear()
+                  }).length === 0 && (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                      No duties for this month
+                    </Typography>
+                  )}
+                </List>
+              </Box>
+            )}
+          </DialogContent>
+        </Dialog>
       </Box>
     )
   }
