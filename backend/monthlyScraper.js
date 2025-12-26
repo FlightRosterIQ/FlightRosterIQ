@@ -469,9 +469,17 @@ async function scrapeDayByDay(page) {
       
       // Attach details to the pairing
       pairing.hotel = details.hotel;
-      pairing.crew = details.crew;
       pairing.hotelPhone = details.hotelPhone;
+      pairing.hotelFax = details.hotelFax;
+      pairing.hotelEmail = details.hotelEmail;
       pairing.hotelAddress = details.hotelAddress;
+      pairing.hotelCity = details.hotelCity;
+      pairing.hotelZip = details.hotelZip;
+      pairing.hotelCountry = details.hotelCountry;
+      pairing.pickupTime = details.pickupTime;
+      pairing.transferTime = details.transferTime;
+      pairing.transportType = details.transportType;
+      pairing.crew = details.crew;
       
       console.log(`    ✅ Hotel: ${details.hotel || 'N/A'}, Crew: ${details.crew?.length || 0} members`);
     } catch (err) {
@@ -504,7 +512,15 @@ async function scrapeDayByDay(page) {
       // Hotel/crew info (only on pairings)
       hotel: duty.hotel || null,
       hotelPhone: duty.hotelPhone || null,
+      hotelFax: duty.hotelFax || null,
+      hotelEmail: duty.hotelEmail || null,
       hotelAddress: duty.hotelAddress || null,
+      hotelCity: duty.hotelCity || null,
+      hotelZip: duty.hotelZip || null,
+      hotelCountry: duty.hotelCountry || null,
+      pickupTime: duty.pickupTime || null,
+      transferTime: duty.transferTime || null,
+      transportType: duty.transportType || null,
       crew: duty.crew || []
     }));
   }
@@ -517,7 +533,20 @@ async function scrapeDayByDay(page) {
 /* ===== PAIRING DETAILS (Hotel/Crew) ===== */
 
 async function getPairingDetails(page, eventId) {
-  const details = { hotel: null, hotelPhone: null, hotelAddress: null, crew: [] };
+  const details = { 
+    hotel: null, 
+    hotelPhone: null,
+    hotelFax: null,
+    hotelEmail: null,
+    hotelAddress: null,
+    hotelCity: null,
+    hotelZip: null,
+    hotelCountry: null,
+    pickupTime: null,
+    transferTime: null,
+    transportType: null,
+    crew: [] 
+  };
   
   try {
     // Find and click the details-page-button for this specific pairing
@@ -565,52 +594,153 @@ async function getPairingDetails(page, eventId) {
     
     // Extract hotel and crew information
     const extracted = await page.evaluate(() => {
-      const result = { hotel: null, hotelPhone: null, hotelAddress: null, crew: [] };
+      const result = { 
+        hotel: null, 
+        hotelPhone: null, 
+        hotelFax: null,
+        hotelEmail: null,
+        hotelAddress: null,
+        hotelCity: null,
+        hotelZip: null,
+        hotelCountry: null,
+        pickupTime: null,
+        transferTime: null,
+        transportType: null,
+        crew: [] 
+      };
+      
       const text = document.body.innerText;
       
-      // Extract hotel name (common hotel chains)
-      const hotelPatterns = [
-        /((?:Hilton|Marriott|Holiday Inn|Hampton|Courtyard|Sheraton|Westin|Hyatt|Radisson|Best Western|Comfort|Days Inn|La Quinta|Embassy|Doubletree|Residence Inn|Fairfield|Four Points|Crowne Plaza|InterContinental|Renaissance|Aloft|Element|Home2|Tru by Hilton|AC Hotels?|Moxy|SpringHill|TownePlace)[^\n]{0,50})/i,
-        /Hotel[:\s]+([^\n]{5,60})/i,
-        /Accommodation[:\s]+([^\n]{5,60})/i,
-        /Layover[:\s]+([^\n]{5,60})/i
-      ];
+      // === HOTEL DETAILS EXTRACTION ===
       
-      for (const pattern of hotelPatterns) {
-        const match = text.match(pattern);
-        if (match) {
-          result.hotel = match[1]?.trim();
-          break;
+      // Extract hotel name - look for "Hotel name" label or common patterns
+      const hotelNameMatch = text.match(/Hotel\s+name[:\s]+([^\n]+)/i) || 
+                             text.match(/Hotel\s+details[:\s]+([^\n]+)/i);
+      if (hotelNameMatch) {
+        result.hotel = hotelNameMatch[1]?.trim();
+      } else {
+        // Fallback: look for common hotel chains
+        const hotelPatterns = [
+          /((?:Hilton|Marriott|Holiday Inn|Hampton|Courtyard|Sheraton|Westin|Hyatt|Radisson|Best Western|Comfort|Days Inn|La Quinta|Embassy|Doubletree|Residence Inn|Fairfield|Four Points|Crowne Plaza|InterContinental|Renaissance|Aloft|Element|Home2|Tru by Hilton|AC Hotels?|Moxy|SpringHill|TownePlace|Homewood)[^\n]{0,50})/i
+        ];
+        for (const pattern of hotelPatterns) {
+          const match = text.match(pattern);
+          if (match) {
+            result.hotel = match[1]?.trim();
+            break;
+          }
+        }
+      }
+      
+      // Extract hotel address components
+      const cityMatch = text.match(/City[:\s]+([^\n]+)/i);
+      if (cityMatch) result.hotelCity = cityMatch[1]?.trim();
+      
+      const streetMatch = text.match(/Street[:\s]+([^\n]+)/i);
+      if (streetMatch) result.hotelAddress = streetMatch[1]?.trim();
+      
+      const zipMatch = text.match(/Zip[:\s]+([^\n]+)/i);
+      if (zipMatch) result.hotelZip = zipMatch[1]?.trim();
+      
+      const countryMatch = text.match(/Country[:\s]+([^\n]+)/i);
+      if (countryMatch) result.hotelCountry = countryMatch[1]?.trim();
+      
+      // Combine address if individual components found
+      if (!result.hotelAddress && (result.hotelCity || result.hotelZip)) {
+        const parts = [result.hotelAddress, result.hotelCity, result.hotelZip, result.hotelCountry].filter(Boolean);
+        if (parts.length > 0) {
+          result.hotelAddress = parts.join(', ');
         }
       }
       
       // Extract hotel phone
-      const phoneMatch = text.match(/(?:Hotel|Accommodation)\s*(?:Phone|Tel|Contact)?[:\s]*(\+?[\d\-\(\)\s]{10,20})/i);
+      const phoneMatch = text.match(/Phone[:\s]+([+\d\-\(\)\s]{10,20})/i);
       if (phoneMatch) {
         result.hotelPhone = phoneMatch[1]?.trim();
       }
       
-      // Extract crew members
-      // Look for names in specific sections or patterns
-      const crewSection = text.match(/Crew(?:\s+Members?)?(?:\s+on\s+this\s+(?:leg|flight))?[:\s]*([\s\S]{0,500}?)(?:Hotel|Accommodation|Notes|$)/i);
-      if (crewSection) {
-        // Extract names (First Last pattern)
-        const namePattern = /([A-Z][a-z]+)\s+([A-Z][a-z]+)/g;
-        const matches = [...crewSection[1].matchAll(namePattern)];
-        const names = matches.map(m => `${m[1]} ${m[2]}`);
-        
-        // Filter out common non-name phrases
-        const excludeList = ['Crew Member', 'First Officer', 'Flight Attendant', 'More Info', 'Click Here', 'View All', 'No Crew'];
-        result.crew = names.filter(n => !excludeList.includes(n)).slice(0, 10);
+      // Extract hotel fax
+      const faxMatch = text.match(/Fax[:\s]+([+\d\-\(\)\s]{10,20})/i);
+      if (faxMatch) {
+        result.hotelFax = faxMatch[1]?.trim();
       }
       
-      // Alternative: look for crew in table rows or list items
+      // Extract hotel email
+      const emailMatch = text.match(/Email[:\s]+([a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+      if (emailMatch) {
+        result.hotelEmail = emailMatch[1]?.trim();
+      }
+      
+      // Extract pickup time
+      const pickupMatch = text.match(/Pickup\s+time[:\s]+([^\n]+)/i);
+      if (pickupMatch) {
+        result.pickupTime = pickupMatch[1]?.trim();
+      }
+      
+      // Extract transfer time
+      const transferMatch = text.match(/Transfer\s+time[:\s]+([^\n]+)/i);
+      if (transferMatch) {
+        result.transferTime = transferMatch[1]?.trim();
+      }
+      
+      // Extract transport type
+      const transportMatch = text.match(/Transport\s+company\s+type[:\s]+([^\n]+)/i);
+      if (transportMatch) {
+        result.transportType = transportMatch[1]?.trim();
+      }
+      
+      // === CREW MEMBERS EXTRACTION ===
+      
+      // Look for "CREW MEMBERS ON THIS LEG" section and extract detailed info
+      const crewSection = text.match(/CREW\s+MEMBERS\s+ON\s+THIS\s+LEG([\s\S]{0,2000}?)(?:YOUR\s+ROLE|EVENT\s+REMARK|Hotel|$)/i);
+      
+      if (crewSection) {
+        const crewText = crewSection[1];
+        
+        // Extract crew member blocks (each member has: name, rank, HB, seniority, crew ID, phone)
+        // Pattern: Name, then "RANK: XX  HB: XXX  SENIORITY: NNN  CREW ID: NNNNNN  PHONE: XXX-XXX-XXXX"
+        const memberBlocks = crewText.split(/\n{2,}/).filter(b => b.trim().length > 10);
+        
+        memberBlocks.forEach(block => {
+          const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+          if (lines.length === 0) return;
+          
+          // First line is typically the name
+          const nameMatch = lines[0].match(/^([A-Z\s]+)$/);
+          const name = nameMatch ? nameMatch[1].trim() : lines[0];
+          
+          // Second line contains rank, HB, seniority, crew ID, phone
+          const detailsLine = lines[1] || lines[0];
+          
+          const rankMatch = detailsLine.match(/RANK[:\s]+([A-Z]{2,3})/i);
+          const hbMatch = detailsLine.match(/HB[:\s]+([A-Z]{3})/i);
+          const seniorityMatch = detailsLine.match(/SENIORITY[:\s]+(\d+)/i);
+          const crewIdMatch = detailsLine.match(/CREW\s+ID[:\s]+(\d+)/i);
+          const phoneMatch = detailsLine.match(/PHONE[:\s]+([\d\-]+)/i);
+          
+          if (name && name.length > 2) {
+            result.crew.push({
+              name: name,
+              rank: rankMatch ? rankMatch[1] : null,
+              homeBase: hbMatch ? hbMatch[1] : null,
+              seniority: seniorityMatch ? seniorityMatch[1] : null,
+              crewId: crewIdMatch ? crewIdMatch[1] : null,
+              phone: phoneMatch ? phoneMatch[1] : null
+            });
+          }
+        });
+      }
+      
+      // Fallback: simple name extraction if structured extraction failed
       if (result.crew.length === 0) {
-        const crewElements = document.querySelectorAll('[class*="crew"] [class*="name"], [class*="crew"] td, [class*="crew"] li');
+        const crewElements = document.querySelectorAll('[class*="crew"] [class*="name"], [class*="crew"] td, [class*="crew"] li, [data-test-id*="crew"]');
         crewElements.forEach(el => {
           const name = el.innerText?.trim();
-          if (name && name.match(/^[A-Z][a-z]+ [A-Z][a-z]+$/)) {
-            result.crew.push(name);
+          if (name && name.match(/^[A-Z][a-z]+\s+[A-Z][a-z]+/)) {
+            const excludeList = ['Crew Member', 'First Officer', 'Flight Attendant', 'More Info', 'Click Here', 'View All', 'No Crew'];
+            if (!excludeList.some(ex => name.includes(ex))) {
+              result.crew.push({ name: name, rank: null, homeBase: null, seniority: null, crewId: null, phone: null });
+            }
           }
         });
       }
