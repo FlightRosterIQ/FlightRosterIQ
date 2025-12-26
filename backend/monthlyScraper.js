@@ -3,136 +3,58 @@ const puppeteer = require('puppeteer');
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 
                      'July', 'August', 'September', 'October', 'November', 'December'];
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// 🔥 Network-Response-Based Scraper (The Fix)
 
-// 1️⃣ Network Listener (tracks roster API responses)
-let lastRosterResponse = null;
+// Step 3️⃣ Normalize Duties (Detect Type)
+function detectDutyType(duty) {
+  const id = duty.logicalId || '';
 
-function setupNetworkListener(page) {
-  page.on('response', async response => {
-    const url = response.url();
+  if (/IADP/i.test(id)) return 'IADP';
+  if (/RES|RSV|STBY/i.test(id)) return 'RESERVE';
+  if (duty.legs && duty.legs.length > 0) return 'FLIGHT';
 
-    if (
-      url.includes('/roster') ||
-      url.includes('/schedule') ||
-      url.includes('/events')
-    ) {
-      try {
-        lastRosterResponse = await response.json();
-      } catch (_) {}
-    }
-  });
+  return 'OTHER';
 }
 
-// 2️⃣ Month Navigation (React-Safe)
-async function navigateToMonth(page, year, monthIndex) {
-  await page.evaluate(
-    (y, m) => {
-      window.dispatchEvent(
-        new CustomEvent('netline-change-month', {
-          detail: { year: y, month: m }
-        })
-      );
-    },
-    year,
-    monthIndex
-  );
+// Step 4️⃣ Parse Flights, Aircraft, Tail
+function parseDuty(duty) {
+  return {
+    id: duty.logicalId,
+    type: detectDutyType(duty),
+    startUtc: duty.fromDt,
+    endUtc: duty.toDt,
 
-  // React render + API fetch
-  await page.waitForTimeout(1500);
+    legs: (duty.legs || []).map(l => ({
+      from: l.depAirport,
+      to: l.arrAirport,
+      aircraft: l.aircraftType || null,
+      tail: l.aircraftRegistration || null
+    })),
+
+    pairing: duty.pairingId || null
+  };
 }
 
-// 🔍 Step 1 — Wait for Roster to Render (Critical)
-async function waitForRosterToRender(page) {
-  console.log('[WAIT] Waiting for duties to render...');
-  
-  await page.waitForFunction(() => {
-    return (
-      document.querySelectorAll('[class*="duty"], [class*="pairing"], [class*="roster"]').length > 0
-    );
-  }, { timeout: 30000 });
-  
-  console.log('[WAIT] ✅ Duties rendered');
-}
+// Step 5️⃣ Crew & Hotel Enrichment (Fail-Safe)
+function enrichDuty(duty) {
+  try {
+    duty.crew = (duty.crewMembers || []).map(c => ({
+      role: c.role,
+      name: `${c.firstName} ${c.lastName}`,
+      id: c.crewId,
+      phone: c.phone || null
+    }));
+  } catch {
+    duty.crew = [];
+  }
 
-// 🧩 Step 3 — Fail-Safe Duty Detection Code (COPY–PASTE)
-async function extractDuties(page) {
-  const duties = await page.evaluate(() => {
-    const results = [];
+  try {
+    duty.hotel = duty.hotel?.name || null;
+  } catch {
+    duty.hotel = null;
+  }
 
-    const dutyNodes = document.querySelectorAll(
-      '[class*="duty"], [class*="pairing"], [role="listitem"]'
-    );
-
-    dutyNodes.forEach(el => {
-      try {
-        const text = el.innerText.replace(/\s+/g, ' ').trim();
-
-        if (!text || text.length < 10) return;
-
-        let type = 'OTHER';
-
-        // ✈️ FLIGHT detection
-        if (/[A-Z]{3}\s*(→|-)\s*[A-Z]{3}/.test(text)) {
-          type = 'FLIGHT';
-        }
-
-        // 🟡 RESERVE detection
-        if (/RESERVE|STANDBY|RSV|SBY/i.test(text)) {
-          type = 'RESERVE';
-        }
-
-        // 🧾 IADP / TRAINING detection
-        if (/IADP|TRAIN|SIM|GROUND|ADMIN/i.test(text)) {
-          type = 'IADP';
-        }
-
-        // 🏨 Step 5 — Enrichment (Hotel, Tail, Crew) — SAFE VERSION
-        const hotel = text.match(/Hotel\s+[A-Za-z0-9 ]+/i)?.[0] || null;
-        const tail = text.match(/\bN\d+[A-Z]*/)?.[0] || null;
-        const aircraft = text.match(/\b(737|767|777|B7\d{2}|A320|A330)\b/)?.[0] || null;
-        const pairing = text.match(/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/)?.[0] || null;
-        
-        // Extract legs for FLIGHT type
-        const legs = type === 'FLIGHT' 
-          ? (text.match(/[A-Z]{3}\s*(→|-)\s*[A-Z]{3}/g) || []).map(leg => {
-              const airports = leg.match(/[A-Z]{3}/g);
-              return airports ? { from: airports[0], to: airports[1] } : null;
-            }).filter(Boolean)
-          : [];
-        
-        // Extract crew info
-        const crew = (text.match(/(CAPT|FO|FE|SO)[^\n]+/g) || []).map(c => ({
-          role: c.match(/CAPT|FO|FE|SO/)?.[0],
-          name: c.replace(/CAPT|FO|FE|SO/, '').trim()
-        }));
-
-        results.push({
-          rawText: text,
-          type,
-          pairing,
-          legs,
-          aircraft,
-          tail,
-          hotel,
-          crew
-        });
-      } catch (err) {
-        // Fail-safe: skip problematic duties
-      }
-    });
-
-    return results;
-  });
-  
-  // 🧪 Step 4 — Debug Output (MANDATORY)
-  console.log('[SCRAPER DEBUG] Duties found:', duties.length);
-  console.log(
-    '[SCRAPER DEBUG] Sample duties:',
-    duties.slice(0, 3).map(d => ({ type: d.type, text: d.rawText.slice(0, 80) }))
-  );
-  
-  return duties;
+  return duty;
 }
 
 async function scrapeMonthlyRoster({ employeeId, password, month, year }) {
@@ -155,6 +77,33 @@ async function scrapeMonthlyRoster({ employeeId, password, month, year }) {
     await page.setViewport({ width: 1400, height: 900 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
+    // Step 1️⃣ Intercept NetLine API responses
+    const duties = [];
+    
+    await page.setRequestInterception(true);
+    
+    page.on('request', request => {
+      request.continue();
+    });
+    
+    page.on('response', async response => {
+      const url = response.url();
+
+      // This is the key NetLine endpoint
+      if (url.includes('/idp/user/roster') && url.includes('/events')) {
+        try {
+          const json = await response.json();
+
+          if (json?.success && Array.isArray(json.result)) {
+            duties.push(...json.result);
+            console.log('[NETLINE] Captured duties:', json.result.length);
+          }
+        } catch (e) {
+          // Ignore non-JSON
+        }
+      }
+    });
+    
     // 1️⃣ LOGIN
     console.log('🔐 Logging in to crew portal...');
     await page.goto('https://crew.abxair.com', { waitUntil: 'networkidle2', timeout: 30000 });
@@ -167,40 +116,47 @@ async function scrapeMonthlyRoster({ employeeId, password, month, year }) {
     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
     console.log('✅ Logged in successfully');
     
-    // 2️⃣ NAVIGATE TO ROSTER
-    console.log('🗓️ Navigating to roster page...');
+    // Step 2️⃣ Trigger data load (no month clicking)
+    console.log('🗓️ Loading roster page...');
     await page.goto(
       'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html',
       { waitUntil: 'networkidle2', timeout: 30000 }
     );
-    console.log('✅ Roster page loaded');
-    await sleep(2000);
     
-    // 🎧 Setup network listener BEFORE navigation
-    setupNetworkListener(page);
+    // Give React time to fetch roster
+    console.log('⏳ Waiting for NetLine API to respond...');
+    await page.waitForTimeout(5000);
     
-    // 3️⃣ SCRAPE THE MONTH USING BULLETPROOF LOGIC
-    console.log(`📅 Scraping ${MONTH_NAMES[month - 1]} ${year}...`);
+    console.log(`📊 Total duties captured: ${duties.length}`);
     
-    await navigateToMonth(page, year, month - 1); // monthIndex is 0-based
-    await waitForRosterToRender(page);
+    // Step 6️⃣ Return Final Payload
+    const finalDuties = duties.map(d =>
+      enrichDuty(parseDuty(d))
+    );
     
-    const flights = await extractDuties(page);
+    // Filter by requested month if needed
+    const requestedDate = new Date(year, month - 1);
+    const filteredDuties = finalDuties.filter(d => {
+      if (!d.startUtc) return false;
+      const dutyDate = new Date(d.startUtc);
+      return dutyDate.getMonth() === requestedDate.getMonth() && 
+             dutyDate.getFullYear() === requestedDate.getFullYear();
+    });
     
-    console.log(`✅ Extracted ${flights.length} duties`);
-    console.log(`✈️ ${flights.filter(f => f.type === 'FLIGHT').length} flights`);
-    console.log(`🟡 ${flights.filter(f => f.type === 'RESERVE').length} reserve days`);
-    console.log(`🧾 ${flights.filter(f => f.type === 'IADP').length} IADP/training`);
-    console.log(`👥 ${flights.filter(f => f.crew && f.crew.length > 0).length} duties have crew info`);
-    console.log(`🏨 ${flights.filter(f => f.hotel).length} duties have hotel info`);
-    console.log(`✈️ ${flights.filter(f => f.aircraft).length} duties have aircraft info`);
+    console.log(`✅ Extracted ${filteredDuties.length} duties for ${MONTH_NAMES[month - 1]} ${year}`);
+    console.log(`✈️ ${filteredDuties.filter(f => f.type === 'FLIGHT').length} flights`);
+    console.log(`🟡 ${filteredDuties.filter(f => f.type === 'RESERVE').length} reserve days`);
+    console.log(`🧾 ${filteredDuties.filter(f => f.type === 'IADP').length} IADP/training`);
+    console.log(`👥 ${filteredDuties.filter(f => f.crew && f.crew.length > 0).length} duties have crew info`);
+    console.log(`🏨 ${filteredDuties.filter(f => f.hotel).length} duties have hotel info`);
+    console.log(`✈️ ${filteredDuties.filter(f => f.legs && f.legs.some(l => l.aircraft)).length} duties have aircraft info`);
     
     await browser.close();
     
     return {
       month,
       year,
-      flights
+      flights: filteredDuties
     };
     
   } catch (error) {
