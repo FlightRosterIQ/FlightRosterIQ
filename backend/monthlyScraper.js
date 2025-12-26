@@ -270,7 +270,38 @@ async function scrapeDayByDay(page) {
   });
   await page.waitForTimeout(2000);
   
-  // Step 2: Scrape all duty rows including sub-events (C_I = Check-in, flights, etc.)
+  // Step 2: Click all duty rows to expand details
+  console.log('🔽 Clicking all duty rows to expand...');
+  await page.$$eval('[data-testid*="duty"], .duty-row, [data-test-id="duty-row"]', rows =>
+    rows.forEach(r => r.click())
+  );
+  await page.waitForTimeout(3000);
+  
+  // Step 3: Expand crew sections
+  console.log('👥 Expanding crew sections...');
+  await page.$$eval('button, div, span', els => {
+    els
+      .filter(e =>
+        e.innerText?.toLowerCase().includes('crew')
+      )
+      .forEach(e => e.click());
+  });
+  await page.waitForTimeout(1000);
+  
+  // Step 4: Expand hotel/layover sections
+  console.log('🏨 Expanding hotel sections...');
+  await page.$$eval('button, div, span', els => {
+    els
+      .filter(e =>
+        e.innerText?.toLowerCase().includes('hotel') ||
+        e.innerText?.toLowerCase().includes('layover') ||
+        e.innerText?.toLowerCase().includes('accommodation')
+      )
+      .forEach(e => e.click());
+  });
+  await page.waitForTimeout(3000);
+  
+  // Step 5: Scrape all duty rows including sub-events (C_I = Check-in, flights, etc.)
   const duties = await page.evaluate(() => {
     const results = [];
     
@@ -469,42 +500,28 @@ async function getPairingDetails(page, eventId) {
       return details;
     }
     
-    // Wait for details panel to load
+    // Wait for details panel/XHRs to load
+    await page.waitForTimeout(3000);
+    
+    // Look for and click on "Crew" related elements to expand
+    await page.$$eval('button, div, span', els => {
+      els
+        .filter(e => e.innerText?.toLowerCase().includes('crew'))
+        .forEach(e => e.click());
+    });
+    await page.waitForTimeout(1000);
+    
+    // Look for and click on "Hotel/Layover" related elements to expand
+    await page.$$eval('button, div, span', els => {
+      els
+        .filter(e =>
+          e.innerText?.toLowerCase().includes('hotel') ||
+          e.innerText?.toLowerCase().includes('layover') ||
+          e.innerText?.toLowerCase().includes('accommodation')
+        )
+        .forEach(e => e.click());
+    });
     await page.waitForTimeout(2000);
-    
-    // Look for "Hotel" section and expand if collapsed
-    await page.evaluate(() => {
-      // Find and click on hotel-related expandable sections
-      const elements = document.querySelectorAll('*');
-      for (const el of elements) {
-        const text = el.innerText?.toLowerCase() || '';
-        if ((text.includes('hotel') || text.includes('accommodation')) && text.length < 50) {
-          // Look for expand button nearby
-          const parent = el.closest('[class*="accordion"], [class*="section"], [class*="expandable"]') || el.parentElement;
-          const expandBtn = parent?.querySelector('[class*="expand"], [class*="toggle"], svg, button');
-          if (expandBtn) {
-            expandBtn.click();
-          }
-        }
-      }
-    });
-    await page.waitForTimeout(500);
-    
-    // Look for "Crew" section and expand if collapsed
-    await page.evaluate(() => {
-      const elements = document.querySelectorAll('*');
-      for (const el of elements) {
-        const text = el.innerText?.toLowerCase() || '';
-        if ((text.includes('crew') && text.includes('member')) || text.includes('crew on this')) {
-          const parent = el.closest('[class*="accordion"], [class*="section"], [class*="expandable"]') || el.parentElement;
-          const expandBtn = parent?.querySelector('[class*="expand"], [class*="toggle"], svg, button');
-          if (expandBtn) {
-            expandBtn.click();
-          }
-        }
-      }
-    });
-    await page.waitForTimeout(500);
     
     // Extract hotel and crew information
     const extracted = await page.evaluate(() => {
