@@ -51,9 +51,15 @@ app.post('/api/authenticate', async (req, res) => {
 
     await page.type('#username', employeeId);
     await page.type('#password', password);
-    await page.click('button[type="submit"]');
 
-    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+    // Submit form and wait for navigation together
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
+      page.evaluate(() => {
+        const form = document.querySelector('form');
+        if (form) form.submit();
+      })
+    ]);
     console.log('✅ Logged in successfully');
 
     // Scrape duties from network responses
