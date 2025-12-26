@@ -8,10 +8,11 @@ import { API_BASE_URL } from '../config';
  * @param {string} employeeId - Crew member ID
  * @param {string} password - Password
  * @param {string} airline - 'abx' or 'ati'
- * @param {Function} onProgress - Optional callback for status updates
+ * @param {Function} onProgress - Optional callback for status updates (status, progress%)
+ * @param {Function} onFlightsUpdate - Optional callback for progressive flight updates (flights[])
  * @returns {Promise<{flights: Array, news: Array}>} Object with flights and news arrays
  */
-export async function simpleScrape(employeeId, password, airline = 'abx', onProgress = null) {
+export async function simpleScrape(employeeId, password, airline = 'abx', onProgress = null, onFlightsUpdate = null) {
   console.log('🔧 [SIMPLE SCRAPER] Starting multi-month Puppeteer scrape for:', employeeId);
   
   // Calculate months to scrape (previous, current, next)
@@ -143,6 +144,12 @@ export async function simpleScrape(employeeId, password, airline = 'abx', onProg
           rawText: duty.rawText || ''
         });
       });
+      
+      // Progressive update: send flights so far to the UI
+      if (onFlightsUpdate && allFlights.length > 0) {
+        console.log(`📤 [SIMPLE SCRAPER] Sending ${allFlights.length} flights to UI (progressive update)`);
+        onFlightsUpdate([...allFlights]);
+      }
     }
     
     console.log('✅ [SIMPLE SCRAPER] Multi-month scrape complete! Total flights:', allFlights.length, 'News:', allNews.length);

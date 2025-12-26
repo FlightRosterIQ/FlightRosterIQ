@@ -1264,9 +1264,19 @@ function App() {
             credentials.username.trim(),
             credentials.password,
             airline || 'abx',
+            // Progress callback
             (status, progress) => {
               setLoadingMessage(status)
               console.log(`📊 Progress: ${progress}% - ${status}`)
+            },
+            // Progressive flights update callback - show flights as they come in
+            (flights) => {
+              console.log(`📤 [LOGIN] Progressive update: ${flights.length} flights`)
+              const progressiveSchedule = {
+                flights,
+                hotelsByDate: {}
+              }
+              setSchedule(progressiveSchedule)
             }
           )
           
