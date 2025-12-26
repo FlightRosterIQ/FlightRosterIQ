@@ -5726,11 +5726,11 @@ function App() {
       for (let j = 0; j < 7; j++) {
         if (i === 0 && j < firstDay) {
           week.push(
-            <Box key={`empty-${j}`} sx={{ minHeight: 80, border: 1, borderColor: 'divider' }} />
+            <Box key={`empty-${j}`} sx={{ minHeight: 70, m: 0.25 }} />
           )
         } else if (day > daysInMonth) {
           week.push(
-            <Box key={`empty-${j}`} sx={{ minHeight: 80, border: 1, borderColor: 'divider' }} />
+            <Box key={`empty-${j}`} sx={{ minHeight: 70, m: 0.25 }} />
           )
         } else {
           const date = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day)
@@ -5785,17 +5785,20 @@ function App() {
                 setActiveTab('daily')
               }}
               sx={{ 
-                minHeight: 80,
-                p: 1,
-                border: 1,
-                borderColor: borderColor,
-                borderWidth: isToday ? 2 : 1,
+                minHeight: 70,
+                p: 0.75,
+                m: 0.25,
+                borderRadius: 2,
+                border: isToday ? 2 : 0,
+                borderColor: 'primary.main',
                 bgcolor: bgColor,
                 cursor: 'pointer',
                 transition: 'all 0.2s',
+                boxShadow: hasFlights ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 '&:hover': {
                   bgcolor: hasFlights ? bgColor : 'action.hover',
-                  boxShadow: 1
+                  boxShadow: 2,
+                  transform: 'scale(1.02)'
                 }
               }}
             >
@@ -5887,10 +5890,10 @@ function App() {
             <Box sx={{ width: 100 }} />
           )}
         </Stack>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0, mb: 2 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0, mb: 1 }}>
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <Box key={day} sx={{ textAlign: 'center', py: 1, fontWeight: 600, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography variant="body2">{day}</Typography>
+            <Box key={day} sx={{ textAlign: 'center', py: 0.75, px: 0.25 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>{day}</Typography>
             </Box>
           ))}
         </Box>
