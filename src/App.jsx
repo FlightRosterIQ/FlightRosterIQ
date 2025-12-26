@@ -4130,119 +4130,80 @@ function App() {
     return (
       <Container maxWidth="lg" sx={{ mt: 2, mb: 2 }}>
         <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <SwapIcon /> Trip Trade & Reserve
+          <SwapIcon /> Trips
         </Typography>
         
         <Grid container spacing={2}>
           {/* Trip Trade Section */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <SwapIcon color="primary" /> Trip Trade
+          <Grid item xs={12} md={4}>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                '&:hover': { boxShadow: 4 },
+                transition: 'box-shadow 0.2s'
+              }}
+              onClick={() => {
+                // TODO: Add URL navigation
+                console.log('Trip Trade clicked')
+              }}
+            >
+              <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                <SwapIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Trip Trade
                 </Typography>
-                <Typography variant="body2" color="text.secondary" paragraph>
+                <Typography variant="body2" color="text.secondary">
                   Post trips for trade or browse available trips from other crew members.
                 </Typography>
-                
-                <Button 
-                  variant="contained" 
-                  fullWidth 
-                  startIcon={<SwapIcon />}
-                  sx={{ mb: 2 }}
-                >
-                  Post Trip for Trade
-                </Button>
-                
-                <Button 
-                  variant="outlined" 
-                  fullWidth
-                  startIcon={<SwapIcon />}
-                >
-                  Browse Available Trips
-                </Button>
-                
-                <Divider sx={{ my: 2 }} />
-                
-                <Typography variant="subtitle2" gutterBottom>
-                  My Active Trade Posts
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  No active trade posts
-                </Typography>
               </CardContent>
             </Card>
           </Grid>
           
-          {/* Reserve Section */}
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ReserveIcon color="primary" /> Reserve Days
-                </Typography>
-                <Typography variant="body2" color="text.secondary" paragraph>
-                  View your reserve schedule and availability.
-                </Typography>
-                
-                <Button 
-                  variant="contained" 
-                  fullWidth 
-                  startIcon={<ReserveIcon />}
-                  sx={{ mb: 2 }}
-                >
-                  View Reserve Calendar
-                </Button>
-                
-                <Button 
-                  variant="outlined" 
-                  fullWidth
-                  startIcon={<CalendarIcon />}
-                >
-                  Set Availability Preferences
-                </Button>
-                
-                <Divider sx={{ my: 2 }} />
-                
-                <Typography variant="subtitle2" gutterBottom>
-                  Upcoming Reserve Days
-                </Typography>
-                {schedule?.flights?.filter(f => f.isReserveDuty).length > 0 ? (
-                  <List dense>
-                    {schedule.flights
-                      .filter(f => f.isReserveDuty)
-                      .slice(0, 5)
-                      .map((flight, idx) => (
-                        <ListItem key={idx}>
-                          <ListItemIcon>
-                            <ReserveIcon fontSize="small" />
-                          </ListItemIcon>
-                          <ListItemText 
-                            primary={flight.date}
-                            secondary={`${flight.departure} - ${flight.arrival}`}
-                          />
-                        </ListItem>
-                      ))
-                    }
-                  </List>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    No reserve days scheduled
-                  </Typography>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          {/* Recent Trade Activity */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
+          {/* RSV View Section */}
+          <Grid item xs={12} md={4}>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                '&:hover': { boxShadow: 4 },
+                transition: 'box-shadow 0.2s'
+              }}
+              onClick={() => {
+                // TODO: Add URL navigation
+                console.log('RSV View clicked')
+              }}
+            >
+              <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                <ReserveIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
                 <Typography variant="h6" gutterBottom>
-                  Recent Trade Activity
+                  RSV View
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  No recent trade activity
+                  View reserve schedule and availability status.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          {/* Open Trips Section */}
+          <Grid item xs={12} md={4}>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                '&:hover': { boxShadow: 4 },
+                transition: 'box-shadow 0.2s'
+              }}
+              onClick={() => {
+                // TODO: Add URL navigation
+                console.log('Open Trips clicked')
+              }}
+            >
+              <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                <FlightIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Open Trips
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Browse and pick up available open trips.
                 </Typography>
               </CardContent>
             </Card>
@@ -6710,7 +6671,7 @@ function App() {
             />
             {airline === 'abx' && (
               <BottomNavigationAction
-                label="Trip Trade"
+                label="Trips"
                 value="tripTrade"
                 icon={<SwapIcon />}
                 sx={{ minWidth: { xs: 80, sm: 'auto' } }}
