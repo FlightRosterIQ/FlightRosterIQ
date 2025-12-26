@@ -4,6 +4,7 @@
 // =======================================
 
 import { loadRoster, saveRoster } from '../cache/rosterCache';
+import { API_BASE_URL } from '../config';
 
 // ---------- TYPES ----------
 
@@ -51,7 +52,7 @@ function rosterHash(duties: Duty[]) {
 // ---------- STEP 1: API FETCH ----------
 
 async function fetchRosterEvents(crewCode: string): Promise<Duty[]> {
-  const url = `/api/netline/roster/events?crewCode=${crewCode}`;
+  const url = `${API_BASE_URL}/api/netline/roster/events?crewCode=${crewCode}`;
   console.log('[FRIQ][FETCH] Calling:', url);
   
   const res = await fetch(url, { credentials: 'include' });
