@@ -11,53 +11,91 @@ export async function scrapeMonthlyRoster(page, targetMonth, targetYear) {
   console.log(`📅 Scraping ${targetYear}-${targetMonth}`);
 
   // Wait for page to fully load after login
+  await page.waitForTimeout(3000);
+
+  // Step 1: Dismiss cookie banner if present
+  console.log('🍪 Dismissing cookie banner...');
+  await page.evaluate(() => {
+    const okBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'OK');
+    if (okBtn) okBtn.click();
+  });
+  await page.waitForTimeout(1000);
+
+  // Step 2: Click on "Duty plan" or "DUTY PLAN" menu item to load the roster
+  console.log('📋 Clicking Duty Plan menu...');
+  const clickedDutyPlan = await page.evaluate(() => {
+    // Try various selectors for the duty plan menu
+    const selectors = [
+      'a[href*="iadp"]',
+      '[class*="MenuItem"]',
+      '[class*="ListItem"]'
+    ];
+    
+    // First try clicking text that says "Duty plan" or "DUTY PLAN"
+    const allElements = document.querySelectorAll('*');
+    for (const el of allElements) {
+      const text = el.innerText?.trim()?.toUpperCase();
+      if (text === 'DUTY PLAN' && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+        el.click();
+        return 'Clicked: ' + el.tagName + ' - ' + el.className;
+      }
+    }
+    
+    // Try menu items
+    const menuItems = document.querySelectorAll('[class*="MuiMenuItem"], [class*="MuiListItem"]');
+    for (const item of menuItems) {
+      if (item.innerText?.toLowerCase().includes('duty')) {
+        item.click();
+        return 'Clicked menu item: ' + item.className;
+      }
+    }
+    
+    return null;
+  });
+  console.log('📋 Duty plan click result:', clickedDutyPlan);
+
+  // Wait for content to load
   await page.waitForTimeout(5000);
 
-  // DEBUG: Dump page structure
+  // DEBUG: Dump page structure after clicking duty plan
   const debugInfo = await page.evaluate(() => {
     const body = document.body;
     const allClasses = new Set();
-    const allTags = {};
     
     body.querySelectorAll('*').forEach(el => {
-      const tag = el.tagName.toLowerCase();
-      allTags[tag] = (allTags[tag] || 0) + 1;
       el.classList.forEach(c => allClasses.add(c));
     });
 
     // Find potential duty/flight containers
     const potentialContainers = [];
-    const keywords = ['duty', 'flight', 'pairing', 'roster', 'schedule', 'trip', 'leg', 'segment', 'row', 'card', 'item', 'entry'];
+    const keywords = ['duty', 'flight', 'pairing', 'roster', 'schedule', 'trip', 'leg', 'segment', 'row', 'card', 'item', 'entry', 'iadp', 'gantt', 'calendar'];
     
     allClasses.forEach(className => {
       const lower = className.toLowerCase();
       if (keywords.some(k => lower.includes(k))) {
         const count = document.querySelectorAll('.' + CSS.escape(className)).length;
-        potentialContainers.push({ className, count });
+        if (count > 0) potentialContainers.push({ className, count });
       }
     });
 
     // Get visible text snippet
-    const visibleText = body.innerText.substring(0, 2000);
+    const visibleText = body.innerText.substring(0, 3000);
 
     return {
       url: window.location.href,
       title: document.title,
-      totalElements: Object.values(allTags).reduce((a, b) => a + b, 0),
-      tags: allTags,
-      classCount: allClasses.size,
-      potentialContainers: potentialContainers.slice(0, 30),
-      sampleClasses: Array.from(allClasses).slice(0, 50),
+      totalElements: body.querySelectorAll('*').length,
+      potentialContainers: potentialContainers.slice(0, 40),
+      sampleClasses: Array.from(allClasses).filter(c => c.toLowerCase().includes('iadp') || c.toLowerCase().includes('duty') || c.toLowerCase().includes('gantt')).slice(0, 30),
       visibleText
     };
   });
 
   console.log('🔍 DEBUG - Page URL:', debugInfo.url);
-  console.log('🔍 DEBUG - Title:', debugInfo.title);
   console.log('🔍 DEBUG - Total elements:', debugInfo.totalElements);
-  console.log('🔍 DEBUG - Potential duty containers:', JSON.stringify(debugInfo.potentialContainers, null, 2));
-  console.log('🔍 DEBUG - Sample classes:', debugInfo.sampleClasses.join(', '));
-  console.log('🔍 DEBUG - Visible text (first 1000 chars):', debugInfo.visibleText.substring(0, 1000));
+  console.log('🔍 DEBUG - IADP/Duty classes:', debugInfo.sampleClasses.join(', '));
+  console.log('🔍 DEBUG - Potential containers:', JSON.stringify(debugInfo.potentialContainers, null, 2));
+  console.log('🔍 DEBUG - Visible text:', debugInfo.visibleText.substring(0, 1500));
 
   await navigateToMonth(page, targetMonth, targetYear);
 
