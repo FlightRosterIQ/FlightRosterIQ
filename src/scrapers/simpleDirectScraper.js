@@ -8,45 +8,92 @@ import { API_BASE_URL } from '../config';
  * @param {string} employeeId - Crew member ID
  * @param {string} password - Password
  * @param {string} airline - 'abx' or 'ati'
+ * @param {Function} onProgress - Optional callback for status updates
  * @returns {Promise<Array>} Array of flights
  */
-export async function simpleScrape(employeeId, password, airline = 'abx') {
-  console.log('🔧 [SIMPLE SCRAPER] Starting Puppeteer scrape for:', employeeId);
+export async function simpleScrape(employeeId, password, airline = 'abx', onProgress = null) {
+  console.log('🔧 [SIMPLE SCRAPER] Starting multi-month Puppeteer scrape for:', employeeId);
+  
+  // Calculate months to scrape (previous, current, next)
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 0-indexed
+  const currentYear = now.getFullYear();
+  
+  let prevMonth = currentMonth - 1;
+  let prevYear = currentYear;
+  if (prevMonth === 0) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  
+  let nextMonth = currentMonth + 1;
+  let nextYear = currentYear;
+  if (nextMonth === 13) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+  
+  const monthsToScrape = [
+    { month: prevMonth, year: prevYear, label: getMonthName(prevMonth) },
+    { month: currentMonth, year: currentYear, label: getMonthName(currentMonth) },
+    { month: nextMonth, year: nextYear, label: getMonthName(nextMonth) }
+  ];
+  
+  const allFlights = [];
   
   try {
-    console.log('🌐 [SIMPLE SCRAPER] Calling authenticate endpoint with scraping...');
-    const authUrl = `${API_BASE_URL}/api/authenticate`;
-    const authResponse = await fetch(authUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        employeeId: employeeId, 
-        password: password, 
-        airline: airline 
-      })
-    });
-    
-    console.log('🌐 [SIMPLE SCRAPER] Response status:', authResponse.status);
-    const authData = await authResponse.json();
-    console.log('🌐 [SIMPLE SCRAPER] Response data:', authData);
-    console.log('🌐 [SIMPLE SCRAPER] Data structure:', JSON.stringify(authData.data, null, 2));
-    
-    if (!authData.success) {
-      throw new Error(authData.error || 'Authentication/scraping failed');
+    for (let i = 0; i < monthsToScrape.length; i++) {
+      const { month, year, label } = monthsToScrape[i];
+      const progress = Math.round(((i + 1) / monthsToScrape.length) * 100);
+      
+      onProgress?.(`Scraping ${label} ${year}... (${i + 1}/${monthsToScrape.length})`, progress);
+      console.log(`📅 [SIMPLE SCRAPER] Scraping ${label} ${year}...`);
+      
+      const authUrl = `${API_BASE_URL}/api/authenticate`;
+      const authResponse = await fetch(authUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          employeeId: employeeId, 
+          password: password, 
+          airline: airline,
+          month: month,
+          year: year
+        })
+      });
+      
+      console.log(`📅 [SIMPLE SCRAPER] ${label} response status:`, authResponse.status);
+      const authData = await authResponse.json();
+      
+      if (!authData.success) {
+        console.error(`❌ [SIMPLE SCRAPER] ${label} failed:`, authData.error);
+        continue; // Continue with other months
+      }
+      
+      const flights = authData.data?.flights || [];
+      console.log(`✅ [SIMPLE SCRAPER] ${label}: Got ${flights.length} flights`);
+      
+      allFlights.push(...flights);
     }
     
-    // The backend returns flights directly in data.flights
-    const flights = authData.data?.flights || [];
-    console.log('🌐 [SIMPLE SCRAPER] Extracted flights:', flights);
-    console.log('🌐 [SIMPLE SCRAPER] flights.length:', flights.length);
+    console.log('✅ [SIMPLE SCRAPER] Multi-month scrape complete! Total flights:', allFlights.length);
+    onProgress?.(`Completed! Loaded ${allFlights.length} flights`, 100);
     
-    console.log('✅ [SIMPLE SCRAPER] Success! Got', flights.length, 'flights from Puppeteer scrape');
-    return flights;
+    return allFlights;
     
   } catch (error) {
     console.error('❌ [SIMPLE SCRAPER] Error:', error);
     throw error;
   }
+}
+
+/**
+ * Get month name from month number
+ */
+function getMonthName(month) {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  return months[month - 1];
 }
 
 /**

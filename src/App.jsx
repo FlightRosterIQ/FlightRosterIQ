@@ -495,8 +495,11 @@ function App() {
           }
         }
         
-        // Use simple scraper for background refresh
-        const flights = await simpleScrape(employeeId, password, airline || 'abx')
+        // Use simple scraper for background refresh with status
+        const flights = await simpleScrape(employeeId, password, airline || 'abx', (status, progress) => {
+          setLoadingMessage(status)
+          console.log(`📊 Background: ${progress}% - ${status}`)
+        })
         
         if (flights && flights.length > 0) {
           const refreshedSchedule = {
@@ -1223,17 +1226,21 @@ function App() {
       // Set active tab to monthly view immediately
       setActiveTab('monthly')
       
-      // ✅ SIMPLE SCRAPER: Puppeteer HTML scraping with status display
+      // ✅ SIMPLE SCRAPER: Puppeteer HTML scraping with detailed status
       if (accountType === 'pilot') {
         console.log('✅ [LOGIN] Pilot account - starting Puppeteer scraper...')
         setScrapingInProgress(true)
-        setLoadingMessage('Connecting to crew portal and scraping schedule...')
+        setLoadingMessage('Connecting to crew portal...')
         
         try {
           const flights = await simpleScrape(
             credentials.username.trim(),
             credentials.password,
-            airline || 'abx'
+            airline || 'abx',
+            (status, progress) => {
+              setLoadingMessage(status)
+              console.log(`📊 Progress: ${progress}% - ${status}`)
+            }
           )
           
           console.log('✅ [LOGIN] Received', flights.length, 'flights from scraper')
@@ -2919,12 +2926,14 @@ function App() {
         return
       }
       
-      // Use simple scraper with status updates
-      setLoadingMessage('Scraping schedule data from crew portal...')
-      console.log('🔄 Calling simple scraper...')
-      const flights = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx')
+      // Use simple scraper with detailed status updates
+      setLoadingMessage('Connecting to crew portal...')
+      console.log('🔄 Calling simple scraper with multi-month support...')
+      const flights = await simpleScrape(storedUsername, storedPassword, storedAirline || 'abx', (status, progress) => {
+        setLoadingMessage(status)
+        console.log(`📊 Refresh: ${progress}% - ${status}`)
+      })
       
-      setLoadingMessage('Processing schedule data...')
       console.log('✅ Refresh complete:', flights.length, 'flights')
       
       if (!flights || flights.length === 0) {
