@@ -42,45 +42,97 @@ async function navigateToMonth(page, year, monthIndex) {
   await page.waitForTimeout(1500);
 }
 
-// 3️⃣ HARD WAIT for React Roster Render
+// 🔍 Step 1 — Wait for Roster to Render (Critical)
 async function waitForRosterToRender(page) {
+  console.log('[WAIT] Waiting for duties to render...');
+  
   await page.waitForFunction(() => {
-    const dutyEls =
-      document.querySelectorAll('[class*="duty"], [class*="pairing"]');
-    return dutyEls.length > 0;
-  }, { timeout: 15000 });
+    return (
+      document.querySelectorAll('[class*="duty"], [class*="pairing"], [class*="roster"]').length > 0
+    );
+  }, { timeout: 30000 });
+  
+  console.log('[WAIT] ✅ Duties rendered');
 }
 
-// 4️⃣ Bulletproof Duty Extraction (FAIL-SAFE)
+// 🧩 Step 3 — Fail-Safe Duty Detection Code (COPY–PASTE)
 async function extractDuties(page) {
-  return await page.evaluate(() => {
-    const duties = [];
+  const duties = await page.evaluate(() => {
+    const results = [];
 
-    document
-      .querySelectorAll('[class*="duty"], [class*="pairing"]')
-      .forEach(el => {
-        try {
-          const text = el.innerText || '';
+    const dutyNodes = document.querySelectorAll(
+      '[class*="duty"], [class*="pairing"], [role="listitem"]'
+    );
 
-          if (!text.trim()) return;
+    dutyNodes.forEach(el => {
+      try {
+        const text = el.innerText.replace(/\s+/g, ' ').trim();
 
-          duties.push({
-            raw: text,
-            pairing: text.match(/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/)?.[0] || null,
-            legs: text.match(/[A-Z]{3}\s*(→|-)\s*[A-Z]{3}/g) || [],
-            aircraft: text.match(/B\d{3}/)?.[0] || null,
-            tail: text.match(/N\d+[A-Z]*/)?.[0] || null,
-            hotel: text.match(/Hotel[^\n]+/)?.[0] || null,
-            crew: text.match(/(CAPT|FO|FE)[^\n]+/g)?.map(c => ({
-              role: c.match(/CAPT|FO|FE/)?.[0],
-              name: c.replace(/CAPT|FO|FE/, '').trim()
-            })) || []
-          });
-        } catch (_) {}
-      });
+        if (!text || text.length < 10) return;
 
-    return duties;
+        let type = 'OTHER';
+
+        // ✈️ FLIGHT detection
+        if (/[A-Z]{3}\s*(→|-)\s*[A-Z]{3}/.test(text)) {
+          type = 'FLIGHT';
+        }
+
+        // 🟡 RESERVE detection
+        if (/RESERVE|STANDBY|RSV|SBY/i.test(text)) {
+          type = 'RESERVE';
+        }
+
+        // 🧾 IADP / TRAINING detection
+        if (/IADP|TRAIN|SIM|GROUND|ADMIN/i.test(text)) {
+          type = 'IADP';
+        }
+
+        // 🏨 Step 5 — Enrichment (Hotel, Tail, Crew) — SAFE VERSION
+        const hotel = text.match(/Hotel\s+[A-Za-z0-9 ]+/i)?.[0] || null;
+        const tail = text.match(/\bN\d+[A-Z]*/)?.[0] || null;
+        const aircraft = text.match(/\b(737|767|777|B7\d{2}|A320|A330)\b/)?.[0] || null;
+        const pairing = text.match(/C\d{4,5}[A-Z]?\/\d{2}[A-Za-z]{3}/)?.[0] || null;
+        
+        // Extract legs for FLIGHT type
+        const legs = type === 'FLIGHT' 
+          ? (text.match(/[A-Z]{3}\s*(→|-)\s*[A-Z]{3}/g) || []).map(leg => {
+              const airports = leg.match(/[A-Z]{3}/g);
+              return airports ? { from: airports[0], to: airports[1] } : null;
+            }).filter(Boolean)
+          : [];
+        
+        // Extract crew info
+        const crew = (text.match(/(CAPT|FO|FE|SO)[^\n]+/g) || []).map(c => ({
+          role: c.match(/CAPT|FO|FE|SO/)?.[0],
+          name: c.replace(/CAPT|FO|FE|SO/, '').trim()
+        }));
+
+        results.push({
+          rawText: text,
+          type,
+          pairing,
+          legs,
+          aircraft,
+          tail,
+          hotel,
+          crew
+        });
+      } catch (err) {
+        // Fail-safe: skip problematic duties
+      }
+    });
+
+    return results;
   });
+  
+  // 🧪 Step 4 — Debug Output (MANDATORY)
+  console.log('[SCRAPER DEBUG] Duties found:', duties.length);
+  console.log(
+    '[SCRAPER DEBUG] Sample duties:',
+    duties.slice(0, 3).map(d => ({ type: d.type, text: d.rawText.slice(0, 80) }))
+  );
+  
+  return duties;
 }
 
 async function scrapeMonthlyRoster({ employeeId, password, month, year }) {
@@ -136,6 +188,9 @@ async function scrapeMonthlyRoster({ employeeId, password, month, year }) {
     const flights = await extractDuties(page);
     
     console.log(`✅ Extracted ${flights.length} duties`);
+    console.log(`✈️ ${flights.filter(f => f.type === 'FLIGHT').length} flights`);
+    console.log(`🟡 ${flights.filter(f => f.type === 'RESERVE').length} reserve days`);
+    console.log(`🧾 ${flights.filter(f => f.type === 'IADP').length} IADP/training`);
     console.log(`👥 ${flights.filter(f => f.crew && f.crew.length > 0).length} duties have crew info`);
     console.log(`🏨 ${flights.filter(f => f.hotel).length} duties have hotel info`);
     console.log(`✈️ ${flights.filter(f => f.aircraft).length} duties have aircraft info`);
