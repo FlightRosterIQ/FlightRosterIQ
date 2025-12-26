@@ -81,55 +81,67 @@ async function scrapeMonthlyRoster(page, month, year) {
     // Only intercept XHR and fetch requests
     if (!req.resourceType().includes('xhr') && !req.resourceType().includes('fetch')) return;
 
-    // Capture roster-related endpoints
+    // Capture roster-related endpoints (expanded list)
     if (
       url.includes('roster') ||
       url.includes('schedule') ||
       url.includes('pairing') ||
       url.includes('duty') ||
       url.includes('bid') ||
-      url.includes('events')
+      url.includes('events') ||
+      url.includes('pems') ||
+      url.includes('crew') ||
+      url.includes('iadp') ||
+      url.includes('calendar') ||
+      url.includes('assignment')
     ) {
       try {
         const json = await response.json();
         collectedResponses.push(json);
-        console.log('[NETLINE XHR] Captured response from:', url.split('/').pop());
+        console.log('[NETLINE XHR] Captured response from:', url.split('?')[0].split('/').pop());
       } catch (e) {
         // Ignore non-JSON responses
       }
     }
   });
   
-  // ✅ 2. Trigger the SAME action a human does
+  // ✅ 2. Navigate to the IADP roster page (triggers roster API calls)
   console.log('🗓️ Loading roster page...');
+  
+  // Navigate to roster/IADP page - this triggers the schedule API calls
   await page.goto(
-    'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html',
+    'https://crew.abxair.com/nlcrew/ui/netline/crew/crm-workspace/index.html#/iadp',
     { waitUntil: 'networkidle2', timeout: 30000 }
   );
   
-  // Wait for initial load, then trigger schedule data fetch
-  await page.waitForTimeout(2000);
+  // Wait for initial load
+  await page.waitForTimeout(3000);
   
-  // Try to click schedule/roster tab if it exists
+  // Try to click on schedule/roster elements to trigger data load
   console.log('📊 Triggering roster data load...');
   try {
     await page.evaluate(() => {
-      // Look for schedule/roster tabs or buttons
-      const scheduleBtn = Array.from(document.querySelectorAll('button, [role="tab"], a')).find(el =>
-        /schedule|roster|calendar/i.test(el.innerText || el.getAttribute('aria-label') || '')
-      );
-      if (scheduleBtn) {
-        console.log('Clicking schedule tab...');
-        scheduleBtn.click();
-      }
+      // Look for any clickable schedule elements
+      const scheduleElements = Array.from(document.querySelectorAll('button, [role="tab"], a, [class*="schedule"], [class*="roster"], [class*="calendar"]'));
+      const clicked = [];
+      
+      scheduleElements.forEach(el => {
+        const text = (el.innerText || el.getAttribute('aria-label') || el.className || '').toLowerCase();
+        if (/schedule|roster|calendar|month|view/i.test(text)) {
+          el.click();
+          clicked.push(text.substring(0, 20));
+        }
+      });
+      
+      console.log('Clicked elements:', clicked);
     });
   } catch (e) {
-    console.log('⚠️ No schedule tab found, continuing...');
+    console.log('⚠️ Could not click schedule elements:', e.message);
   }
   
-  // Wait for XHR requests to complete
+  // Wait longer for XHR requests to complete
   console.log('⏳ Waiting for NetLine API responses...');
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(8000);
   
   console.log(`📊 Total responses captured: ${collectedResponses.length}`);
   
