@@ -7582,4 +7582,4 @@ function App() {
   )
 }
 
-export default Appe
+export default App
