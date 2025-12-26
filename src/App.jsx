@@ -89,6 +89,34 @@ localforage.config({
   storeName: 'schedules'
 })
 
+// Helper: format ISO/Zulu timestamps as 'December 26th, 1655Z' (METAR format)
+function formatUtcDateTime(isoString) {
+  if (!isoString || typeof isoString !== 'string') return isoString || '';
+  // Accept values like '2025-12-26T17:25:00Z' or already human text
+  const maybeIso = isoString.includes('T') || /\d{4}-\d{2}-\d{2}/.test(isoString);
+  if (!maybeIso) return isoString;
+  const d = new Date(isoString);
+  if (isNaN(d)) return isoString;
+  
+  // Full month names
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const month = monthNames[d.getUTCMonth()];
+  const day = d.getUTCDate();
+  
+  // Add ordinal suffix (st, nd, rd, th)
+  const getOrdinal = (n) => {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  
+  const dayWithOrdinal = getOrdinal(day);
+  const HH = String(d.getUTCHours()).padStart(2, '0');
+  const MM = String(d.getUTCMinutes()).padStart(2, '0');
+  
+  return `${month} ${dayWithOrdinal}, ${HH}${MM}Z`;
+}
+
 function App() {
   const [token, setToken] = useState(null)
   const [username, setUsername] = useState('')
@@ -3436,8 +3464,9 @@ function App() {
     earliestDate.setMonth(earliestDate.getMonth() - 1)
     earliestDate.setDate(1) // First day of previous month
     
-    // Prevent going too far back
-    if (newDate < earliestDate) {
+    // Prevent going too far back - compare year and month only
+    if (newDate.getFullYear() < earliestDate.getFullYear() || 
+        (newDate.getFullYear() === earliestDate.getFullYear() && newDate.getMonth() < earliestDate.getMonth())) {
       console.log('⚠️ Cannot navigate beyond previous month')
       setError('Schedule data only available for previous, current, and next month.')
       setTimeout(() => setError(null), 3000)
@@ -3495,7 +3524,6 @@ function App() {
           <Tab label="💬 Chats" value="chats" />
           <Tab label="📍 Nearby" value="nearby" />
           <Tab label="🔍 Find" value="find" />
-          <Tab label="📅 View Schedule" value="viewSchedule" />
         </Tabs>
 
         {friendsSubTab === 'chats' && (
@@ -3890,279 +3918,32 @@ function App() {
 
         {friendsSubTab === 'viewSchedule' && (
           <Box>
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" gutterBottom>📅 View Crew Member Schedule</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Enter a crew member's credentials to view their monthly schedule
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <Typography variant="h5" gutterBottom>📅 Friend Schedule Viewing</Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                To view a friend's schedule:
               </Typography>
-            </Box>
-            
-            {!viewCrewSchedule ? (
-              <Box>
-                <Stack spacing={2} sx={{ mb: 3 }}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Airline</InputLabel>
-                    <Select
-                      value={viewCrewAirline}
-                      label="Airline"
-                      onChange={(e) => setViewCrewAirline(e.target.value)}
-                    >
-                      <MenuItem value="abx">ABX Air</MenuItem>
-                      <MenuItem value="ati">ATI (Air Transport International)</MenuItem>
-                    </Select>
-                  </FormControl>
-                  
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Employee ID"
-                    placeholder="Enter employee number..."
-                    value={viewCrewEmployeeId}
-                    onChange={(e) => setViewCrewEmployeeId(e.target.value)}
-                  />
-                  
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="password"
-                    label="Password"
-                    placeholder="Enter crew portal password..."
-                    value={viewCrewPassword}
-                    onChange={(e) => setViewCrewPassword(e.target.value)}
-                  />
-                  
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Name (optional)"
-                    placeholder="Enter crew member's name for display..."
-                    value={viewCrewName}
-                    onChange={(e) => setViewCrewName(e.target.value)}
-                  />
-                  
-                  {viewCrewError && (
-                    <Alert severity="error" onClose={() => setViewCrewError('')}>
-                      {viewCrewError}
-                    </Alert>
-                  )}
-                  
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    disabled={!viewCrewEmployeeId || !viewCrewPassword || viewCrewLoading}
-                    onClick={async () => {
-                      setViewCrewLoading(true)
-                      setViewCrewError('')
-                      try {
-                        // Use the simpleScrape function to fetch their schedule
-                        const result = await simpleScrape(
-                          viewCrewEmployeeId.trim(),
-                          viewCrewPassword,
-                          viewCrewAirline,
-                          (status, progress) => {
-                            console.log(`📊 View Crew: ${progress}% - ${status}`)
-                          },
-                          null // No progressive update needed
-                        )
-                        
-                        const flights = Array.isArray(result) ? result : (result.flights || [])
-                        
-                        if (!flights || flights.length === 0) {
-                          setViewCrewError('No schedule data found. Check credentials and try again.')
-                          setViewCrewLoading(false)
-                          return
-                        }
-                        
-                        setViewCrewSchedule({
-                          flights,
-                          employeeId: viewCrewEmployeeId,
-                          name: viewCrewName || `Crew #${viewCrewEmployeeId}`,
-                          airline: viewCrewAirline,
-                          fetchedAt: new Date().toISOString()
-                        })
-                        setViewCrewLoading(false)
-                      } catch (err) {
-                        console.error('View crew schedule error:', err)
-                        setViewCrewError(err.message || 'Failed to fetch schedule. Check credentials.')
-                        setViewCrewLoading(false)
-                      }
-                    }}
-                  >
-                    {viewCrewLoading ? (
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <CircularProgress size={20} color="inherit" />
-                        <span>Loading Schedule...</span>
-                      </Stack>
-                    ) : (
-                      '📅 View Schedule'
-                    )}
-                  </Button>
-                </Stack>
-                
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="h6" gutterBottom>⚠️ Important</Typography>
-                  <Box component="ul" sx={{ pl: 3 }}>
-                    <Typography component="li" variant="body2">Only use this with permission from the crew member</Typography>
-                    <Typography component="li" variant="body2">Credentials are not stored - enter them each time</Typography>
-                    <Typography component="li" variant="body2">Schedule is fetched directly from the crew portal</Typography>
+              <Box sx={{ textAlign: 'left', maxWidth: 400, mx: 'auto' }}>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="body2">1️⃣ Go to the <strong>Chats</strong> tab</Typography>
                   </Box>
-                </Box>
-              </Box>
-            ) : (
-              <Box>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                  <Typography variant="h6">
-                    📅 {viewCrewSchedule.name}'s Schedule
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => {
-                      setViewCrewSchedule(null)
-                      setViewCrewPassword('')
-                    }}
-                  >
-                    ← Back
-                  </Button>
+                  <Box>
+                    <Typography variant="body2">2️⃣ Click on a friend's name</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2">3️⃣ Select <strong>"View Schedule"</strong> from the menu</Typography>
+                  </Box>
                 </Stack>
-                
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                  {viewCrewSchedule.airline.toUpperCase()} • Employee #{viewCrewSchedule.employeeId} • Fetched {new Date(viewCrewSchedule.fetchedAt).toLocaleTimeString()}
-                </Typography>
-                
-                {/* Monthly calendar view of their schedule */}
-                <Box sx={{ mb: 2 }}>
-                  {(() => {
-                    const now = new Date()
-                    const year = now.getFullYear()
-                    const month = now.getMonth()
-                    const daysInMonth = new Date(year, month + 1, 0).getDate()
-                    const firstDayOfWeek = new Date(year, month, 1).getDay()
-                    
-                    const days = []
-                    // Empty cells for days before month starts
-                    for (let i = 0; i < firstDayOfWeek; i++) {
-                      days.push(<Box key={`empty-${i}`} sx={{ p: 1 }} />)
-                    }
-                    
-                    // Calendar days
-                    for (let day = 1; day <= daysInMonth; day++) {
-                      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-                      const dayFlights = viewCrewSchedule.flights.filter(f => f.date === dateStr)
-                      const hasFlights = dayFlights.length > 0
-                      const isToday = day === now.getDate()
-                      
-                      // Check for special duty types
-                      const isOff = dayFlights.some(f => f.dutyType === 'OFF' || f.flightNumber?.includes('OFF'))
-                      const isReserve = dayFlights.some(f => f.isReserveDuty || f.dutyType === 'RSV' || f.flightNumber?.match(/^R\d/))
-                      const isTraining = dayFlights.some(f => f.isTraining || f.dutyType === 'TRN')
-                      const isVacation = dayFlights.some(f => f.dutyType === 'VAC' || f.flightNumber?.includes('VAC'))
-                      
-                      let bgColor = 'background.paper'
-                      let textColor = 'text.primary'
-                      if (isOff) bgColor = 'grey.200'
-                      else if (isVacation) bgColor = 'success.light'
-                      else if (isReserve) bgColor = 'warning.light'
-                      else if (isTraining) bgColor = 'info.light'
-                      else if (hasFlights) bgColor = 'primary.light'
-                      
-                      days.push(
-                        <Tooltip
-                          key={day}
-                          title={
-                            hasFlights 
-                              ? dayFlights.map(f => `${f.flightNumber || f.dutyType}: ${f.from || ''}→${f.to || ''}`).join(', ')
-                              : 'No activity'
-                          }
-                        >
-                          <Box
-                            sx={{
-                              p: 1,
-                              textAlign: 'center',
-                              borderRadius: 1,
-                              bgcolor: bgColor,
-                              border: isToday ? 2 : 0,
-                              borderColor: 'primary.main',
-                              cursor: 'pointer',
-                              '&:hover': { opacity: 0.8 }
-                            }}
-                          >
-                            <Typography variant="body2" sx={{ fontWeight: isToday ? 'bold' : 'normal', color: textColor }}>
-                              {day}
-                            </Typography>
-                            {hasFlights && (
-                              <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: textColor }}>
-                                {dayFlights.length === 1 
-                                  ? (dayFlights[0].flightNumber?.substring(0, 6) || dayFlights[0].dutyType)
-                                  : `${dayFlights.length} items`
-                                }
-                              </Typography>
-                            )}
-                          </Box>
-                        </Tooltip>
-                      )
-                    }
-                    
-                    return (
-                      <Box>
-                        <Typography variant="subtitle1" align="center" sx={{ mb: 1, fontWeight: 'bold' }}>
-                          {new Date(year, month).toLocaleString('default', { month: 'long', year: 'numeric' })}
-                        </Typography>
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
-                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                            <Typography key={i} variant="caption" align="center" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
-                              {d}
-                            </Typography>
-                          ))}
-                          {days}
-                        </Box>
-                      </Box>
-                    )
-                  })()}
-                </Box>
-                
-                {/* Legend */}
-                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
-                  <Chip size="small" label="Flight" sx={{ bgcolor: 'primary.light' }} />
-                  <Chip size="small" label="Reserve" sx={{ bgcolor: 'warning.light' }} />
-                  <Chip size="small" label="Training" sx={{ bgcolor: 'info.light' }} />
-                  <Chip size="small" label="Vacation" sx={{ bgcolor: 'success.light' }} />
-                  <Chip size="small" label="Off" sx={{ bgcolor: 'grey.200' }} />
-                </Stack>
-                
-                {/* List of flights */}
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  All Duties ({viewCrewSchedule.flights.length})
-                </Typography>
-                <List dense sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                  {viewCrewSchedule.flights
-                    .sort((a, b) => new Date(a.date) - new Date(b.date))
-                    .map((flight, idx) => (
-                      <ListItem key={idx} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                        <ListItemText
-                          primary={
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Typography variant="body2" fontWeight="bold">
-                                {flight.flightNumber || flight.dutyType || 'Duty'}
-                              </Typography>
-                              <Chip 
-                                size="small" 
-                                label={flight.date}
-                                sx={{ fontSize: '0.7rem' }}
-                              />
-                            </Stack>
-                          }
-                          secondary={
-                            flight.from && flight.to 
-                              ? `${flight.from} → ${flight.to} | ${flight.departure || flight.departureTime || ''} - ${flight.arrival || flight.arrivalTime || ''}`
-                              : flight.extraInfo || ''
-                          }
-                        />
-                      </ListItem>
-                    ))}
-                </List>
               </Box>
-            )}
+              <Button
+                variant="contained"
+                sx={{ mt: 4 }}
+                onClick={() => setFriendsSubTab('chats')}
+              >
+                Go to Chats
+              </Button>
+            </Box>
           </Box>
         )}
         
@@ -4196,8 +3977,8 @@ function App() {
           <DialogContent>
             {!friendScheduleData ? (
               <Box sx={{ py: 2 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Enter {selectedFriendForMenu?.name || 'your friend'}'s crew portal password to view their schedule
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  View {selectedFriendForMenu?.name || 'your friend'}'s schedule. This fetches their publicly shared schedule information.
                 </Typography>
                 
                 <Stack spacing={2}>
@@ -4211,13 +3992,10 @@ function App() {
                   
                   <TextField
                     fullWidth
-                    type="password"
-                    label="Password"
-                    placeholder="Enter their crew portal password..."
-                    value={friendSchedulePassword}
-                    onChange={(e) => setFriendSchedulePassword(e.target.value)}
+                    label="Airline"
+                    value={(selectedFriendForMenu?.airline || airline || 'abx').toUpperCase()}
+                    disabled
                     size="small"
-                    autoFocus
                   />
                   
                   {friendScheduleError && (
@@ -4226,55 +4004,16 @@ function App() {
                     </Alert>
                   )}
                   
+                  <Alert severity="info">
+                    Friend schedule viewing is coming soon! This will show their publicly shared schedule without requiring credentials.
+                  </Alert>
+                  
                   <Button
                     variant="contained"
                     fullWidth
-                    disabled={!friendSchedulePassword || friendScheduleLoading}
-                    onClick={async () => {
-                      setFriendScheduleLoading(true)
-                      setFriendScheduleError('')
-                      try {
-                        const friendAirline = selectedFriendForMenu?.airline || airline || 'abx'
-                        const result = await simpleScrape(
-                          selectedFriendForMenu?.employeeId,
-                          friendSchedulePassword,
-                          friendAirline,
-                          (status, progress) => {
-                            console.log(`📊 Friend Schedule: ${progress}% - ${status}`)
-                          },
-                          null
-                        )
-                        
-                        const flights = Array.isArray(result) ? result : (result.flights || [])
-                        
-                        if (!flights || flights.length === 0) {
-                          setFriendScheduleError('No schedule data found. Check the password and try again.')
-                          setFriendScheduleLoading(false)
-                          return
-                        }
-                        
-                        setFriendScheduleData({
-                          flights,
-                          name: selectedFriendForMenu?.name || selectedFriendForMenu?.employeeId,
-                          employeeId: selectedFriendForMenu?.employeeId,
-                          fetchedAt: new Date().toISOString()
-                        })
-                        setFriendScheduleLoading(false)
-                      } catch (err) {
-                        console.error('Friend schedule error:', err)
-                        setFriendScheduleError(err.message || 'Failed to fetch schedule. Check the password.')
-                        setFriendScheduleLoading(false)
-                      }
-                    }}
+                    disabled
                   >
-                    {friendScheduleLoading ? (
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <CircularProgress size={20} color="inherit" />
-                        <span>Loading Schedule...</span>
-                      </Stack>
-                    ) : (
-                      '📅 View Schedule'
-                    )}
+                    🚧 Coming Soon
                   </Button>
                 </Stack>
               </Box>
@@ -5943,7 +5682,7 @@ function App() {
                           viewMonth.getMonth() === today.getMonth() && 
                           viewMonth.getFullYear() === today.getFullYear()
           
-          // Determine colors and styles
+          // Determine colors and styles matching the legend
           let bgColor = 'background.paper'
           let borderColor = 'divider'
           let dayColor = 'text.primary'
@@ -5954,17 +5693,17 @@ function App() {
           
           if (hasFlights) {
             if (isTraining) {
-              bgColor = 'rgba(33, 150, 243, 0.08)'
-              dayColor = 'primary.main'
+              // Cyan for Training
+              bgColor = '#00BCD4'
+              dayColor = 'white'
             } else if (isReserve) {
-              bgColor = 'rgba(3, 169, 244, 0.08)'
-              dayColor = 'info.main'
-            } else if (hasArrivalFlights && !hasDepartureFlights) {
-              bgColor = 'rgba(255, 152, 0, 0.08)'
-              dayColor = 'warning.main'
+              // Orange for Reserve
+              bgColor = '#FF9800'
+              dayColor = 'white'
             } else {
-              bgColor = 'rgba(76, 175, 80, 0.08)'
-              dayColor = 'success.main'
+              // Blue for Flights
+              bgColor = '#5C6BC0'
+              dayColor = 'white'
             }
           }
           
@@ -7594,7 +7333,10 @@ function App() {
                           <h4>📻 Decoded</h4>
                           <div className="atis-info">
                             {(weatherData[selectedFlight.origin].decoded.observationTime || weatherData[selectedFlight.origin].decoded.time) && (
-                              <p><strong>Time:</strong> {weatherData[selectedFlight.origin].decoded.observationTime || weatherData[selectedFlight.origin].decoded.time}</p>
+                              <p><strong>Time:</strong> {(() => {
+                                const timeStr = weatherData[selectedFlight.origin].decoded.observationTime || weatherData[selectedFlight.origin].decoded.time;
+                                return formatUtcDateTime(timeStr);
+                              })()}</p>
                             )}
                             {weatherData[selectedFlight.origin].decoded.flightCategory && (
                               <p><strong>Category:</strong> <span style={{
@@ -7656,7 +7398,10 @@ function App() {
                           <h4>📻 Decoded</h4>
                           <div className="atis-info">
                             {(weatherData[selectedFlight.destination].decoded.observationTime || weatherData[selectedFlight.destination].decoded.time) && (
-                              <p><strong>Time:</strong> {weatherData[selectedFlight.destination].decoded.observationTime || weatherData[selectedFlight.destination].decoded.time}</p>
+                              <p><strong>Time:</strong> {(() => {
+                                const timeStr = weatherData[selectedFlight.destination].decoded.observationTime || weatherData[selectedFlight.destination].decoded.time;
+                                return formatUtcDateTime(timeStr);
+                              })()}</p>
                             )}
                             {weatherData[selectedFlight.destination].decoded.flightCategory && (
                               <p><strong>Category:</strong> <span style={{
@@ -7735,7 +7480,7 @@ function App() {
                     <h3>📻 Decoded Weather Information</h3>
                     <div className="atis-info">
                       {weatherData[weatherAirport].decoded.observationTime && (
-                        <p><strong>Observation Time:</strong> {weatherData[weatherAirport].decoded.observationTime}</p>
+                        <p><strong>Observation Time:</strong> {formatUtcDateTime(weatherData[weatherAirport].decoded.observationTime)}</p>
                       )}
                       {weatherData[weatherAirport].decoded.flightCategory && (
                         <p><strong>Flight Category:</strong> <span style={{

@@ -16,6 +16,46 @@
 
 import fs from 'fs';
 
+/**
+ * Helper: Convert "01Dec" or "26Nov" format to "YYYY-MM-DD"
+ * @param {string} dateStr - Date in format "DDMon" (e.g., "01Dec", "26Nov")
+ * @param {number} targetYear - The year to use
+ * @param {number} targetMonth - The month being scraped (1-12)
+ * @returns {string} - Date in "YYYY-MM-DD" format
+ */
+function normalizeDate(dateStr, targetYear, targetMonth) {
+  if (!dateStr || typeof dateStr !== 'string') return dateStr;
+  
+  // If already in YYYY-MM-DD format, return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  
+  // Parse "DDMon" format (e.g., "01Dec", "26Nov")
+  const monthMap = {
+    'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+    'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+  };
+  
+  const match = dateStr.match(/^(\d{1,2})([A-Za-z]{3})$/);
+  if (!match) return dateStr;
+  
+  const day = match[1].padStart(2, '0');
+  const monthAbbr = match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase();
+  const month = monthMap[monthAbbr];
+  
+  if (!month) return dateStr;
+  
+  // Determine the year: if month is earlier than target month, it's next year
+  // e.g., if scraping December (12) and see "01Jan", that's next year
+  let year = targetYear;
+  if (month < targetMonth && targetMonth === 12) {
+    year = targetYear + 1;
+  } else if (month > targetMonth && targetMonth === 1) {
+    year = targetYear - 1;
+  }
+  
+  return `${year}-${String(month).padStart(2, '0')}-${day}`;
+}
+
 export async function scrapeMonthlyRoster(page, targetMonth, targetYear, options = {}) {
   const { scrapeNewsSection = false } = options; // Only scrape news when explicitly requested
   console.log(`📅 Scraping ${targetYear}-${targetMonth}${scrapeNewsSection ? ' (with news)' : ''}`);
@@ -394,10 +434,10 @@ async function scrapeDayByDay(page) {
           aircraft: aircraft,
           tailNumber: tailNumber,
           from: startLocation,
-          fromDate: startDate,
+          fromDate: normalizeDate(startDate, targetYear, targetMonth),
           fromTime: startTime,
           to: endLocation,
-          toDate: endDate,
+          toDate: normalizeDate(endDate, targetYear, targetMonth),
           toTime: endTime,
           extraInfo: extraInfo,
           eventId: row.className.match(/event-id-(\d+)/)?.[1] || '',
@@ -449,10 +489,10 @@ async function scrapeDayByDay(page) {
       isCheckIn: duty.isCheckIn,
       from: duty.from,
       to: duty.to,
-      date: duty.fromDate,
+      date: duty.fromDate,  // Already normalized above
       departureTime: duty.fromTime,
       arrivalTime: duty.toTime,
-      arrivalDate: duty.toDate,
+      arrivalDate: duty.toDate,  // Already normalized above
       rank: duty.rank,
       aircraft: duty.aircraft,
       tailNumber: duty.tailNumber,
@@ -609,10 +649,39 @@ async function getPairingDetails(page, eventId) {
   return details;
 }
 
-async function getFlightsFromView(page) {
-  return await page.evaluate(() => {
+async function getFlightsFromView(page, targetYear, targetMonth) {
+  return await page.evaluate((year, month) => {
     const flights = [];
     const text = document.body.innerText;
+
+    // Helper: Convert "01Dec" or "26Nov" format to "YYYY-MM-DD" (in browser context)
+    const normalizeDate = (dateStr, targetYear, targetMonth) => {
+      if (!dateStr || typeof dateStr !== 'string') return dateStr;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+      
+      const monthMap = {
+        'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+        'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+      };
+      
+      const match = dateStr.match(/^(\d{1,2})([A-Za-z]{3})$/);
+      if (!match) return dateStr;
+      
+      const day = match[1].padStart(2, '0');
+      const monthAbbr = match[2].charAt(0).toUpperCase() + match[2].slice(1).toLowerCase();
+      const parsedMonth = monthMap[monthAbbr];
+      
+      if (!parsedMonth) return dateStr;
+      
+      let yearToUse = targetYear;
+      if (parsedMonth < targetMonth && targetMonth === 12) {
+        yearToUse = targetYear + 1;
+      } else if (parsedMonth > targetMonth && targetMonth === 1) {
+        yearToUse = targetYear - 1;
+      }
+      
+      return `${yearToUse}-${String(parsedMonth).padStart(2, '0')}-${day}`;
+    };
 
     // Flight pattern: 2-3 letter airline code + 3-4 digit number
     const flightPattern = /\b([A-Z]{2,3})\s*(\d{3,4})\b/g;
@@ -641,14 +710,14 @@ async function getFlightsFromView(page) {
         to: routeMatch?.[2] || null,
         departureTime: timeMatch?.[0] || null,
         arrivalTime: timeMatch?.[1] || null,
-        date: dateMatch?.[0] || null,
+        date: normalizeDate(dateMatch?.[0] || null, year, month),
         type: context.toUpperCase().includes('RES') ? 'RESERVE' :
               context.toUpperCase().includes('DH') ? 'DEADHEAD' : 'FLIGHT'
       });
     });
 
     return flights;
-  });
+  }, targetYear, targetMonth);
 }
 
 async function getFlightDetails(page, flight) {
