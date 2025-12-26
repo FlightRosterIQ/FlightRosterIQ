@@ -6955,8 +6955,8 @@ function App() {
                         <div className="weather-section atis-section">
                           <h4>📻 Decoded</h4>
                           <div className="atis-info">
-                            {weatherData[selectedFlight.origin].decoded.observationTime && (
-                              <p><strong>Time:</strong> {weatherData[selectedFlight.origin].decoded.observationTime}</p>
+                            {(weatherData[selectedFlight.origin].decoded.observationTime || weatherData[selectedFlight.origin].decoded.time) && (
+                              <p><strong>Time:</strong> {weatherData[selectedFlight.origin].decoded.observationTime || weatherData[selectedFlight.origin].decoded.time}</p>
                             )}
                             {weatherData[selectedFlight.origin].decoded.flightCategory && (
                               <p><strong>Category:</strong> <span style={{
@@ -6972,11 +6972,23 @@ function App() {
                             {weatherData[selectedFlight.origin].decoded.temperature && (
                               <p><strong>Temp:</strong> {weatherData[selectedFlight.origin].decoded.temperature}</p>
                             )}
+                            {weatherData[selectedFlight.origin].decoded.dewpoint && (
+                              <p><strong>Dewpoint:</strong> {weatherData[selectedFlight.origin].decoded.dewpoint}</p>
+                            )}
                             {weatherData[selectedFlight.origin].decoded.wind && (
                               <p><strong>Wind:</strong> {weatherData[selectedFlight.origin].decoded.wind}</p>
                             )}
                             {weatherData[selectedFlight.origin].decoded.visibility && (
                               <p><strong>Visibility:</strong> {weatherData[selectedFlight.origin].decoded.visibility}</p>
+                            )}
+                            {weatherData[selectedFlight.origin].decoded.sky && (
+                              <p><strong>Sky:</strong> {weatherData[selectedFlight.origin].decoded.sky}</p>
+                            )}
+                            {weatherData[selectedFlight.origin].decoded.altimeter && (
+                              <p><strong>Altimeter:</strong> {weatherData[selectedFlight.origin].decoded.altimeter}</p>
+                            )}
+                            {weatherData[selectedFlight.origin].decoded.wxString && (
+                              <p><strong>Weather:</strong> {weatherData[selectedFlight.origin].decoded.wxString}</p>
                             )}
                           </div>
                         </div>
@@ -7005,8 +7017,8 @@ function App() {
                         <div className="weather-section atis-section">
                           <h4>📻 Decoded</h4>
                           <div className="atis-info">
-                            {weatherData[selectedFlight.destination].decoded.observationTime && (
-                              <p><strong>Time:</strong> {weatherData[selectedFlight.destination].decoded.observationTime}</p>
+                            {(weatherData[selectedFlight.destination].decoded.observationTime || weatherData[selectedFlight.destination].decoded.time) && (
+                              <p><strong>Time:</strong> {weatherData[selectedFlight.destination].decoded.observationTime || weatherData[selectedFlight.destination].decoded.time}</p>
                             )}
                             {weatherData[selectedFlight.destination].decoded.flightCategory && (
                               <p><strong>Category:</strong> <span style={{
@@ -7022,11 +7034,23 @@ function App() {
                             {weatherData[selectedFlight.destination].decoded.temperature && (
                               <p><strong>Temp:</strong> {weatherData[selectedFlight.destination].decoded.temperature}</p>
                             )}
+                            {weatherData[selectedFlight.destination].decoded.dewpoint && (
+                              <p><strong>Dewpoint:</strong> {weatherData[selectedFlight.destination].decoded.dewpoint}</p>
+                            )}
                             {weatherData[selectedFlight.destination].decoded.wind && (
                               <p><strong>Wind:</strong> {weatherData[selectedFlight.destination].decoded.wind}</p>
                             )}
                             {weatherData[selectedFlight.destination].decoded.visibility && (
                               <p><strong>Visibility:</strong> {weatherData[selectedFlight.destination].decoded.visibility}</p>
+                            )}
+                            {weatherData[selectedFlight.destination].decoded.sky && (
+                              <p><strong>Sky:</strong> {weatherData[selectedFlight.destination].decoded.sky}</p>
+                            )}
+                            {weatherData[selectedFlight.destination].decoded.altimeter && (
+                              <p><strong>Altimeter:</strong> {weatherData[selectedFlight.destination].decoded.altimeter}</p>
+                            )}
+                            {weatherData[selectedFlight.destination].decoded.wxString && (
+                              <p><strong>Weather:</strong> {weatherData[selectedFlight.destination].decoded.wxString}</p>
                             )}
                           </div>
                         </div>

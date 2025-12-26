@@ -289,28 +289,79 @@ app.post('/api/weather', async (req, res) => {
   console.log(`🌦️ Fetching weather for: ${airport}`);
   
   try {
-    // Fetch METAR from aviationweather.gov
-    const metarUrl = `https://aviationweather.gov/api/data/metar?ids=${airport}&format=raw`;
-    const tafUrl = `https://aviationweather.gov/api/data/taf?ids=${airport}&format=raw`;
+    // Fetch METAR and TAF from aviationweather.gov in JSON format
+    const metarUrl = `https://aviationweather.gov/api/data/metar?ids=${airport}&format=json`;
+    const tafUrl = `https://aviationweather.gov/api/data/taf?ids=${airport}&format=json`;
+    
+    console.log(`📡 Fetching METAR: ${metarUrl}`);
+    console.log(`📡 Fetching TAF: ${tafUrl}`);
     
     const [metarResponse, tafResponse] = await Promise.all([
       fetch(metarUrl),
       fetch(tafUrl)
     ]);
     
-    const metarText = await metarResponse.text();
-    const tafText = await tafResponse.text();
+    let metarData = null;
+    let tafData = null;
+    let metarRaw = '';
+    let tafRaw = '';
     
-    console.log(`📡 METAR for ${airport}:`, metarText.substring(0, 100));
-    console.log(`📡 TAF for ${airport}:`, tafText.substring(0, 100));
+    // Parse METAR JSON
+    try {
+      const metarJson = await metarResponse.json();
+      console.log(`📡 METAR JSON response:`, JSON.stringify(metarJson).substring(0, 300));
+      if (Array.isArray(metarJson) && metarJson.length > 0) {
+        metarData = metarJson[0];
+        metarRaw = metarData.rawOb || '';
+      }
+    } catch (e) {
+      console.log('⚠️ METAR not JSON, trying raw text');
+      const rawText = await metarResponse.text();
+      metarRaw = rawText.trim();
+    }
     
-    // Decode METAR
-    const decoded = decodeMetar(metarText.trim());
+    // Parse TAF JSON
+    try {
+      const tafJson = await tafResponse.json();
+      console.log(`📡 TAF JSON response:`, JSON.stringify(tafJson).substring(0, 300));
+      if (Array.isArray(tafJson) && tafJson.length > 0) {
+        tafData = tafJson[0];
+        tafRaw = tafData.rawTAF || '';
+      }
+    } catch (e) {
+      console.log('⚠️ TAF not JSON, trying raw text');
+      const rawText = await tafResponse.text();
+      tafRaw = rawText.trim();
+    }
+    
+    // Build decoded METAR from JSON data or parse from raw
+    let decoded = null;
+    if (metarData) {
+      decoded = {
+        raw: metarRaw,
+        station: metarData.icaoId || airport,
+        time: metarData.reportTime || '',
+        wind: metarData.wdir && metarData.wspd 
+          ? `${metarData.wdir}° at ${metarData.wspd} knots${metarData.wgst ? `, gusting ${metarData.wgst} knots` : ''}`
+          : 'Calm',
+        visibility: metarData.visib ? `${metarData.visib} statute miles` : '',
+        sky: metarData.clouds?.map(c => `${c.cover} at ${c.base} feet`).join(', ') || 'Clear',
+        temperature: metarData.temp != null ? `${metarData.temp}°C (${Math.round(metarData.temp * 9/5 + 32)}°F)` : '',
+        dewpoint: metarData.dewp != null ? `${metarData.dewp}°C (${Math.round(metarData.dewp * 9/5 + 32)}°F)` : '',
+        altimeter: metarData.altim ? `${(metarData.altim / 33.8639).toFixed(2)} inHg` : '',
+        flightCategory: metarData.fltcat || '',
+        wxString: metarData.wxString || ''
+      };
+    } else if (metarRaw) {
+      decoded = decodeMetar(metarRaw);
+    }
+    
+    console.log(`✅ Weather for ${airport}: METAR=${metarRaw ? 'OK' : 'N/A'}, TAF=${tafRaw ? 'OK' : 'N/A'}`);
     
     res.json({
       success: true,
-      metar: metarText.trim() || 'No METAR available',
-      taf: tafText.trim() || 'No TAF available',
+      metar: metarRaw || 'No METAR available',
+      taf: tafRaw || 'No TAF available',
       decoded: decoded
     });
     
